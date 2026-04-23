@@ -1,4 +1,4 @@
-# LocalServe Marketplace
+# GigsCourt
 
 Local service marketplace app.
 
@@ -9,7 +9,7 @@ Local service marketplace app.
 - Firebase (Real-time)
 
 ## Development
-- Web: [Vercel Deployment](https://localserve.vercel.app)
+- Web: [Vercel Deployment](https://gigscourt.vercel.app)
 - `npm run dev` — local dev server
 - `npm run build` — production build
 
