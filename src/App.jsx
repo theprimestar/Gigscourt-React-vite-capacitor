@@ -5,6 +5,7 @@ import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
+import ChatListScreen from './screens/ChatListScreen';
 import './App.css';
 
 function App() {
@@ -103,8 +104,10 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-content">
-        {activeTab === 'home' ? <HomeScreen /> : <SearchScreen />}
-      </div>
+  {activeTab === 'home' && <HomeScreen />}
+  {activeTab === 'search' && <SearchScreen />}
+  {activeTab === 'chats' && <ChatListScreen />}
+</div>
       <nav className="bottom-nav">
         <button
           className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
@@ -120,10 +123,13 @@ function App() {
           <span className="nav-icon">🔍</span>
           <span className="nav-label">Search</span>
         </button>
-        <button className="nav-btn">
-          <span className="nav-icon">💬</span>
-          <span className="nav-label">Chats</span>
-        </button>
+        <button
+  className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
+  onClick={() => setActiveTab('chats')}
+>
+  <span className="nav-icon">💬</span>
+  <span className="nav-label">Chats</span>
+</button>
         <button className="nav-btn">
           <span className="nav-icon">👤</span>
           <span className="nav-label">Profile</span>
