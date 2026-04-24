@@ -274,7 +274,7 @@ function StepLocation({ onNext, onBack }) {
           dragRotate={true}
           touchZoomRotate={true}
           attributionControl={false}
-          style={{ width: '100%', height: 300, borderRadius: 12 }}
+          style={{ width: '100%', height: '100%', borderRadius: 12, zIndex: 1 }}
         >
           {markerPos && (
             <Marker
