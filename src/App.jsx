@@ -4,6 +4,7 @@ import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
 import HomeScreen from './screens/HomeScreen';
+import SearchScreen from './screens/SearchScreen';
 import './App.css';
 
 function App() {
@@ -79,6 +80,42 @@ function App() {
     return (
       <div className="app">
         <Onboarding onComplete={handleOnboardingComplete} />
+      </div>
+    );
+  }
+
+  const [activeTab, setActiveTab] = useState('home');
+
+  if (screen === 'home') {
+    return (
+      <div className="app-shell">
+        <div className="app-content">
+          {activeTab === 'home' ? <HomeScreen /> : <SearchScreen />}
+        </div>
+        <nav className="bottom-nav">
+          <button
+            className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveTab('home')}
+          >
+            <span className="nav-icon">🏠</span>
+            <span className="nav-label">Home</span>
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
+            onClick={() => setActiveTab('search')}
+          >
+            <span className="nav-icon">🔍</span>
+            <span className="nav-label">Search</span>
+          </button>
+          <button className="nav-btn">
+            <span className="nav-icon">💬</span>
+            <span className="nav-label">Chats</span>
+          </button>
+          <button className="nav-btn">
+            <span className="nav-icon">👤</span>
+            <span className="nav-label">Profile</span>
+          </button>
+        </nav>
       </div>
     );
   }
