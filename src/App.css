@@ -1160,3 +1160,37 @@ body {
 .nav-btn.active .nav-label {
   color: #007aff;
 }
+
+/* Resend Email */
+.resend-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e5ea;
+}
+
+.resend-button {
+  background: #f2f2f7;
+  color: #007aff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resend-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.resend-message {
+  font-size: 13px;
+  margin-top: 8px;
+  color: #8e8e93;
+}
+
+.resend-message.success {
+  color: #34c759;
+}
