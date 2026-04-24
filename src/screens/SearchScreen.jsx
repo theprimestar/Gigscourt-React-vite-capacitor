@@ -83,10 +83,12 @@ function SearchScreen() {
     }
   }, [viewerLat, viewerLng]);
 
-  // Fix map size when switching to map view
+ // Fix map size when switching to map view
   useEffect(() => {
     if (view === 'map' && map.current) {
-      setTimeout(() => map.current.invalidateSize(), 100);
+      setTimeout(() => {
+        if (map.current) map.current.invalidateSize();
+      }, 200);
     }
   }, [view]);
 
@@ -365,7 +367,7 @@ function SearchScreen() {
 
       {/* Bottom Sheet */}
       {selectedUser && (
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
+        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)} style={{ zIndex: 200 }}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="bottom-sheet-handle"></div>
             <div className="bottom-sheet-content">
