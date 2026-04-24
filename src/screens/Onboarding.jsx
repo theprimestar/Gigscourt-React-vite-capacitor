@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
-import { IKContext, IKUpload } from 'imagekitio-react';
+import { IKContext } from 'imagekitio-react';
+import { ImageKit } from 'imagekit-javascript';
 import L from 'leaflet';
 import 'leaflet-rotate';
 
@@ -333,25 +334,7 @@ function StepPhotoBio({ onNext, onBack }) {
   const [profilePic, setProfilePic] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const uploadRef = useRef(null);
-
-  const onUploadProgress = () => {};
-
-  const onError = (err) => {
-    setUploading(false);
-    setError('Upload failed. Please try again.');
-    console.error(err);
-  };
-
-  const onSuccess = (res) => {
-    setUploading(false);
-    setProfilePic(res.url);
-  };
-
-  const onUploadStart = () => {
-    setUploading(true);
-    setError('');
-  };
+  const fileInputRef = useRef(null);
 
   const handleSkip = () => {
     onNext({ bio: bio.trim(), profilePicUrl: null });
@@ -367,8 +350,48 @@ function StepPhotoBio({ onNext, onBack }) {
 
   const handleAvatarClick = (e) => {
     e.stopPropagation();
-    if (uploadRef.current) {
-      uploadRef.current.click();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      // Get auth params from our serverless function
+      const authRes = await fetch('/api/imagekit-auth');
+      const auth = await authRes.json();
+
+      const imagekit = new ImageKit({
+        publicKey: imagekitPublicKey,
+        urlEndpoint: imagekitUrl,
+      });
+
+      const result = await imagekit.upload({
+        file: file,
+        fileName: 'profile.jpg',
+        folder: '/profiles',
+        useUniqueFileName: true,
+        token: auth.token,
+        signature: auth.signature,
+        expire: auth.expire,
+      });
+
+      setProfilePic(result.url);
+    } catch (err) {
+      setError('Upload failed. Please try again.');
+      console.error(err);
+    } finally {
+      setUploading(false);
+      // Reset file input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -400,31 +423,13 @@ function StepPhotoBio({ onNext, onBack }) {
           )}
         </div>
 
-        <IKContext
-          publicKey={imagekitPublicKey}
-          urlEndpoint={imagekitUrl}
-          authenticator={async () => {
-            const res = await fetch('/api/imagekit-auth');
-            const auth = await res.json();
-            return {
-              token: auth.token,
-              signature: auth.signature,
-              expire: auth.expire,
-            };
-          }}
-        >
-          <IKUpload
-            ref={uploadRef}
-            fileName="profile.jpg"
-            onSuccess={onSuccess}
-            onError={onError}
-            onUploadStart={onUploadStart}
-            onUploadProgress={onUploadProgress}
-            useUniqueFileName
-            folder="/profiles"
-            style={{ display: 'none' }}
-          />
-        </IKContext>
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
 
         {profilePic && (
           <button onClick={() => setProfilePic(null)} className="remove-pic">
