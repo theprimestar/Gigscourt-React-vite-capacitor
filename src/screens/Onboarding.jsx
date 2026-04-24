@@ -365,7 +365,8 @@ function StepPhotoBio({ onNext, onBack }) {
     onNext({ bio: bio.trim(), profilePicUrl: profilePic });
   };
 
-  const handleAvatarClick = () => {
+  const handleAvatarClick = (e) => {
+    e.stopPropagation();
     if (uploadRef.current) {
       uploadRef.current.click();
     }
@@ -379,7 +380,7 @@ function StepPhotoBio({ onNext, onBack }) {
       <label>Profile Picture (optional)</label>
 
       <div className="profile-pic-section">
-        <div className="avatar-wrapper" onClick={handleAvatarClick}>
+        <div className="avatar-wrapper">
           <div className={`avatar-circle ${profilePic ? 'has-photo' : ''}`}>
             {profilePic ? (
               <img src={profilePic} alt="Profile" />
@@ -387,7 +388,11 @@ function StepPhotoBio({ onNext, onBack }) {
               <span>👤</span>
             )}
           </div>
-          <div className="avatar-overlay">📷</div>
+          {!uploading && (
+            <div className="avatar-overlay" onClick={handleAvatarClick}>
+              <span>+</span>
+            </div>
+          )}
           {uploading && (
             <div className="avatar-uploading">
               <div className="spinner"></div>
