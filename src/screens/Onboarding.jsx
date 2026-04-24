@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IKContext, IKUpload } from 'imagekitio-react';
 import Map, { Marker } from 'react-map-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 
 // Step 1: Name + Services
 function StepNameServices({ onNext }) {
