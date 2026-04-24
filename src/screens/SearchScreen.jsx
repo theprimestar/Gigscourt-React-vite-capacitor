@@ -55,6 +55,7 @@ function SearchScreen() {
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
+      trackResize: true,
     });
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -86,9 +87,10 @@ function SearchScreen() {
  // Fix map size when switching to map view
   useEffect(() => {
     if (view === 'map' && map.current) {
-      setTimeout(() => {
-        if (map.current) map.current.invalidateSize();
-      }, 200);
+      // Multiple attempts to ensure the DOM has settled
+      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 50);
+      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 300);
+      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 600);
     }
   }, [view]);
 
@@ -271,7 +273,10 @@ function SearchScreen() {
       <div className="view-toggle">
         <button
           className={`toggle-btn ${view === 'map' ? 'active' : ''}`}
-          onClick={() => setView('map')}
+          onClick={() => {
+            setView('map');
+            setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
+          }}
         >
           🗺️ Map
         </button>
