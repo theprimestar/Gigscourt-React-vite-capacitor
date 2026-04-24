@@ -1099,3 +1099,64 @@ body {
 .search-card {
   margin-bottom: 10px;
 }
+
+/* Bottom Navigation */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.bottom-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 6px 0 20px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  z-index: 50;
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 12px;
+  min-width: 60px;
+  transition: all 0.2s;
+}
+
+.nav-icon {
+  font-size: 22px;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #8e8e93;
+}
+
+.nav-btn.active .nav-label {
+  color: #007aff;
+}
