@@ -333,6 +333,7 @@ function StepPhotoBio({ onNext, onBack }) {
   const [profilePic, setProfilePic] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const uploadRef = useRef(null);
 
   const onUploadProgress = () => {};
 
@@ -364,43 +365,66 @@ function StepPhotoBio({ onNext, onBack }) {
     onNext({ bio: bio.trim(), profilePicUrl: profilePic });
   };
 
+  const handleAvatarClick = () => {
+    if (uploadRef.current) {
+      uploadRef.current.click();
+    }
+  };
+
   return (
     <div className="onboarding-step">
       <h2>Your profile</h2>
       <p className="step-sub">Let clients know who you are</p>
 
       <label>Profile Picture (optional)</label>
+
       <div className="profile-pic-section">
-        {profilePic ? (
-          <div className="profile-pic-preview">
-            <img src={profilePic} alt="Profile" />
-            <button onClick={() => setProfilePic(null)} className="remove-pic">Remove</button>
+        <div className="avatar-wrapper" onClick={handleAvatarClick}>
+          <div className={`avatar-circle ${profilePic ? 'has-photo' : ''}`}>
+            {profilePic ? (
+              <img src={profilePic} alt="Profile" />
+            ) : (
+              <span>👤</span>
+            )}
           </div>
-        ) : (
-          <IKContext
-  publicKey={imagekitPublicKey}
-  urlEndpoint={imagekitUrl}
-  authenticator={async () => {
-    const res = await fetch('/api/imagekit-auth');
-    const auth = await res.json();
-    return {
-      token: auth.token,
-      signature: auth.signature,
-      expire: auth.expire,
-    };
-  }}
->
-  <IKUpload
-    fileName="profile.jpg"
-    onSuccess={onSuccess}
-    onError={onError}
-    onUploadStart={onUploadStart}
-    onUploadProgress={onUploadProgress}
-    useUniqueFileName
-    folder="/profiles"
-  />
-  {uploading && <p>Uploading...</p>}
-</IKContext>
+          <div className="avatar-overlay">📷</div>
+          {uploading && (
+            <div className="avatar-uploading">
+              <div className="spinner"></div>
+            </div>
+          )}
+        </div>
+
+        <IKContext
+          publicKey={imagekitPublicKey}
+          urlEndpoint={imagekitUrl}
+          authenticator={async () => {
+            const res = await fetch('/api/imagekit-auth');
+            const auth = await res.json();
+            return {
+              token: auth.token,
+              signature: auth.signature,
+              expire: auth.expire,
+            };
+          }}
+        >
+          <IKUpload
+            ref={uploadRef}
+            fileName="profile.jpg"
+            onSuccess={onSuccess}
+            onError={onError}
+            onUploadStart={onUploadStart}
+            onUploadProgress={onUploadProgress}
+            useUniqueFileName
+            folder="/profiles"
+            style={{ display: 'none' }}
+          />
+        </IKContext>
+
+        {profilePic && (
+          <button onClick={() => setProfilePic(null)} className="remove-pic">
+            Remove photo
+          </button>
         )}
       </div>
 
