@@ -154,46 +154,41 @@ function StepNameServices({ onNext }) {
 // Step 2: Workspace Location
 function StepLocation({ onNext, onBack }) {
   const [address, setAddress] = useState('');
-  const [viewport, setViewport] = useState({
-    latitude: 9.0765,
-    longitude: 7.3986,
-    zoom: 14,
-    bearing: 0,
-    pitch: 0,
-  });
-  const [markerPos, setMarkerPos] = useState(null);
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const mapRef = useRef(null);
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const marker = useRef(null);
 
   useEffect(() => {
     getCurrentLocation();
+    return () => {
+      if (map.current) map.current.remove();
+    };
   }, []);
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
+      setError('Geolocation is not supported');
+      setLat(9.0765);
+      setLng(7.3986);
       setLoading(false);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        setViewport({
-          latitude,
-          longitude,
-          zoom: 16,
-          bearing: 0,
-          pitch: 0,
-        });
-        setMarkerPos({ latitude, longitude });
-        reverseGeocode(latitude, longitude);
+        setLat(position.coords.latitude);
+        setLng(position.coords.longitude);
+        reverseGeocode(position.coords.latitude, position.coords.longitude);
         setLoading(false);
       },
       () => {
         setError('Unable to get your location. Using default.');
-        setMarkerPos({ latitude: 9.0765, longitude: 7.3986 });
+        setLat(9.0765);
+        setLng(7.3986);
         setLoading(false);
       }
     );
@@ -213,38 +208,56 @@ function StepLocation({ onNext, onBack }) {
     }
   };
 
-  const onMapClick = useCallback((event) => {
-    const { lat, lng } = event.lngLat;
-    setMarkerPos({ latitude: lat, longitude: lng });
-    reverseGeocode(lat, lng);
-  }, []);
+  // Initialize map when lat/lng are set
+  useEffect(() => {
+    if (lat === null || lng === null) return;
+    if (map.current) return; // already initialized
 
-  const onMapMove = useCallback(() => {
-    if (mapRef.current) {
-      const center = mapRef.current.getCenter();
-      setMarkerPos({ latitude: center.lat, longitude: center.lng });
-    }
-  }, []);
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: 'https://tiles.versa.org/styles/colorful/style.json',
+      center: [lng, lat],
+      zoom: 16,
+      dragRotate: true,
+      touchZoomRotate: true,
+      attributionControl: false,
+    });
 
-  const onMapMoveEnd = useCallback(() => {
-    if (mapRef.current) {
-      const center = mapRef.current.getCenter();
-      setMarkerPos({ latitude: center.lat, longitude: center.lng });
-    }
-  }, []);
+    map.current.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+
+    // Add marker
+    const el = document.createElement('div');
+    el.innerHTML = '📍';
+    el.style.fontSize = '36px';
+    el.style.transform = 'translate(-50%, -100%)';
+    el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+
+    marker.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([lng, lat])
+      .addTo(map.current);
+
+    // Update address when map stops moving
+    map.current.on('moveend', () => {
+      const center = map.current.getCenter();
+      setLat(center.lat);
+      setLng(center.lng);
+      marker.current.setLngLat([center.lng, center.lat]);
+      reverseGeocode(center.lat, center.lng);
+    });
+  }, [lat, lng]);
 
   const handleNext = () => {
     if (!address.trim()) {
       setError('Please enter your workspace address');
       return;
     }
-    if (!markerPos) {
+    if (!lat || !lng) {
       setError('Please set your workspace location');
       return;
     }
     onNext({
-      workspaceLat: markerPos.latitude,
-      workspaceLng: markerPos.longitude,
+      workspaceLat: lat,
+      workspaceLng: lng,
       workspaceAddress: address.trim(),
     });
   };
@@ -263,36 +276,18 @@ function StepLocation({ onNext, onBack }) {
       <p className="step-sub">Set your workspace location so clients can find you. Drag the map, pinch to zoom, and rotate with two fingers.</p>
 
       <div className="map-container">
-        <Map
-          ref={mapRef}
-          {...viewport}
-          onMove={(evt) => setViewport(evt.viewState)}
-          onMoveEnd={onMapMoveEnd}
-          onClick={onMapClick}
-          mapLib={import('maplibre-gl')}
-          mapStyle="https://tiles.versa.org/styles/colorful/style.json"
-          dragRotate={true}
-          touchZoomRotate={true}
-          attributionControl={false}
-          style={{ width: '100%', height: '100%', borderRadius: 12, zIndex: 1 }}
-        >
-          {markerPos && (
-            <Marker
-              latitude={markerPos.latitude}
-              longitude={markerPos.longitude}
-              anchor="bottom"
-            >
-              <div style={{
-                fontSize: 36,
-                transform: 'translate(-50%, -100%)',
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
-              }}>
-                📍
-              </div>
-            </Marker>
-          )}
-        </Map>
-        <button onClick={getCurrentLocation} className="map-refresh-btn">
+        <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+        <button onClick={() => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              map.current.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 });
+              marker.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
+              setLat(pos.coords.latitude);
+              setLng(pos.coords.longitude);
+              reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+            }
+          );
+        }} className="map-refresh-btn">
           📍 My Location
         </button>
       </div>
