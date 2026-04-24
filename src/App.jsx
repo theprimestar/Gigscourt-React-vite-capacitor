@@ -11,6 +11,7 @@ import './App.css';
 function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
+  const [chatTarget, setChatTarget] = useState(null);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -104,9 +105,9 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-content">
-  {activeTab === 'home' && <HomeScreen />}
-  {activeTab === 'search' && <SearchScreen />}
-  {activeTab === 'chats' && <ChatListScreen />}
+  {activeTab === 'home' && <HomeScreen onStartChat={(user) => setChatTarget(user)} />}
+{activeTab === 'search' && <SearchScreen onStartChat={(user) => setChatTarget(user)} />}
+{activeTab === 'chats' && <ChatListScreen chatTarget={chatTarget} onClearChatTarget={() => setChatTarget(null)} />}
 </div>
       <nav className="bottom-nav">
         <button
