@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IKContext, IKUpload } from 'imagekitio-react';
-import maplibregl from 'maplibre-gl';
+import L from 'leaflet';
+import 'leaflet-rotate';
 
 // Step 1: Name + Services
 function StepNameServices({ onNext }) {
@@ -211,37 +212,48 @@ function StepLocation({ onNext, onBack }) {
   // Initialize map when lat/lng are set
   useEffect(() => {
     if (lat === null || lng === null) return;
-    if (map.current) return; // already initialized
+    if (map.current) return;
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: 'https://tiles.versa.org/styles/colorful/style.json',
-      center: [lng, lat],
+    map.current = L.map(mapContainer.current, {
+      center: [lat, lng],
       zoom: 16,
-      dragRotate: true,
-      touchZoomRotate: true,
-      attributionControl: false,
+      zoomControl: false,
+      attributionControl: true,
+      rotate: true,
+      touchRotate: true,
     });
 
-    map.current.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    // Stylish CartoDB Positron tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20,
+    }).addTo(map.current);
 
-    // Add marker
-    const el = document.createElement('div');
-    el.innerHTML = '📍';
-    el.style.fontSize = '36px';
-    el.style.transform = 'translate(-50%, -100%)';
-    el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+    // Add rotation control
+    L.control.rotate({ position: 'topright' }).addTo(map.current);
 
-    marker.current = new maplibregl.Marker({ element: el, anchor: 'bottom' })
-      .setLngLat([lng, lat])
-      .addTo(map.current);
+    // Custom marker icon
+    const markerIcon = L.divIcon({
+      html: '<div style="font-size:36px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));transform:translate(-50%,-100%);">📍</div>',
+      className: '',
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+    });
+
+    marker.current = L.marker([lat, lng], { icon: markerIcon, draggable: false }).addTo(map.current);
+
+    // Update center pin when map moves
+    map.current.on('move', () => {
+      const center = map.current.getCenter();
+      marker.current.setLatLng([center.lat, center.lng]);
+    });
 
     // Update address when map stops moving
     map.current.on('moveend', () => {
       const center = map.current.getCenter();
       setLat(center.lat);
       setLng(center.lng);
-      marker.current.setLngLat([center.lng, center.lat]);
       reverseGeocode(center.lat, center.lng);
     });
   }, [lat, lng]);
@@ -276,12 +288,11 @@ function StepLocation({ onNext, onBack }) {
       <p className="step-sub">Set your workspace location so clients can find you. Drag the map, pinch to zoom, and rotate with two fingers.</p>
 
       <div className="map-container">
-        <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
+        <div ref={mapContainer} style={{ width: '100%', height: '100%', zIndex: 1 }} />
         <button onClick={() => {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
-              map.current.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 });
-              marker.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
+              map.current.setView([pos.coords.latitude, pos.coords.longitude], 16);
               setLat(pos.coords.latitude);
               setLng(pos.coords.longitude);
               reverseGeocode(pos.coords.latitude, pos.coords.longitude);
