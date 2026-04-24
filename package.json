@@ -1,4 +1,18 @@
-"dependencies": {
+{
+  "name": "GigsCourt",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios"
+  },
+  "dependencies": {
     "@capacitor/core": "^7.0.0",
     "@capacitor/android": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
@@ -10,4 +24,9 @@
     "leaflet-rotate": "^0.2.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
-},
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2"
+  }
+}
