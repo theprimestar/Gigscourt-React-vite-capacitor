@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IKContext, IKUpload } from 'imagekitio-react';
+import Map, { Marker } from 'react-map-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 // Step 1: Name + Services
 function StepNameServices({ onNext }) {
@@ -153,10 +155,17 @@ function StepNameServices({ onNext }) {
 // Step 2: Workspace Location
 function StepLocation({ onNext, onBack }) {
   const [address, setAddress] = useState('');
-  const [lat, setLat] = useState(null);
-  const [lng, setLng] = useState(null);
-  const [mapUrl, setMapUrl] = useState('');
+  const [viewport, setViewport] = useState({
+    latitude: 9.0765,
+    longitude: 7.3986,
+    zoom: 14,
+    bearing: 0,
+    pitch: 0,
+  });
+  const [markerPos, setMarkerPos] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const mapRef = useRef(null);
 
   useEffect(() => {
     getCurrentLocation();
@@ -165,21 +174,28 @@ function StepLocation({ onNext, onBack }) {
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
+      setLoading(false);
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setLat(latitude);
-        setLng(longitude);
-        setMapUrl(
-          `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=16&size=400x250&markers=color:red%7C${latitude},${longitude}&key=YOUR_GOOGLE_MAPS_KEY`
-        );
+        setViewport({
+          latitude,
+          longitude,
+          zoom: 16,
+          bearing: 0,
+          pitch: 0,
+        });
+        setMarkerPos({ latitude, longitude });
         reverseGeocode(latitude, longitude);
+        setLoading(false);
       },
       () => {
-        setError('Unable to get your location. Please enable location access.');
+        setError('Unable to get your location. Using default.');
+        setMarkerPos({ latitude: 9.0765, longitude: 7.3986 });
+        setLoading(false);
       }
     );
   };
@@ -198,33 +214,87 @@ function StepLocation({ onNext, onBack }) {
     }
   };
 
+  const onMapClick = useCallback((event) => {
+    const { lat, lng } = event.lngLat;
+    setMarkerPos({ latitude: lat, longitude: lng });
+    reverseGeocode(lat, lng);
+  }, []);
+
+  const onMapMove = useCallback(() => {
+    if (mapRef.current) {
+      const center = mapRef.current.getCenter();
+      setMarkerPos({ latitude: center.lat, longitude: center.lng });
+    }
+  }, []);
+
+  const onMapMoveEnd = useCallback(() => {
+    if (mapRef.current) {
+      const center = mapRef.current.getCenter();
+      setMarkerPos({ latitude: center.lat, longitude: center.lng });
+    }
+  }, []);
+
   const handleNext = () => {
     if (!address.trim()) {
       setError('Please enter your workspace address');
       return;
     }
-    if (!lat || !lng) {
+    if (!markerPos) {
       setError('Please set your workspace location');
       return;
     }
-    onNext({ workspaceLat: lat, workspaceLng: lng, workspaceAddress: address.trim() });
+    onNext({
+      workspaceLat: markerPos.latitude,
+      workspaceLng: markerPos.longitude,
+      workspaceAddress: address.trim(),
+    });
   };
+
+  if (loading) {
+    return (
+      <div className="onboarding-step">
+        <p>Getting your location...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding-step">
       <h2>Where do you work?</h2>
-      <p className="step-sub">Set your workspace location so clients can find you</p>
+      <p className="step-sub">Set your workspace location so clients can find you. Drag the map, pinch to zoom, and rotate with two fingers.</p>
 
       <div className="map-container">
-        {mapUrl ? (
-          <img src={mapUrl} alt="Workspace location" className="map-image" />
-        ) : (
-          <div className="map-placeholder">
-            <p>Loading map...</p>
-          </div>
-        )}
+        <Map
+          ref={mapRef}
+          {...viewport}
+          onMove={(evt) => setViewport(evt.viewState)}
+          onMoveEnd={onMapMoveEnd}
+          onClick={onMapClick}
+          mapLib={import('maplibre-gl')}
+          mapStyle="https://tiles.versa.org/styles/colorful/style.json"
+          dragRotate={true}
+          touchZoomRotate={true}
+          attributionControl={false}
+          style={{ width: '100%', height: 300, borderRadius: 12 }}
+        >
+          {markerPos && (
+            <Marker
+              latitude={markerPos.latitude}
+              longitude={markerPos.longitude}
+              anchor="bottom"
+            >
+              <div style={{
+                fontSize: 36,
+                transform: 'translate(-50%, -100%)',
+                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
+              }}>
+                📍
+              </div>
+            </Marker>
+          )}
+        </Map>
         <button onClick={getCurrentLocation} className="map-refresh-btn">
-          📍 Use My Current Location
+          📍 My Location
         </button>
       </div>
 
