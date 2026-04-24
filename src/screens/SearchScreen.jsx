@@ -41,20 +41,24 @@ function SearchScreen() {
 
   // Initialize map
   useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current) return;
 
-    map.current = L.map(mapContainer.current, {
-      center: [viewerLat, viewerLng],
-      zoom: 13,
-      zoomControl: false,
-      attributionControl: false,
-    });
+    if (!map.current) {
+      map.current = L.map(mapContainer.current, {
+        center: [viewerLat, viewerLng],
+        zoom: 14,
+        zoomControl: false,
+        attributionControl: false,
+      });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 20,
-    }).addTo(map.current);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }).addTo(map.current);
+    } else {
+      map.current.setView([viewerLat, viewerLng], 14);
+    }
   }, [viewerLat, viewerLng]);
 
   // Search function
