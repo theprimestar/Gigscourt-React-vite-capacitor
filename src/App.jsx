@@ -3,18 +3,18 @@ import { supabase } from './lib/supabase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import WelcomeScreen from './screens/WelcomeScreen';
+import Onboarding from './screens/Onboarding';
 import './App.css';
 
 function App() {
   const [screen, setScreen] = useState('loading');
 
   useEffect(() => {
-    // Check if user is already logged in
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        setScreen('welcome');
+        checkOnboarding(session.user.id);
       } else {
         setScreen('auth');
       }
@@ -22,10 +22,9 @@ function App() {
 
     checkSession();
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        setScreen('welcome');
+        checkOnboarding(session.user.id);
       } else {
         setScreen('auth');
       }
@@ -33,6 +32,24 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkOnboarding = async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', userId)
+      .single();
+
+    if (data?.onboarding_completed) {
+      setScreen('welcome');
+    } else {
+      setScreen('onboarding');
+    }
+  };
+
+  const handleOnboardingComplete = () => {
+    setScreen('welcome');
+  };
 
   if (screen === 'loading') {
     return (
@@ -53,7 +70,15 @@ function App() {
   if (screen === 'verify') {
     return (
       <div className="app">
-        <VerifyEmailScreen onVerified={() => setScreen('welcome')} />
+        <VerifyEmailScreen onVerified={() => setScreen('onboarding')} />
+      </div>
+    );
+  }
+
+  if (screen === 'onboarding') {
+    return (
+      <div className="app">
+        <Onboarding onComplete={handleOnboardingComplete} />
       </div>
     );
   }
