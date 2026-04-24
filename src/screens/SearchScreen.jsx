@@ -55,7 +55,6 @@ function SearchScreen() {
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
-      trackResize: true,
     });
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -84,13 +83,10 @@ function SearchScreen() {
     }
   }, [viewerLat, viewerLng]);
 
- // Fix map size when switching to map view
+  // Fix map size when switching to map view
   useEffect(() => {
     if (view === 'map' && map.current) {
-      // Multiple attempts to ensure the DOM has settled
-      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 50);
-      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 300);
-      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 600);
+      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
     }
   }, [view]);
 
@@ -273,10 +269,7 @@ function SearchScreen() {
       <div className="view-toggle">
         <button
           className={`toggle-btn ${view === 'map' ? 'active' : ''}`}
-          onClick={() => {
-            setView('map');
-            setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
-          }}
+          onClick={() => setView('map')}
         >
           🗺️ Map
         </button>
@@ -288,91 +281,87 @@ function SearchScreen() {
         </button>
       </div>
 
-      {/* Map View */}
-      {view === 'map' && (
-        <div className="search-map-container">
-          <div ref={mapContainer} className="search-map" />
+      {/* Map View — always rendered, hidden with CSS when inactive */}
+      <div className={`search-map-container ${view === 'map' ? 'view-visible' : 'view-hidden'}`}>
+        <div ref={mapContainer} className="search-map" />
 
-          {/* Empty State Overlay */}
-          {!hasSearched && !loading && (
-            <div className="map-empty-overlay">
-              <div className="map-empty-card">
-                <p className="map-empty-title">Find providers near you</p>
-                <p className="map-empty-sub">Tap a service above or search</p>
-              </div>
+        {/* Empty State Overlay */}
+        {!hasSearched && !loading && (
+          <div className="map-empty-overlay">
+            <div className="map-empty-card">
+              <p className="map-empty-title">Find providers near you</p>
+              <p className="map-empty-sub">Tap a service above or search</p>
             </div>
-          )}
+          </div>
+        )}
 
-          {loading && (
-            <div className="search-map-loading">
-              <div className="spinner"></div>
-            </div>
-          )}
+        {loading && (
+          <div className="search-map-loading">
+            <div className="spinner"></div>
+          </div>
+        )}
 
-          {hasSearched && !loading && providers.length === 0 && (
-            <div className="search-map-empty">
-              <p>No providers found</p>
-              <p className="search-map-empty-sub">Try a different service or increase radius</p>
-            </div>
-          )}
-        </div>
-      )}
+        {hasSearched && !loading && providers.length === 0 && (
+          <div className="search-map-empty">
+            <p>No providers found</p>
+            <p className="search-map-empty-sub">Try a different service or increase radius</p>
+          </div>
+        )}
+      </div>
 
-      {/* List View */}
-      {view === 'list' && (
-        <div className="search-list">
-          {!hasSearched && !loading && (
-            <div className="search-list-empty-state">
-              <div className="list-empty-icon">📋</div>
-              <p className="list-empty-title">Search for a service</p>
-              <p className="list-empty-sub">to see providers near you</p>
-            </div>
-          )}
+      {/* List View — always rendered, hidden with CSS when inactive */}
+      <div className={`search-list ${view === 'list' ? 'view-visible' : 'view-hidden'}`}>
+        {!hasSearched && !loading && (
+          <div className="search-list-empty-state">
+            <div className="list-empty-icon">📋</div>
+            <p className="list-empty-title">Search for a service</p>
+            <p className="list-empty-sub">to see providers near you</p>
+          </div>
+        )}
 
-          {loading && (
-            <div className="search-list-loading">
-              <div className="spinner"></div>
-            </div>
-          )}
+        {loading && (
+          <div className="search-list-loading">
+            <div className="spinner"></div>
+          </div>
+        )}
 
-          {hasSearched && !loading && providers.length === 0 && (
-            <div className="search-list-empty">
-              <p>No providers found for "{activeService?.replace(/-/g, ' ')}"</p>
-              <p className="search-list-empty-sub">Try a different service or increase radius</p>
-            </div>
-          )}
+        {hasSearched && !loading && providers.length === 0 && (
+          <div className="search-list-empty">
+            <p>No providers found for "{activeService?.replace(/-/g, ' ')}"</p>
+            <p className="search-list-empty-sub">Try a different service or increase radius</p>
+          </div>
+        )}
 
-          {providers.map((provider) => (
-            <div
-              key={provider.id}
-              className="user-card search-card"
-              onClick={() => setSelectedUser(provider)}
-            >
-              <div className="card-avatar">
-                {provider.profile_pic_url ? (
-                  <img src={provider.profile_pic_url} alt={provider.full_name} />
-                ) : (
-                  <div className="card-avatar-placeholder">👤</div>
-                )}
-              </div>
-              <div className="card-info">
-                <h3>{provider.full_name}</h3>
-                <p className="card-services">
-                  {provider.services?.slice(0, 3).map((s) => s.replace(/-/g, ' ')).join(', ')}
-                </p>
-                <p className="card-distance">{formatDistance(provider.distance_meters)}</p>
-              </div>
-              <div className="card-rating">
-                <span className="rating-badge">New</span>
-              </div>
+        {providers.map((provider) => (
+          <div
+            key={provider.id}
+            className="user-card search-card"
+            onClick={() => setSelectedUser(provider)}
+          >
+            <div className="card-avatar">
+              {provider.profile_pic_url ? (
+                <img src={provider.profile_pic_url} alt={provider.full_name} />
+              ) : (
+                <div className="card-avatar-placeholder">👤</div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+            <div className="card-info">
+              <h3>{provider.full_name}</h3>
+              <p className="card-services">
+                {provider.services?.slice(0, 3).map((s) => s.replace(/-/g, ' ')).join(', ')}
+              </p>
+              <p className="card-distance">{formatDistance(provider.distance_meters)}</p>
+            </div>
+            <div className="card-rating">
+              <span className="rating-badge">New</span>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Bottom Sheet */}
       {selectedUser && (
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)} style={{ zIndex: 200 }}>
+        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="bottom-sheet-handle"></div>
             <div className="bottom-sheet-content">
