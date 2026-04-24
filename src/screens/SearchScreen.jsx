@@ -3,21 +3,28 @@ import { supabase } from '../lib/supabase';
 import L from 'leaflet';
 import 'leaflet-rotate';
 
+const POPULAR_SERVICES = [
+  'barbing', 'tailoring', 'makeup', 'hairdressing',
+  'electrical', 'plumbing', 'auto-mechanic', 'photography'
+];
+
 function SearchScreen() {
-  const [view, setView] = useState('map'); // 'map' or 'list'
+  const [view, setView] = useState('map');
   const [searchTerm, setSearchTerm] = useState('');
-  const [radius, setRadius] = useState(1000); // default 1km in meters
+  const [radius, setRadius] = useState(1000);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [viewerLat, setViewerLat] = useState(9.0765);
   const [viewerLng, setViewerLng] = useState(7.3986);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [services, setServices] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeService, setActiveService] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [services, setServices] = useState([]);
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markers = useRef([]);
-  const cursorRef = useRef({ distance: null, id: null });
+  const viewerMarker = useRef(null);
 
   // Get viewer location
   useEffect(() => {
@@ -41,39 +48,63 @@ function SearchScreen() {
 
   // Initialize map
   useEffect(() => {
-    if (!mapContainer.current) return;
+    if (!mapContainer.current || map.current) return;
 
-    if (!map.current) {
-      map.current = L.map(mapContainer.current, {
-        center: [viewerLat, viewerLng],
-        zoom: 14,
-        zoomControl: false,
-        attributionControl: false,
-      });
+    map.current = L.map(mapContainer.current, {
+      center: [viewerLat, viewerLng],
+      zoom: 14,
+      zoomControl: false,
+      attributionControl: false,
+    });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20,
-      }).addTo(map.current);
-    } else {
-      map.current.setView([viewerLat, viewerLng], 14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20,
+    }).addTo(map.current);
+
+    // Add viewer location marker
+    const vIcon = L.divIcon({
+      html: '<div style="width:14px;height:14px;background:#007aff;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,122,255,0.4);"></div>',
+      className: '',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    viewerMarker.current = L.marker([viewerLat, viewerLng], { icon: vIcon }).addTo(map.current);
+  }, [viewerLat, viewerLng]);
+
+  // Update map center when location changes
+  useEffect(() => {
+    if (map.current) {
+      map.current.setView([viewerLat, viewerLng], map.current.getZoom());
+      if (viewerMarker.current) {
+        viewerMarker.current.setLatLng([viewerLat, viewerLng]);
+      }
     }
   }, [viewerLat, viewerLng]);
 
+  // Fix map size when switching to map view
+  useEffect(() => {
+    if (view === 'map' && map.current) {
+      setTimeout(() => map.current.invalidateSize(), 100);
+    }
+  }, [view]);
+
   // Search function
-  const handleSearch = useCallback(async (term, rad) => {
+  const handleSearch = useCallback(async (term) => {
     const trimmed = term.trim().toLowerCase().replace(/\s+/g, '-');
     if (!trimmed) return;
 
     setLoading(true);
-    cursorRef.current = { distance: null, id: null };
+    setActiveService(trimmed);
+    setHasSearched(true);
+    setShowSuggestions(false);
 
     const { data } = await supabase.rpc('search_providers', {
       viewer_lat: viewerLat,
       viewer_lng: viewerLng,
       service_slug: trimmed,
-      max_distance_meters: rad,
+      max_distance_meters: radius,
       p_limit: 50,
       p_cursor_distance: null,
       p_cursor_id: null,
@@ -81,67 +112,54 @@ function SearchScreen() {
 
     setProviders(data || []);
     setLoading(false);
-    setShowSuggestions(false);
-  }, [viewerLat, viewerLng]);
+  }, [viewerLat, viewerLng, radius]);
 
   // Update map markers when providers change
   useEffect(() => {
     if (!map.current) return;
 
-    // Clear old markers
     markers.current.forEach((m) => m.remove());
     markers.current = [];
 
     if (providers.length === 0) return;
 
     const bounds = L.latLngBounds();
+    bounds.extend([viewerLat, viewerLng]);
 
     providers.forEach((provider) => {
       const markerIcon = L.divIcon({
         html: `<div style="
-          width: 40px; height: 40px;
-          background: white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          border: 2px solid #007aff;
-          overflow: hidden;
+          width:42px;height:42px;
+          background:white;
+          border-radius:50%;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:22px;
+          box-shadow:0 2px 10px rgba(0,0,0,0.15);
+          border:2px solid #007aff;
+          overflow:hidden;
         ">${
           provider.profile_pic_url
             ? `<img src="${provider.profile_pic_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />`
             : '👤'
         }</div>`,
         className: '',
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
       });
 
       const marker = L.marker(
-        [provider.workspace_lat || viewerLat, provider.workspace_lng || viewerLng],
+        [provider.workspace_lat, provider.workspace_lng],
         { icon: markerIcon }
       ).addTo(map.current);
 
       marker.on('click', () => setSelectedUser(provider));
       markers.current.push(marker);
-      bounds.extend(marker.getLatLng());
+      bounds.extend([provider.workspace_lat, provider.workspace_lng]);
     });
 
-    // Add viewer location
-    const viewerIcon = L.divIcon({
-      html: '<div style="width:12px;height:12px;background:#007aff;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
-      className: '',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-    });
-    L.marker([viewerLat, viewerLng], { icon: viewerIcon }).addTo(map.current);
-    bounds.extend([viewerLat, viewerLng]);
-
-    if (providers.length > 0) {
-      map.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-    }
+    map.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
   }, [providers, viewerLat, viewerLng]);
 
   const formatDistance = (meters) => {
@@ -152,6 +170,11 @@ function SearchScreen() {
   const filteredSuggestions = services.filter((s) =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).slice(0, 6);
+
+  const handleChipTap = (slug) => {
+    setSearchTerm(slug.replace(/-/g, ' '));
+    handleSearch(slug);
+  };
 
   return (
     <div className="search-screen">
@@ -176,6 +199,8 @@ function SearchScreen() {
               onClick={() => {
                 setSearchTerm('');
                 setProviders([]);
+                setActiveService(null);
+                setHasSearched(false);
               }}
             >
               ✕
@@ -191,7 +216,7 @@ function SearchScreen() {
                 className="suggestion-item"
                 onClick={() => {
                   setSearchTerm(s.name);
-                  handleSearch(s.name, radius);
+                  handleSearch(s.name);
                 }}
               >
                 <span className="suggestion-name">{s.name}</span>
@@ -200,6 +225,19 @@ function SearchScreen() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Service Chips */}
+      <div className="chips-scroll">
+        {POPULAR_SERVICES.map((slug) => (
+          <button
+            key={slug}
+            className={`chip-btn ${activeService === slug ? 'active' : ''}`}
+            onClick={() => handleChipTap(slug)}
+          >
+            {slug.replace(/-/g, ' ')}
+          </button>
+        ))}
       </div>
 
       {/* Radius Slider */}
@@ -217,7 +255,7 @@ function SearchScreen() {
           onChange={(e) => {
             const val = Number(e.target.value);
             setRadius(val);
-            if (searchTerm) handleSearch(searchTerm, val);
+            if (activeService) handleSearch(activeService);
           }}
           className="radius-slider"
         />
@@ -247,14 +285,27 @@ function SearchScreen() {
       {view === 'map' && (
         <div className="search-map-container">
           <div ref={mapContainer} className="search-map" />
+
+          {/* Empty State Overlay */}
+          {!hasSearched && !loading && (
+            <div className="map-empty-overlay">
+              <div className="map-empty-card">
+                <p className="map-empty-title">Find providers near you</p>
+                <p className="map-empty-sub">Tap a service above or search</p>
+              </div>
+            </div>
+          )}
+
           {loading && (
             <div className="search-map-loading">
               <div className="spinner"></div>
             </div>
           )}
-          {!loading && providers.length === 0 && searchTerm && (
+
+          {hasSearched && !loading && providers.length === 0 && (
             <div className="search-map-empty">
               <p>No providers found</p>
+              <p className="search-map-empty-sub">Try a different service or increase radius</p>
             </div>
           )}
         </div>
@@ -263,16 +314,27 @@ function SearchScreen() {
       {/* List View */}
       {view === 'list' && (
         <div className="search-list">
+          {!hasSearched && !loading && (
+            <div className="search-list-empty-state">
+              <div className="list-empty-icon">📋</div>
+              <p className="list-empty-title">Search for a service</p>
+              <p className="list-empty-sub">to see providers near you</p>
+            </div>
+          )}
+
           {loading && (
             <div className="search-list-loading">
               <div className="spinner"></div>
             </div>
           )}
-          {!loading && providers.length === 0 && searchTerm && (
+
+          {hasSearched && !loading && providers.length === 0 && (
             <div className="search-list-empty">
-              <p>No providers found for "{searchTerm}"</p>
+              <p>No providers found for "{activeService?.replace(/-/g, ' ')}"</p>
+              <p className="search-list-empty-sub">Try a different service or increase radius</p>
             </div>
           )}
+
           {providers.map((provider) => (
             <div
               key={provider.id}
@@ -328,10 +390,7 @@ function SearchScreen() {
 
       {/* Tap overlay to close suggestions */}
       {showSuggestions && (
-        <div
-          className="suggestions-overlay"
-          onClick={() => setShowSuggestions(false)}
-        />
+        <div className="suggestions-overlay" onClick={() => setShowSuggestions(false)} />
       )}
     </div>
   );
