@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
-import WelcomeScreen from './screens/WelcomeScreen';
 import Onboarding from './screens/Onboarding';
+import HomeScreen from './screens/HomeScreen';
 import './App.css';
 
 function App() {
@@ -41,14 +41,14 @@ function App() {
       .single();
 
     if (data?.onboarding_completed) {
-      setScreen('welcome');
+      setScreen('home');
     } else {
       setScreen('onboarding');
     }
   };
 
   const handleOnboardingComplete = () => {
-    setScreen('welcome');
+    setScreen('home');
   };
 
   if (screen === 'loading') {
@@ -84,9 +84,7 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <WelcomeScreen />
-    </div>
+    <HomeScreen />
   );
 }
 
