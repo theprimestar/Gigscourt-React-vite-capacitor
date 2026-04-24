@@ -16,7 +16,7 @@ function App() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        checkOnboarding(session.user.id);
+        determineScreen(session.user);
       } else {
         setScreen('auth');
       }
@@ -26,7 +26,7 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        checkOnboarding(session.user.id);
+        determineScreen(session.user);
       } else {
         setScreen('auth');
       }
@@ -35,12 +35,19 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkOnboarding = async (userId) => {
+  const determineScreen = async (user) => {
+    // Check email verification FIRST
+    if (!user.email_confirmed_at) {
+      setScreen('verify');
+      return;
+    }
+
+    // Email is confirmed, check onboarding
     const { data } = await supabase
       .from('profiles')
       .select('onboarding_completed')
-      .eq('id', userId)
-      .single();
+      .eq('id', user.id)
+      .maybeSingle();
 
     if (data?.onboarding_completed) {
       setScreen('home');
@@ -72,7 +79,15 @@ function App() {
   if (screen === 'verify') {
     return (
       <div className="app">
-        <VerifyEmailScreen onVerified={() => setScreen('onboarding')} />
+        <VerifyEmailScreen onVerified={() => {
+          const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email_confirmed_at) {
+              determineScreen(user);
+            }
+          };
+          checkUser();
+        }} />
       </div>
     );
   }
