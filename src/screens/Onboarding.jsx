@@ -198,7 +198,12 @@ function StepLocation({ onNext, onBack }) {
   const reverseGeocode = async (latitude, longitude) => {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+        {
+          headers: {
+            'User-Agent': 'GigsCourt/0.0.1',
+          },
+        }
       );
       const data = await res.json();
       if (data.display_name) {
