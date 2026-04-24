@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import ChatScreen from './ChatScreen';
 
-function ChatListScreen() {
+function ChatListScreen({ chatTarget, onClearChatTarget }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
@@ -14,7 +14,17 @@ function ChatListScreen() {
   useEffect(() => {
     setupChats();
   }, []);
-
+useEffect(() => {
+    if (chatTarget && currentUserId) {
+      const chatId = [currentUserId, chatTarget.id].sort().join('_');
+      setActiveChat({
+        id: chatId,
+        participants: [currentUserId, chatTarget.id],
+      });
+      onClearChatTarget && onClearChatTarget();
+    }
+  }, [chatTarget, currentUserId]);
+  
   const setupChats = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
