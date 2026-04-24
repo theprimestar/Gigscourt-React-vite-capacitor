@@ -1,22 +1,9 @@
-{
-  "name": "GigsCourt",
-  "private": true,
-  "version": "0.0.1",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "cap:add:android": "npx cap add android",
-    "cap:add:ios": "npx cap add ios",
-    "cap:sync": "npx cap sync",
-    "cap:open:android": "npx cap open android",
-    "cap:open:ios": "npx cap open ios"
-  },
-  "dependencies": {
+"dependencies": {
     "@capacitor/core": "^7.0.0",
     "@capacitor/android": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
     "@supabase/supabase-js": "^2.49.1",
+    "firebase": "^11.0.0",
     "imagekit": "^5.0.0",
     "imagekitio-react": "^1.0.0",
     "leaflet": "^1.9.4",
@@ -24,8 +11,3 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
 },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2"
-  }
-}
