@@ -21,8 +21,7 @@
     "imagekitio-react": "^1.0.0",
     "maplibre-gl": "^4.7.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-map-gl": "^7.1.7"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
