@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-function HomeScreen() {
+function HomeScreen({ onStartChat }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -204,7 +204,15 @@ function HomeScreen() {
                   ? selectedUser.services.map((s) => s.replace(/-/g, ' ')).join(' • ')
                   : 'No services listed'}
               </p>
-              <button className="sheet-view-profile-btn">View Full Profile</button>
+              <div className="sheet-buttons">
+  <button className="sheet-message-btn" onClick={() => {
+    onStartChat && onStartChat(selectedUser);
+    setSelectedUser(null);
+  }}>
+    💬 Message
+  </button>
+  <button className="sheet-view-profile-btn">View Full Profile</button>
+</div>
             </div>
           </div>
         </div>
