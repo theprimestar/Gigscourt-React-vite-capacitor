@@ -377,18 +377,30 @@ function StepPhotoBio({ onNext, onBack }) {
             <button onClick={() => setProfilePic(null)} className="remove-pic">Remove</button>
           </div>
         ) : (
-          <IKContext publicKey={imagekitPublicKey} urlEndpoint={imagekitUrl}>
-            <IKUpload
-              fileName="profile.jpg"
-              onSuccess={onSuccess}
-              onError={onError}
-              onUploadStart={onUploadStart}
-              onUploadProgress={onUploadProgress}
-              useUniqueFileName
-              folder="/profiles"
-            />
-            {uploading && <p>Uploading...</p>}
-          </IKContext>
+          <IKContext
+  publicKey={imagekitPublicKey}
+  urlEndpoint={imagekitUrl}
+  authenticator={async () => {
+    const res = await fetch('/api/imagekit-auth');
+    const auth = await res.json();
+    return {
+      token: auth.token,
+      signature: auth.signature,
+      expire: auth.expire,
+    };
+  }}
+>
+  <IKUpload
+    fileName="profile.jpg"
+    onSuccess={onSuccess}
+    onError={onError}
+    onUploadStart={onUploadStart}
+    onUploadProgress={onUploadProgress}
+    useUniqueFileName
+    folder="/profiles"
+  />
+  {uploading && <p>Uploading...</p>}
+</IKContext>
         )}
       </div>
 
