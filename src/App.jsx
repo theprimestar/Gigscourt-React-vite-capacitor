@@ -9,6 +9,7 @@ import './App.css';
 
 function App() {
   const [screen, setScreen] = useState('loading');
+  const [activeTab, setActiveTab] = useState('home');
 
   useEffect(() => {
     const checkSession = async () => {
@@ -84,44 +85,36 @@ function App() {
     );
   }
 
-  const [activeTab, setActiveTab] = useState('home');
-
-  if (screen === 'home') {
-    return (
-      <div className="app-shell">
-        <div className="app-content">
-          {activeTab === 'home' ? <HomeScreen /> : <SearchScreen />}
-        </div>
-        <nav className="bottom-nav">
-          <button
-            className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
-            onClick={() => setActiveTab('home')}
-          >
-            <span className="nav-icon">🏠</span>
-            <span className="nav-label">Home</span>
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
-            onClick={() => setActiveTab('search')}
-          >
-            <span className="nav-icon">🔍</span>
-            <span className="nav-label">Search</span>
-          </button>
-          <button className="nav-btn">
-            <span className="nav-icon">💬</span>
-            <span className="nav-label">Chats</span>
-          </button>
-          <button className="nav-btn">
-            <span className="nav-icon">👤</span>
-            <span className="nav-label">Profile</span>
-          </button>
-        </nav>
-      </div>
-    );
-  }
-
   return (
-    <HomeScreen />
+    <div className="app-shell">
+      <div className="app-content">
+        {activeTab === 'home' ? <HomeScreen /> : <SearchScreen />}
+      </div>
+      <nav className="bottom-nav">
+        <button
+          className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
+          onClick={() => setActiveTab('home')}
+        >
+          <span className="nav-icon">🏠</span>
+          <span className="nav-label">Home</span>
+        </button>
+        <button
+          className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
+          onClick={() => setActiveTab('search')}
+        >
+          <span className="nav-icon">🔍</span>
+          <span className="nav-label">Search</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">💬</span>
+          <span className="nav-label">Chats</span>
+        </button>
+        <button className="nav-btn">
+          <span className="nav-icon">👤</span>
+          <span className="nav-label">Profile</span>
+        </button>
+      </nav>
+    </div>
   );
 }
 
