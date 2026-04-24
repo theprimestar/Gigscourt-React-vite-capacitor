@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
-import { IKContext } from 'imagekitio-react';
-import { ImageKit } from 'imagekit-javascript';
 import L from 'leaflet';
 import 'leaflet-rotate';
 
@@ -363,24 +361,29 @@ function StepPhotoBio({ onNext, onBack }) {
     setError('');
 
     try {
-      // Get auth params from our serverless function
       const authRes = await fetch('/api/imagekit-auth');
       const auth = await authRes.json();
 
-      const imagekit = new ImageKit({
-        publicKey: imagekitPublicKey,
-        urlEndpoint: imagekitUrl,
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', 'profile.jpg');
+      formData.append('folder', '/profiles');
+      formData.append('useUniqueFileName', 'true');
+      formData.append('publicKey', imagekitPublicKey);
+      formData.append('token', auth.token);
+      formData.append('signature', auth.signature);
+      formData.append('expire', auth.expire);
+
+      const uploadRes = await fetch('https://upload.imagekit.io/api/v2/files/upload', {
+        method: 'POST',
+        body: formData,
       });
 
-      const result = await imagekit.upload({
-        file: file,
-        fileName: 'profile.jpg',
-        folder: '/profiles',
-        useUniqueFileName: true,
-        token: auth.token,
-        signature: auth.signature,
-        expire: auth.expire,
-      });
+      const result = await uploadRes.json();
+
+      if (!uploadRes.ok) {
+        throw new Error(result.message || 'Upload failed');
+      }
 
       setProfilePic(result.url);
     } catch (err) {
@@ -388,7 +391,6 @@ function StepPhotoBio({ onNext, onBack }) {
       console.error(err);
     } finally {
       setUploading(false);
-      // Reset file input so the same file can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
