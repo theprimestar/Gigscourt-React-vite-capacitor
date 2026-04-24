@@ -1058,7 +1058,7 @@ body {
 /* Map */
 .search-map-container {
   position: relative;
-  height: calc(100vh - 260px);
+  height: calc(100vh - 320px);
   margin: 0 16px;
   border-radius: 16px;
   overflow: hidden;
