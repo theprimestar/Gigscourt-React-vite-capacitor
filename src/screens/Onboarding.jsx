@@ -374,7 +374,7 @@ function StepPhotoBio({ onNext, onBack }) {
       formData.append('signature', auth.signature);
       formData.append('expire', auth.expire);
 
-      const uploadRes = await fetch('https://upload.imagekit.io/api/v2/files/upload', {
+      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
         method: 'POST',
         body: formData,
       });
