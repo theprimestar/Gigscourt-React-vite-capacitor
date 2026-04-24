@@ -1308,3 +1308,11 @@ body {
 .bottom-sheet-overlay {
   z-index: 200 !important;
 }
+
+.view-visible {
+  display: block;
+}
+
+.view-hidden {
+  display: none;
+}
