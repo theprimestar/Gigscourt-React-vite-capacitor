@@ -8,7 +8,7 @@ const POPULAR_SERVICES = [
   'electrical', 'plumbing', 'auto-mechanic', 'photography'
 ];
 
-function SearchScreen() {
+function SearchScreen({ onStartChat }) {
   const [view, setView] = useState('map');
   const [searchTerm, setSearchTerm] = useState('');
   const [radius, setRadius] = useState(1000);
@@ -378,7 +378,15 @@ function SearchScreen() {
               <p className="sheet-services">
                 {selectedUser.services?.map((s) => s.replace(/-/g, ' ')).join(' • ')}
               </p>
-              <button className="sheet-view-profile-btn">View Full Profile</button>
+              <div className="sheet-buttons">
+  <button className="sheet-message-btn" onClick={() => {
+    onStartChat && onStartChat(selectedUser);
+    setSelectedUser(null);
+  }}>
+    💬 Message
+  </button>
+  <button className="sheet-view-profile-btn">View Full Profile</button>
+</div>
             </div>
           </div>
         </div>
