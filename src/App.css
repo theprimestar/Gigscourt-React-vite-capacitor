@@ -1299,3 +1299,12 @@ body {
   color: #8e8e93;
   margin-top: 2px;
 }
+
+/* Fix map z-index below bottom sheet */
+.search-map-container {
+  z-index: 1;
+}
+
+.bottom-sheet-overlay {
+  z-index: 200 !important;
+}
