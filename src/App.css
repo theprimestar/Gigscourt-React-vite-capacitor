@@ -1194,3 +1194,108 @@ body {
 .resend-message.success {
   color: #34c759;
 }
+
+/* Service Chips */
+.chips-scroll {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid #d1d1d6;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 13px;
+  font-weight: 500;
+  color: #3a3a3c;
+  white-space: nowrap;
+  cursor: pointer;
+  text-transform: capitalize;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.chip-btn.active {
+  background: #007aff;
+  color: white;
+  border-color: #007aff;
+}
+
+/* Map Empty State Overlay */
+.map-empty-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.map-empty-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px;
+  padding: 20px 28px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.map-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+
+.map-empty-sub {
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+.search-map-empty-sub {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-top: 2px;
+}
+
+/* List Empty State */
+.search-list-empty-state {
+  text-align: center;
+  padding: 60px 16px;
+}
+
+.list-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.list-empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+
+.list-empty-sub {
+  font-size: 14px;
+  color: #8e8e93;
+}
+
+.search-list-empty-sub {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-top: 2px;
+}
