@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import ChatScreen from './ChatScreen';
 
-function ChatListScreen({ chatTarget, onClearChatTarget }) {
+function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
@@ -15,20 +15,23 @@ function ChatListScreen({ chatTarget, onClearChatTarget }) {
     setupChats();
   }, []);
 
+  // Separate effect for chatTarget — runs whenever chatTarget changes
+  useEffect(() => {
+    if (chatTarget && currentUserId) {
+      const chatId = [currentUserId, chatTarget.id].sort().join('_');
+      setActiveChat({
+        id: chatId,
+        participants: [currentUserId, chatTarget.id],
+      });
+      if (onClearChatTarget) onClearChatTarget();
+      if (onDeepScreen) onDeepScreen('chat');
+    }
+  }, [chatTarget, currentUserId]);
+
   const setupChats = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
-
-    // Handle chatTarget if present — must happen after we have user.id
-    if (chatTarget && user.id) {
-      const chatId = [user.id, chatTarget.id].sort().join('_');
-      setActiveChat({
-        id: chatId,
-        participants: [user.id, chatTarget.id],
-      });
-      if (onClearChatTarget) onClearChatTarget();
-    }
 
     const chatsRef = collection(db, 'chats');
     const q = query(
@@ -87,6 +90,11 @@ function ChatListScreen({ chatTarget, onClearChatTarget }) {
     return date.toLocaleDateString();
   };
 
+  const handleBack = () => {
+    setActiveChat(null);
+    if (onDeepScreen) onDeepScreen(null);
+  };
+
   if (activeChat) {
     const otherUser = getOtherUser(activeChat);
     return (
@@ -94,7 +102,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget }) {
         chatId={activeChat.id}
         otherUserId={activeChat.participants.find((p) => p !== currentUserId)}
         otherUserName={otherUser.full_name}
-        onBack={() => setActiveChat(null)}
+        onBack={handleBack}
       />
     );
   }
@@ -128,7 +136,10 @@ function ChatListScreen({ chatTarget, onClearChatTarget }) {
               <div
                 key={chat.id}
                 className="chat-list-item"
-                onClick={() => setActiveChat(chat)}
+                onClick={() => {
+                  setActiveChat(chat);
+                  if (onDeepScreen) onDeepScreen('chat');
+                }}
               >
                 <div className="chat-list-avatar">
                   {other.profile_pic_url ? (
