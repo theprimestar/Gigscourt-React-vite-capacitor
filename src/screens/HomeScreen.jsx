@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-function HomeScreen({ onStartChat }) {
+function HomeScreen({ onStartChat, onViewProfile }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -12,7 +12,6 @@ function HomeScreen({ onStartChat }) {
   const cursorRef = useRef({ distance: null, id: null });
   const observerRef = useRef(null);
 
-  // Get viewer's location
   useEffect(() => {
     if (!navigator.geolocation) {
       setViewerLat(9.0765);
@@ -32,7 +31,6 @@ function HomeScreen({ onStartChat }) {
     );
   }, []);
 
-  // Fetch profiles when location is available
   useEffect(() => {
     if (viewerLat === null || viewerLng === null) return;
     fetchProfiles();
@@ -87,7 +85,6 @@ function HomeScreen({ onStartChat }) {
     setLoadingMore(false);
   };
 
-  // Infinite scroll observer
   const lastCardRef = useCallback(
     (node) => {
       if (loading || loadingMore) return;
@@ -105,9 +102,7 @@ function HomeScreen({ onStartChat }) {
   );
 
   const formatDistance = (meters) => {
-    if (meters < 1000) {
-      return `${Math.round(meters)}m away`;
-    }
+    if (meters < 1000) return `${Math.round(meters)}m away`;
     return `${(meters / 1000).toFixed(1)}km away`;
   };
 
@@ -183,7 +178,6 @@ function HomeScreen({ onStartChat }) {
         </div>
       )}
 
-      {/* Bottom Sheet */}
       {selectedUser && (
         <div className="bottom-sheet-overlay" onClick={handleCloseSheet}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
@@ -205,14 +199,19 @@ function HomeScreen({ onStartChat }) {
                   : 'No services listed'}
               </p>
               <div className="sheet-buttons">
-  <button className="sheet-message-btn" onClick={() => {
-    onStartChat && onStartChat(selectedUser);
-    setSelectedUser(null);
-  }}>
-    💬 Message
-  </button>
-  <button className="sheet-view-profile-btn">View Full Profile</button>
-</div>
+                <button className="sheet-message-btn" onClick={() => {
+                  onStartChat && onStartChat(selectedUser);
+                  setSelectedUser(null);
+                }}>
+                  💬 Message
+                </button>
+                <button className="sheet-view-profile-btn" onClick={() => {
+                  onViewProfile && onViewProfile(selectedUser);
+                  setSelectedUser(null);
+                }}>
+                  View Full Profile
+                </button>
+              </div>
             </div>
           </div>
         </div>
