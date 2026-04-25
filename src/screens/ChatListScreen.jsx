@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import ChatScreen from './ChatScreen';
 
 function ChatListScreen({ chatTarget, onClearChatTarget }) {
@@ -14,21 +14,21 @@ function ChatListScreen({ chatTarget, onClearChatTarget }) {
   useEffect(() => {
     setupChats();
   }, []);
-useEffect(() => {
-    if (chatTarget && currentUserId) {
-      const chatId = [currentUserId, chatTarget.id].sort().join('_');
-      setActiveChat({
-        id: chatId,
-        participants: [currentUserId, chatTarget.id],
-      });
-      onClearChatTarget && onClearChatTarget();
-    }
-  }, [chatTarget, currentUserId]);
-  
+
   const setupChats = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
+
+    // Handle chatTarget if present — must happen after we have user.id
+    if (chatTarget && user.id) {
+      const chatId = [user.id, chatTarget.id].sort().join('_');
+      setActiveChat({
+        id: chatId,
+        participants: [user.id, chatTarget.id],
+      });
+      if (onClearChatTarget) onClearChatTarget();
+    }
 
     const chatsRef = collection(db, 'chats');
     const q = query(
@@ -43,7 +43,6 @@ useEffect(() => {
         ...doc.data(),
       }));
 
-      // Fetch profiles for all other participants
       const otherUserIds = chatList.map((chat) =>
         chat.participants.find((p) => p !== user.id)
       );
