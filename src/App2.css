@@ -336,3 +336,242 @@
 .sheet-view-profile-btn {
   flex: 1;
 }
+
+/* Profile Screen */
+.profile-screen {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  background: #ffffff;
+  padding-bottom: 100px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.profile-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+/* Sticky Header */
+.profile-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.profile-sticky-header.visible {
+  opacity: 1;
+}
+
+.profile-back-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: #007aff;
+  padding: 0;
+}
+
+.profile-sticky-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Settings */
+.profile-settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+}
+
+.profile-settings-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+/* Top Section */
+.profile-top {
+  display: flex;
+  align-items: center;
+  padding: 0 16px 12px;
+  gap: 28px;
+}
+
+.profile-avatar {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  background: #e5e5ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  border-radius: 50%;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 28px;
+}
+
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-stat-tappable {
+  cursor: pointer;
+}
+
+.stat-number {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+/* Name */
+.profile-name-section {
+  padding: 0 16px 4px;
+}
+
+.profile-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Bio */
+.profile-bio {
+  padding: 0 16px 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #3a3a3c;
+}
+
+.profile-gigs-month {
+  padding: 0 16px 4px;
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+.profile-address {
+  padding: 0 16px 4px;
+  font-size: 13px;
+  color: #3a3a3c;
+}
+
+.profile-services-text {
+  padding: 0 16px 8px;
+  font-size: 13px;
+  color: #007aff;
+  text-transform: capitalize;
+}
+
+/* Action Buttons */
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}
+
+.profile-action-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-action-btn.primary {
+  background: #007aff;
+  color: white;
+}
+
+.profile-action-btn.secondary {
+  background: #f2f2f7;
+  color: #007aff;
+}
+
+/* Photo Grid */
+.profile-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 0 0;
+}
+
+.photo-grid-item {
+  aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.photo-grid-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-add-btn {
+  aspect-ratio: 1;
+  background: #f2f2f7;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #8e8e93;
+  cursor: pointer;
+}
+
+.photo-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
