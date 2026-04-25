@@ -13,7 +13,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 
-function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
+function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -34,20 +34,18 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
     const chatIdToUse = chatId || [user.id, otherUserId].sort().join('_');
     chatDocRef.current = doc(db, 'chats', chatIdToUse);
 
-    // Fetch other user's profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, profile_pic_url')
+      .select('full_name, profile_pic_url, id')
       .eq('id', otherUserId)
       .single();
 
     if (profile) {
       setOtherUser(profile);
     } else {
-      setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null });
+      setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
     }
 
-    // Subscribe to messages
     const messagesRef = collection(chatDocRef.current, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
@@ -81,7 +79,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
       createdAt: serverTimestamp(),
     });
 
-    // Update the EXISTING chat document — NOT create a new one
     await setDoc(chatDocRef.current, {
       participants: [currentUserId, otherUserId],
       lastMessage: newMessage.trim(),
@@ -96,6 +93,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleHeaderTap = () => {
+    if (otherUser?.id && onViewProfile) {
+      onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
+    }
   };
 
   if (loading) {
@@ -113,16 +116,19 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
       {/* Chat Header */}
       <div className="chat-header">
         <button onClick={onBack} className="chat-back-btn">←</button>
-        <div className="chat-header-avatar">
-          {otherUser?.profile_pic_url ? (
-            <img src={otherUser.profile_pic_url} alt="" />
-          ) : (
-            <div className="chat-header-avatar-placeholder">👤</div>
-          )}
+        <div className="chat-header-info-tappable" onClick={handleHeaderTap}>
+          <div className="chat-header-avatar">
+            {otherUser?.profile_pic_url ? (
+              <img src={otherUser.profile_pic_url} alt="" />
+            ) : (
+              <div className="chat-header-avatar-placeholder">👤</div>
+            )}
+          </div>
+          <div className="chat-header-info">
+            <h3>{otherUser?.full_name || 'User'}</h3>
+          </div>
         </div>
-        <div className="chat-header-info">
-          <h3>{otherUser?.full_name || 'User'}</h3>
-        </div>
+        <span style={{ width: 40 }} />
       </div>
 
       {/* Persistent Toast */}
