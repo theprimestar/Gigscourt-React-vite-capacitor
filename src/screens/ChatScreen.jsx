@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+  doc,
+  setDoc,
+} from 'firebase/firestore';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile }) {
   const [messages, setMessages] = useState([]);
@@ -8,22 +19,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
-  const channelRef = useRef(null);
-  const chatlistChannelRef = useRef(null);
-  const channelIdRef = useRef(null);
+  const chatDocRef = useRef(null);
 
   useEffect(() => {
     setupChat();
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-      }
-      if (chatlistChannelRef.current) {
-        chatlistChannelRef.current.unsubscribe();
-        supabase.removeChannel(chatlistChannelRef.current);
-      }
-    };
   }, [chatId, otherUserId]);
 
   const setupChat = async () => {
@@ -31,8 +30,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     if (!user) return;
     setCurrentUserId(user.id);
 
-    const channelId = chatId || [user.id, otherUserId].sort().join('_');
-    channelIdRef.current = channelId;
+    const chatIdToUse = chatId || [user.id, otherUserId].sort().join('_');
+    chatDocRef.current = doc(db, 'chats', chatIdToUse);
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -46,34 +45,20 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
     }
 
-    const { data: history } = await supabase.rpc('get_messages', {
-      p_channel_id: channelId,
-      p_cursor: null,
-      p_limit: 50,
-    });
+    const messagesRef = collection(chatDocRef.current, 'messages');
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
-    if (history) {
-      setMessages(history.reverse());
-    }
-    setLoading(false);
-
-    // Subscribe to chat messages
-    channelRef.current = supabase.channel(channelId, {
-      config: { broadcast: { self: true } },
-    });
-
-    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-      setMessages((prev) => [...prev, payload.payload]);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setMessages(msgs);
+      setLoading(false);
       scrollToBottom();
     });
 
-    channelRef.current.subscribe();
-
-    // Subscribe to chat list updates (to broadcast to other user's chat list)
-    chatlistChannelRef.current = supabase.channel('chatlist:' + user.id, {
-      config: { broadcast: { self: false } },
-    });
-    chatlistChannelRef.current.subscribe();
+    return () => unsubscribe();
   };
 
   const scrollToBottom = () => {
@@ -86,64 +71,26 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId) return;
 
-    const channelId = channelIdRef.current;
-
-    const { data: savedMessage } = await supabase.rpc('send_message', {
-      p_channel_id: channelId,
-      p_sender_id: currentUserId,
-      p_text: newMessage.trim(),
+    const messagesRef = collection(chatDocRef.current, 'messages');
+    await addDoc(messagesRef, {
+      text: newMessage.trim(),
+      senderId: currentUserId,
+      createdAt: serverTimestamp(),
     });
 
-    if (savedMessage && channelRef.current) {
-      // Broadcast to the chat channel
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      });
-    }
-
-    // Broadcast to the other user's chat list
-    const chatListUpdate = {
-      channel_id: channelId,
-      other_user_id: currentUserId,
-      other_user_name: otherUser?.full_name || otherUserName || 'User',
-      other_user_pic: null,
-      last_message: newMessage.trim(),
-      last_message_at: savedMessage?.created_at || new Date().toISOString(),
-      last_message_by: currentUserId,
-    };
-
-    // Send to other user's chatlist channel
-    supabase.channel('chatlist:' + otherUserId).send({
-      type: 'broadcast',
-      event: 'chat_updated',
-      payload: chatListUpdate,
-    });
-
-    // Update own chat list locally via our own chatlist channel
-    const ownUpdate = {
-      channel_id: channelId,
-      other_user_id: otherUserId,
-      other_user_name: otherUser?.full_name || otherUserName || 'User',
-      other_user_pic: otherUser?.profile_pic_url || null,
-      last_message: newMessage.trim(),
-      last_message_at: savedMessage?.created_at || new Date().toISOString(),
-      last_message_by: currentUserId,
-    };
-
-    supabase.channel('chatlist:' + currentUserId).send({
-      type: 'broadcast',
-      event: 'chat_updated',
-      payload: ownUpdate,
-    });
+    await setDoc(chatDocRef.current, {
+      participants: [currentUserId, otherUserId],
+      lastMessage: newMessage.trim(),
+      lastMessageAt: serverTimestamp(),
+      lastMessageBy: currentUserId,
+    }, { merge: true });
 
     setNewMessage('');
   };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = new Date(timestamp);
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -193,12 +140,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           </div>
         )}
         {messages.map((msg) => {
-          const isMine = msg.sender_id === currentUserId;
+          const isMine = msg.senderId === currentUserId;
           return (
             <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
               <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
                 <p className="message-text">{msg.text}</p>
-                <span className="message-time">{formatTime(msg.created_at)}</span>
+                <span className="message-time">{formatTime(msg.createdAt)}</span>
               </div>
             </div>
           );
