@@ -9,6 +9,8 @@ import SearchScreen from './screens/SearchScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
+import SettingsScreen from './screens/SettingsScreen';
 import './App.css';
 
 function App() {
@@ -125,33 +127,23 @@ function App() {
         {/* Home Tab */}
         <div style={{ display: activeTab === 'home' && !currentDeepScreen ? 'block' : 'none' }}>
           <HomeScreen
-            onStartChat={(user) => {
-              navigateTo('chat', { userId: user.id, userName: user.full_name });
-            }}
-            onViewProfile={(user) => {
-              navigateTo('profile', { userId: user.id });
-            }}
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
           />
         </div>
 
         {/* Search Tab */}
         <div style={{ display: activeTab === 'search' && !currentDeepScreen ? 'block' : 'none' }}>
           <SearchScreen
-            onStartChat={(user) => {
-              navigateTo('chat', { userId: user.id, userName: user.full_name });
-            }}
-            onViewProfile={(user) => {
-              navigateTo('profile', { userId: user.id });
-            }}
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
           />
         </div>
 
-        {/* Chats Tab (list only, not when in a chat) */}
+        {/* Chats Tab */}
         <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
           <ChatListScreen
-            onStartChat={(user) => {
-              navigateTo('chat', { userId: user.id, userName: user.full_name });
-            }}
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           />
         </div>
 
@@ -159,22 +151,22 @@ function App() {
         <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
           <ProfileScreen
             isOwn={true}
-            onStartChat={(user) => {
-              navigateTo('chat', { userId: user.id, userName: user.full_name });
-            }}
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+            onEditProfile={() => navigateTo('editProfile')}
+            onOpenSettings={() => navigateTo('settings')}
           />
         </div>
 
         {/* Deep Screen: Chat */}
         {currentDeepScreen?.screen === 'chat' && (
-  <ChatScreen
-    chatId={null}
-    otherUserId={currentDeepScreen.userId}
-    otherUserName={currentDeepScreen.userName}
-    onBack={goBack}
-    onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
-  />
-)}
+          <ChatScreen
+            chatId={null}
+            otherUserId={currentDeepScreen.userId}
+            otherUserName={currentDeepScreen.userName}
+            onBack={goBack}
+            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
+          />
+        )}
 
         {/* Deep Screen: View Another User's Profile */}
         {currentDeepScreen?.screen === 'profile' && (
@@ -182,8 +174,23 @@ function App() {
             userId={currentDeepScreen.userId}
             isOwn={false}
             onBack={goBack}
-            onStartChat={(user) => {
-              navigateTo('chat', { userId: user.id, userName: user.full_name });
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+          />
+        )}
+
+        {/* Deep Screen: Edit Profile */}
+        {currentDeepScreen?.screen === 'editProfile' && (
+          <EditProfileScreen onBack={goBack} />
+        )}
+
+        {/* Deep Screen: Settings */}
+        {currentDeepScreen?.screen === 'settings' && (
+          <SettingsScreen
+            onBack={goBack}
+            onLogout={async () => {
+              await supabase.auth.signOut();
+              setNavStack([]);
+              setScreen('auth');
             }}
           />
         )}
