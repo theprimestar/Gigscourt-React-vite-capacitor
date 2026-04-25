@@ -19,7 +19,7 @@ function App() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-  ensureFirebaseAuth();
+  ensureFirebaseAuth(session.access_token);
   determineScreen(session.user);
 } else {
         setScreen('auth');
@@ -30,7 +30,7 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-  ensureFirebaseAuth();
+  ensureFirebaseAuth(session.access_token);
   determineScreen(session.user);
 } else {
         setScreen('auth');
