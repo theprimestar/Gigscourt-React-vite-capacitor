@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import ChatScreen from './ChatScreen';
 
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat }) {
@@ -7,17 +9,10 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [loading, setLoading] = useState(true);
   const [activeChat, setActiveChat] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const channelRef = useRef(null);
-  const initialLoadDone = useRef(false);
+  const [profiles, setProfiles] = useState({});
 
   useEffect(() => {
-    loadChatList();
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-      }
-    };
+    setupChats();
   }, []);
 
   useEffect(() => {
@@ -32,60 +27,58 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     }
   }, [chatTarget, currentUserId]);
 
-  const loadChatList = async () => {
+  const setupChats = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
 
-    const { data } = await supabase.rpc('get_chat_list', {
-      p_user_id: user.id,
-      p_limit: 30,
+    const chatsRef = collection(db, 'chats');
+    const q = query(
+      chatsRef,
+      where('participants', 'array-contains', user.id),
+      orderBy('lastMessageAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const chatList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      const otherUserIds = chatList.map((chat) =>
+        chat.participants.find((p) => p !== user.id)
+      );
+
+      if (otherUserIds.length > 0) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, full_name, profile_pic_url')
+          .in('id', otherUserIds);
+
+        const profileMap = {};
+        if (profileData) {
+          profileData.forEach((p) => {
+            profileMap[p.id] = p;
+          });
+        }
+        setProfiles(profileMap);
+      }
+
+      setChats(chatList);
+      setLoading(false);
     });
 
-    if (data) {
-      setChats(data);
-    }
-    setLoading(false);
-    initialLoadDone.current = true;
-
-    // Subscribe to real-time chat list updates
-    channelRef.current = supabase.channel('chatlist:' + user.id, {
-      config: { broadcast: { self: false } },
-    });
-
-    channelRef.current.on('broadcast', { event: 'chat_updated' }, (payload) => {
-      const update = payload.payload;
-      setChats((prev) => {
-        // Remove existing entry for this channel if present
-        const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
-        // Add the updated chat at the top
-        return [update, ...filtered];
-      });
-    });
-
-    channelRef.current.subscribe();
+    return () => unsubscribe();
   };
 
-  // Refetch on focus (covers any missed broadcasts)
-  useEffect(() => {
-    const handleFocus = () => {
-      if (initialLoadDone.current && currentUserId) {
-        supabase.rpc('get_chat_list', {
-          p_user_id: currentUserId,
-          p_limit: 30,
-        }).then(({ data }) => {
-          if (data) setChats(data);
-        });
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [currentUserId]);
+  const getOtherUser = (chat) => {
+    const otherId = chat.participants.find((p) => p !== currentUserId);
+    return profiles[otherId] || { full_name: 'User', profile_pic_url: null };
+  };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = new Date(timestamp);
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
     const diff = now - date;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -99,23 +92,15 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const handleBack = () => {
     setActiveChat(null);
     if (onDeepScreen) onDeepScreen(null);
-    // Refetch chat list when returning from a chat
-    if (currentUserId) {
-      supabase.rpc('get_chat_list', {
-        p_user_id: currentUserId,
-        p_limit: 30,
-      }).then(({ data }) => {
-        if (data) setChats(data);
-      });
-    }
   };
 
   if (activeChat) {
+    const otherUser = getOtherUser(activeChat);
     return (
       <ChatScreen
         chatId={activeChat.id}
         otherUserId={activeChat.participants.find((p) => p !== currentUserId)}
-        otherUserName={null}
+        otherUserName={otherUser.full_name}
         onBack={handleBack}
       />
     );
@@ -144,34 +129,34 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         </div>
       ) : (
         <div className="chat-list-items">
-          {chats.map((chat) => (
-            <div
-              key={chat.channel_id}
-              className="chat-list-item"
-              onClick={() => {
-                setActiveChat({
-                  id: chat.channel_id,
-                  participants: [currentUserId, chat.other_user_id],
-                });
-                if (onDeepScreen) onDeepScreen('chat');
-              }}
-            >
-              <div className="chat-list-avatar">
-                {chat.other_user_pic ? (
-                  <img src={chat.other_user_pic} alt="" />
-                ) : (
-                  <div className="chat-list-avatar-placeholder">👤</div>
-                )}
-              </div>
-              <div className="chat-list-info">
-                <div className="chat-list-top">
-                  <h3>{chat.other_user_name}</h3>
-                  <span className="chat-list-time">{formatTime(chat.last_message_at)}</span>
+          {chats.map((chat) => {
+            const other = getOtherUser(chat);
+            return (
+              <div
+                key={chat.id}
+                className="chat-list-item"
+                onClick={() => {
+                  setActiveChat(chat);
+                  if (onDeepScreen) onDeepScreen('chat');
+                }}
+              >
+                <div className="chat-list-avatar">
+                  {other.profile_pic_url ? (
+                    <img src={other.profile_pic_url} alt="" />
+                  ) : (
+                    <div className="chat-list-avatar-placeholder">👤</div>
+                  )}
                 </div>
-                <p className="chat-list-preview">{chat.last_message || ''}</p>
+                <div className="chat-list-info">
+                  <div className="chat-list-top">
+                    <h3>{other.full_name}</h3>
+                    <span className="chat-list-time">{formatTime(chat.lastMessageAt)}</span>
+                  </div>
+                  <p className="chat-list-preview">{chat.lastMessage || ''}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
