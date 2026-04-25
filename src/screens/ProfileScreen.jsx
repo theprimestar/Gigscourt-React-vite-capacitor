@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 
-function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
+function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({ gigs: 0, rating: 'New' });
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
     const targetId = userId || (await supabase.auth.getUser()).data.user?.id;
     if (!targetId) return;
 
-    // Load profile from Supabase
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
@@ -36,12 +35,10 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
       setWorkPhotos(profileData.work_photos || []);
     }
 
-    // Load stats from Firestore
     const userDocRef = doc(db, 'users', targetId);
     const userSnap = await getDoc(userDocRef);
 
     if (!userSnap.exists()) {
-      // Create default stats document
       await setDoc(userDocRef, {
         rating: 0,
         reviewCount: 0,
@@ -50,7 +47,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
       });
     }
 
-    // Subscribe to stats
     onSnapshot(userDocRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -66,7 +62,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
     setLoading(false);
   };
 
-  // Sticky header on scroll
   const handleScroll = useCallback(() => {
     if (nameRef.current && scrollRef.current) {
       const rect = nameRef.current.getBoundingClientRect();
@@ -119,7 +114,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
       const newPhotos = [...workPhotos, result.url];
       setWorkPhotos(newPhotos);
 
-      // Save to Supabase
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('profiles').update({ work_photos: newPhotos }).eq('id', user.id);
     } catch (err) {
@@ -162,7 +156,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
 
   return (
     <div className="profile-screen" ref={scrollRef} onScroll={handleScroll}>
-      {/* Sticky Header */}
       <div className={`profile-sticky-header ${isSticky ? 'visible' : ''}`}>
         <button onClick={onBack || (() => {})} className="profile-back-btn">
           {onBack ? '←' : '⚙️'}
@@ -171,15 +164,13 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
         <span style={{ width: 40 }} />
       </div>
 
-      {/* Settings gear (own profile only) */}
       {isOwn && !isSticky && (
         <div className="profile-settings-row">
           <span />
-          <button className="profile-settings-btn">⚙️</button>
+          <button className="profile-settings-btn" onClick={onOpenSettings}>⚙️</button>
         </div>
       )}
 
-      {/* Top Section */}
       <div className="profile-top">
         <div className="profile-avatar">
           {profile.profile_pic_url ? (
@@ -201,32 +192,26 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
         </div>
       </div>
 
-      {/* Name (this element is watched for sticky header) */}
       <div className="profile-name-section" ref={nameRef}>
         <h2 className="profile-name">{profile.full_name}</h2>
       </div>
 
-      {/* Bio */}
       {profile.bio && <p className="profile-bio">{profile.bio}</p>}
 
-      {/* Gigs this month */}
       <p className="profile-gigs-month">{stats.gigs} gigs this month</p>
 
-      {/* Workspace Address */}
       {profile.workspace_address && (
         <p className="profile-address">📍 {profile.workspace_address}</p>
       )}
 
-      {/* Services */}
       {profile.services && profile.services.length > 0 && (
         <p className="profile-services-text">{formatServices(profile.services)}</p>
       )}
 
-      {/* Action Buttons */}
       <div className="profile-actions">
         {isOwn ? (
           <>
-            <button className="profile-action-btn primary">Edit Profile</button>
+            <button className="profile-action-btn primary" onClick={onEditProfile}>Edit Profile</button>
             <button className="profile-action-btn secondary">Register Gig</button>
           </>
         ) : (
@@ -244,16 +229,12 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat }) {
         )}
       </div>
 
-      {/* Photo Grid */}
       <div className="profile-photo-grid">
         {workPhotos.map((photo, index) => (
           <div key={index} className="photo-grid-item">
             <img src={photo} alt="" />
             {isOwn && (
-              <button
-                className="photo-delete-btn"
-                onClick={() => handleDeletePhoto(index)}
-              >
+              <button className="photo-delete-btn" onClick={() => handleDeletePhoto(index)}>
                 ✕
               </button>
             )}
