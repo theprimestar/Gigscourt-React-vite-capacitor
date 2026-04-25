@@ -8,7 +8,7 @@ const POPULAR_SERVICES = [
   'electrical', 'plumbing', 'auto-mechanic', 'photography'
 ];
 
-function SearchScreen({ onStartChat }) {
+function SearchScreen({ onStartChat, onViewProfile }) {
   const [view, setView] = useState('map');
   const [searchTerm, setSearchTerm] = useState('');
   const [radius, setRadius] = useState(1000);
@@ -26,7 +26,6 @@ function SearchScreen({ onStartChat }) {
   const markers = useRef([]);
   const viewerMarker = useRef(null);
 
-  // Get viewer location
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -39,14 +38,12 @@ function SearchScreen({ onStartChat }) {
     }
   }, []);
 
-  // Fetch services for autocomplete
   useEffect(() => {
     supabase.rpc('get_services').then(({ data }) => {
       if (data) setServices(data);
     });
   }, []);
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
@@ -63,7 +60,6 @@ function SearchScreen({ onStartChat }) {
       maxZoom: 20,
     }).addTo(map.current);
 
-    // Add viewer location marker
     const vIcon = L.divIcon({
       html: '<div style="width:14px;height:14px;background:#007aff;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,122,255,0.4);"></div>',
       className: '',
@@ -73,7 +69,6 @@ function SearchScreen({ onStartChat }) {
     viewerMarker.current = L.marker([viewerLat, viewerLng], { icon: vIcon }).addTo(map.current);
   }, [viewerLat, viewerLng]);
 
-  // Update map center when location changes
   useEffect(() => {
     if (map.current) {
       map.current.setView([viewerLat, viewerLng], map.current.getZoom());
@@ -83,14 +78,12 @@ function SearchScreen({ onStartChat }) {
     }
   }, [viewerLat, viewerLng]);
 
-  // Fix map size when switching to map view
   useEffect(() => {
     if (view === 'map' && map.current) {
       setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
     }
   }, [view]);
 
-  // Search function
   const handleSearch = useCallback(async (term) => {
     const trimmed = term.trim().toLowerCase().replace(/\s+/g, '-');
     if (!trimmed) return;
@@ -114,7 +107,6 @@ function SearchScreen({ onStartChat }) {
     setLoading(false);
   }, [viewerLat, viewerLng, radius]);
 
-  // Update map markers when providers change
   useEffect(() => {
     if (!map.current) return;
 
@@ -178,7 +170,6 @@ function SearchScreen({ onStartChat }) {
 
   return (
     <div className="search-screen">
-      {/* Search Header */}
       <div className="search-header">
         <div className="search-input-wrapper">
           <span className="search-icon">🔍</span>
@@ -227,7 +218,6 @@ function SearchScreen({ onStartChat }) {
         )}
       </div>
 
-      {/* Service Chips */}
       <div className="chips-scroll">
         {POPULAR_SERVICES.map((slug) => (
           <button
@@ -240,7 +230,6 @@ function SearchScreen({ onStartChat }) {
         ))}
       </div>
 
-      {/* Radius Slider */}
       <div className="radius-bar">
         <div className="radius-label">
           <span>Radius</span>
@@ -265,7 +254,6 @@ function SearchScreen({ onStartChat }) {
         </div>
       </div>
 
-      {/* View Toggle */}
       <div className="view-toggle">
         <button
           className={`toggle-btn ${view === 'map' ? 'active' : ''}`}
@@ -281,11 +269,9 @@ function SearchScreen({ onStartChat }) {
         </button>
       </div>
 
-      {/* Map View — always rendered, hidden with CSS when inactive */}
       <div className={`search-map-container ${view === 'map' ? 'view-visible' : 'view-hidden'}`}>
         <div ref={mapContainer} className="search-map" />
 
-        {/* Empty State Overlay */}
         {!hasSearched && !loading && (
           <div className="map-empty-overlay">
             <div className="map-empty-card">
@@ -309,7 +295,6 @@ function SearchScreen({ onStartChat }) {
         )}
       </div>
 
-      {/* List View — always rendered, hidden with CSS when inactive */}
       <div className={`search-list ${view === 'list' ? 'view-visible' : 'view-hidden'}`}>
         {!hasSearched && !loading && (
           <div className="search-list-empty-state">
@@ -359,7 +344,6 @@ function SearchScreen({ onStartChat }) {
         ))}
       </div>
 
-      {/* Bottom Sheet */}
       {selectedUser && (
         <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
@@ -379,20 +363,24 @@ function SearchScreen({ onStartChat }) {
                 {selectedUser.services?.map((s) => s.replace(/-/g, ' ')).join(' • ')}
               </p>
               <div className="sheet-buttons">
-  <button className="sheet-message-btn" onClick={() => {
-    onStartChat && onStartChat(selectedUser);
-    setSelectedUser(null);
-  }}>
-    💬 Message
-  </button>
-  <button className="sheet-view-profile-btn">View Full Profile</button>
-</div>
+                <button className="sheet-message-btn" onClick={() => {
+                  onStartChat && onStartChat(selectedUser);
+                  setSelectedUser(null);
+                }}>
+                  💬 Message
+                </button>
+                <button className="sheet-view-profile-btn" onClick={() => {
+                  onViewProfile && onViewProfile(selectedUser);
+                  setSelectedUser(null);
+                }}>
+                  View Full Profile
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tap overlay to close suggestions */}
       {showSuggestions && (
         <div className="suggestions-overlay" onClick={() => setShowSuggestions(false)} />
       )}
