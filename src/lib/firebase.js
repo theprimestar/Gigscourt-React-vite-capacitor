@@ -16,10 +16,12 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
+const API_BASE = 'https://gigscourt-react-vite-capacitor.vercel.app';
+
 export async function ensureFirebaseAuth(supabaseToken) {
   if (auth.currentUser) return;
 
-  const res = await fetch('/api/mint-firebase-token', {
+  const res = await fetch(`${API_BASE}/api/mint-firebase-token`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${supabaseToken}`,
