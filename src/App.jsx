@@ -8,6 +8,7 @@ import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import ChatListScreen from './screens/ChatListScreen';
 import ChatScreen from './screens/ChatScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import './App.css';
 
 function App() {
@@ -123,16 +124,26 @@ function App() {
       <div className="app-content">
         {/* Home Tab */}
         <div style={{ display: activeTab === 'home' && !currentDeepScreen ? 'block' : 'none' }}>
-          <HomeScreen onStartChat={(user) => {
-            navigateTo('chat', { userId: user.id, userName: user.full_name });
-          }} />
+          <HomeScreen
+            onStartChat={(user) => {
+              navigateTo('chat', { userId: user.id, userName: user.full_name });
+            }}
+            onViewProfile={(user) => {
+              navigateTo('profile', { userId: user.id });
+            }}
+          />
         </div>
 
         {/* Search Tab */}
         <div style={{ display: activeTab === 'search' && !currentDeepScreen ? 'block' : 'none' }}>
-          <SearchScreen onStartChat={(user) => {
-            navigateTo('chat', { userId: user.id, userName: user.full_name });
-          }} />
+          <SearchScreen
+            onStartChat={(user) => {
+              navigateTo('chat', { userId: user.id, userName: user.full_name });
+            }}
+            onViewProfile={(user) => {
+              navigateTo('profile', { userId: user.id });
+            }}
+          />
         </div>
 
         {/* Chats Tab (list only, not when in a chat) */}
@@ -144,18 +155,35 @@ function App() {
           />
         </div>
 
-        {/* Profile Tab */}
+        {/* Profile Tab — own profile */}
         <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
-          <p>Profile coming soon</p>
+          <ProfileScreen
+            isOwn={true}
+            onStartChat={(user) => {
+              navigateTo('chat', { userId: user.id, userName: user.full_name });
+            }}
+          />
         </div>
 
-        {/* Deep Screen: Chat — renders ON TOP of whatever tab is active */}
+        {/* Deep Screen: Chat */}
         {currentDeepScreen?.screen === 'chat' && (
           <ChatScreen
             chatId={null}
             otherUserId={currentDeepScreen.userId}
             otherUserName={currentDeepScreen.userName}
             onBack={goBack}
+          />
+        )}
+
+        {/* Deep Screen: View Another User's Profile */}
+        {currentDeepScreen?.screen === 'profile' && (
+          <ProfileScreen
+            userId={currentDeepScreen.userId}
+            isOwn={false}
+            onBack={goBack}
+            onStartChat={(user) => {
+              navigateTo('chat', { userId: user.id, userName: user.full_name });
+            }}
           />
         )}
       </div>
