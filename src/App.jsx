@@ -67,19 +67,27 @@ function App() {
   // Push a deep screen onto the navigation stack
   const navigateTo = (screenType, data) => {
     setNavStack((prev) => [...prev, { screen: screenType, ...data }]);
+    // Switch to the appropriate tab for this screen type
+    if (screenType === 'chat') {
+      setActiveTab('chats');
+    }
+    // Future: if (screenType === 'profile') setActiveTab('profile');
   };
 
   // Pop the top of the navigation stack and return to previous state
   const goBack = () => {
     setNavStack((prev) => {
+      if (prev.length === 0) return prev;
       const newStack = prev.slice(0, -1);
-      const previousEntry = newStack[newStack.length - 1];
+      // If stack is now empty, return to whatever tab was active before
+      if (newStack.length === 0) {
+        // activeTab stays as-is since tabs preserve their state
+        setChatTarget(null);
+      }
       return newStack;
     });
   };
 
-  // Determine current deep screen from stack
-  const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1].screen : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
   if (screen === 'loading') {
