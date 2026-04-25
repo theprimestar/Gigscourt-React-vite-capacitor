@@ -13,7 +13,7 @@ function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
   const [chatTarget, setChatTarget] = useState(null);
-  const [deepScreen, setDeepScreen] = useState(null);
+  const [navStack, setNavStack] = useState([]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -64,7 +64,23 @@ function App() {
     setScreen('home');
   };
 
-  const showBottomNav = screen === 'home' && !deepScreen;
+  // Push a deep screen onto the navigation stack
+  const navigateTo = (screenType, data) => {
+    setNavStack((prev) => [...prev, { screen: screenType, ...data }]);
+  };
+
+  // Pop the top of the navigation stack and return to previous state
+  const goBack = () => {
+    setNavStack((prev) => {
+      const newStack = prev.slice(0, -1);
+      const previousEntry = newStack[newStack.length - 1];
+      return newStack;
+    });
+  };
+
+  // Determine current deep screen from stack
+  const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1].screen : null;
+  const showBottomNav = screen === 'home' && navStack.length === 0;
 
   if (screen === 'loading') {
     return (
@@ -112,20 +128,26 @@ function App() {
         <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
           <HomeScreen onStartChat={(user) => {
             setChatTarget(user);
-            setActiveTab('chats');
+            navigateTo('chat', { userId: user.id });
           }} />
         </div>
         <div style={{ display: activeTab === 'search' ? 'block' : 'none' }}>
           <SearchScreen onStartChat={(user) => {
             setChatTarget(user);
-            setActiveTab('chats');
+            navigateTo('chat', { userId: user.id });
           }} />
         </div>
         <div style={{ display: activeTab === 'chats' ? 'block' : 'none' }}>
           <ChatListScreen
             chatTarget={chatTarget}
             onClearChatTarget={() => setChatTarget(null)}
-            onDeepScreen={(screen) => setDeepScreen(screen)}
+            onDeepScreen={(screen) => {
+              if (screen) {
+                navigateTo(screen);
+              } else {
+                goBack();
+              }
+            }}
           />
         </div>
         <div style={{ display: activeTab === 'profile' ? 'block' : 'none' }}>
