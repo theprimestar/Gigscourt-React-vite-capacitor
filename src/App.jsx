@@ -7,12 +7,12 @@ import Onboarding from './screens/Onboarding';
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
 import ChatListScreen from './screens/ChatListScreen';
+import ChatScreen from './screens/ChatScreen';
 import './App.css';
 
 function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
-  const [chatTarget, setChatTarget] = useState(null);
   const [navStack, setNavStack] = useState([]);
 
   useEffect(() => {
@@ -64,30 +64,18 @@ function App() {
     setScreen('home');
   };
 
-  // Push a deep screen onto the navigation stack
   const navigateTo = (screenType, data) => {
     setNavStack((prev) => [...prev, { screen: screenType, ...data }]);
-    // Switch to the appropriate tab for this screen type
-    if (screenType === 'chat') {
-      setActiveTab('chats');
-    }
-    // Future: if (screenType === 'profile') setActiveTab('profile');
   };
 
-  // Pop the top of the navigation stack and return to previous state
   const goBack = () => {
     setNavStack((prev) => {
       if (prev.length === 0) return prev;
-      const newStack = prev.slice(0, -1);
-      // If stack is now empty, return to whatever tab was active before
-      if (newStack.length === 0) {
-        // activeTab stays as-is since tabs preserve their state
-        setChatTarget(null);
-      }
-      return newStack;
+      return prev.slice(0, -1);
     });
   };
 
+  const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
   if (screen === 'loading') {
@@ -133,34 +121,43 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-content">
-        <div style={{ display: activeTab === 'home' ? 'block' : 'none' }}>
+        {/* Home Tab */}
+        <div style={{ display: activeTab === 'home' && !currentDeepScreen ? 'block' : 'none' }}>
           <HomeScreen onStartChat={(user) => {
-            setChatTarget(user);
-            navigateTo('chat', { userId: user.id });
+            navigateTo('chat', { userId: user.id, userName: user.full_name });
           }} />
         </div>
-        <div style={{ display: activeTab === 'search' ? 'block' : 'none' }}>
+
+        {/* Search Tab */}
+        <div style={{ display: activeTab === 'search' && !currentDeepScreen ? 'block' : 'none' }}>
           <SearchScreen onStartChat={(user) => {
-            setChatTarget(user);
-            navigateTo('chat', { userId: user.id });
+            navigateTo('chat', { userId: user.id, userName: user.full_name });
           }} />
         </div>
-        <div style={{ display: activeTab === 'chats' ? 'block' : 'none' }}>
+
+        {/* Chats Tab (list only, not when in a chat) */}
+        <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
           <ChatListScreen
-            chatTarget={chatTarget}
-            onClearChatTarget={() => setChatTarget(null)}
-            onDeepScreen={(screen) => {
-              if (screen) {
-                navigateTo(screen);
-              } else {
-                goBack();
-              }
+            onStartChat={(user) => {
+              navigateTo('chat', { userId: user.id, userName: user.full_name });
             }}
           />
         </div>
-        <div style={{ display: activeTab === 'profile' ? 'block' : 'none' }}>
+
+        {/* Profile Tab */}
+        <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
           <p>Profile coming soon</p>
         </div>
+
+        {/* Deep Screen: Chat — renders ON TOP of whatever tab is active */}
+        {currentDeepScreen?.screen === 'chat' && (
+          <ChatScreen
+            chatId={null}
+            otherUserId={currentDeepScreen.userId}
+            otherUserName={currentDeepScreen.userName}
+            onBack={goBack}
+          />
+        )}
       </div>
 
       {showBottomNav && (
