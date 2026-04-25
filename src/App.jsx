@@ -17,13 +17,19 @@ function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
+  const [firebaseReady, setFirebaseReady] = useState(false);
 
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        ensureFirebaseAuth(session.access_token);
+        try {
+          await ensureFirebaseAuth(session.access_token);
+          setFirebaseReady(true);
+        } catch (err) {
+          console.error('Firebase auth failed:', err);
+        }
         determineScreen(session.user);
       } else {
         setScreen('auth');
@@ -32,11 +38,17 @@ function App() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        ensureFirebaseAuth(session.access_token);
+        try {
+          await ensureFirebaseAuth(session.access_token);
+          setFirebaseReady(true);
+        } catch (err) {
+          console.error('Firebase auth failed:', err);
+        }
         determineScreen(session.user);
       } else {
+        setFirebaseReady(false);
         setScreen('auth');
       }
     });
@@ -81,10 +93,13 @@ function App() {
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
-  if (screen === 'loading') {
+  if (screen === 'loading' || (screen === 'home' && !firebaseReady)) {
     return (
       <div className="app">
-        <p>Loading...</p>
+        <div className="home-loading">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
       </div>
     );
   }
@@ -190,6 +205,7 @@ function App() {
             onLogout={async () => {
               await supabase.auth.signOut();
               setNavStack([]);
+              setFirebaseReady(false);
               setScreen('auth');
             }}
           />
