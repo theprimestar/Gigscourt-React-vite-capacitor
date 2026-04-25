@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { db } from '../lib/firebase';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
+import { API_BASE } from '../lib/config';
 
 function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
@@ -90,7 +91,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     setUploadingPhoto(true);
 
     try {
-      const authRes = await fetch('https://gigscourt-react-vite-capacitor.vercel.app/api/imagekit-auth');
+      const authRes = await fetch(`${API_BASE}/api/imagekit-auth`);
       const auth = await authRes.json();
 
       const formData = new FormData();
