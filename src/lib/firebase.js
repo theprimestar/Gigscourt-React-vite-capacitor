@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { API_BASE } from './config';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBvbUwgjSJV7ebtpjZHQeyIH2tXIWnTIaA",
@@ -15,8 +16,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
-
-const API_BASE = 'https://gigscourt-react-vite-capacitor.vercel.app';
 
 export async function ensureFirebaseAuth(supabaseToken) {
   if (auth.currentUser) return;
