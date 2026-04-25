@@ -1,17 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { db } from '../lib/firebase';
-import {
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-  doc,
-  setDoc,
-  getDoc,
-} from 'firebase/firestore';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile }) {
   const [messages, setMessages] = useState([]);
@@ -20,10 +8,16 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
-  const chatDocRef = useRef(null);
+  const channelRef = useRef(null);
 
   useEffect(() => {
     setupChat();
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        supabase.removeChannel(channelRef.current);
+      }
+    };
   }, [chatId, otherUserId]);
 
   const setupChat = async () => {
@@ -31,9 +25,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     if (!user) return;
     setCurrentUserId(user.id);
 
-    const chatIdToUse = chatId || [user.id, otherUserId].sort().join('_');
-    chatDocRef.current = doc(db, 'chats', chatIdToUse);
+    const channelId = chatId || [user.id, otherUserId].sort().join('_');
 
+    // Fetch other user's profile
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name, profile_pic_url, id')
@@ -46,20 +40,29 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
     }
 
-    const messagesRef = collection(chatDocRef.current, 'messages');
-    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    // Load message history
+    const { data: history } = await supabase.rpc('get_messages', {
+      p_channel_id: channelId,
+      p_cursor: null,
+      p_limit: 50,
+    });
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setMessages(msgs);
-      setLoading(false);
+    if (history) {
+      setMessages(history.reverse());
+    }
+    setLoading(false);
+
+    // Subscribe to real-time broadcast
+    channelRef.current = supabase.channel(channelId, {
+      config: { broadcast: { self: true } },
+    });
+
+    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+      setMessages((prev) => [...prev, payload.payload]);
       scrollToBottom();
     });
 
-    return () => unsubscribe();
+    channelRef.current.subscribe();
   };
 
   const scrollToBottom = () => {
@@ -72,26 +75,30 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId) return;
 
-    const messagesRef = collection(chatDocRef.current, 'messages');
-    await addDoc(messagesRef, {
-      text: newMessage.trim(),
-      senderId: currentUserId,
-      createdAt: serverTimestamp(),
+    const channelId = chatId || [currentUserId, otherUserId].sort().join('_');
+
+    // Insert message and get it back with the generated ID
+    const { data: savedMessage } = await supabase.rpc('send_message', {
+      p_channel_id: channelId,
+      p_sender_id: currentUserId,
+      p_text: newMessage.trim(),
     });
 
-    await setDoc(chatDocRef.current, {
-      participants: [currentUserId, otherUserId],
-      lastMessage: newMessage.trim(),
-      lastMessageAt: serverTimestamp(),
-      lastMessageBy: currentUserId,
-    }, { merge: true });
+    if (savedMessage && channelRef.current) {
+      // Broadcast to the other user in real-time
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      });
+    }
 
     setNewMessage('');
   };
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
@@ -113,7 +120,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   return (
     <div className="chat-screen">
-      {/* Chat Header */}
       <div className="chat-header">
         <button onClick={onBack} className="chat-back-btn">←</button>
         <div className="chat-header-info-tappable" onClick={handleHeaderTap}>
@@ -131,12 +137,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         <span style={{ width: 40 }} />
       </div>
 
-      {/* Persistent Toast */}
       <div className="chat-toast">
         <p>Did you complete a gig with {otherUser?.full_name?.split(' ')[0]}? <button className="chat-toast-btn">Register it now</button></p>
       </div>
 
-      {/* Messages */}
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
@@ -144,12 +148,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           </div>
         )}
         {messages.map((msg) => {
-          const isMine = msg.senderId === currentUserId;
+          const isMine = msg.sender_id === currentUserId;
           return (
             <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
               <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
                 <p className="message-text">{msg.text}</p>
-                <span className="message-time">{formatTime(msg.createdAt)}</span>
+                <span className="message-time">{formatTime(msg.created_at)}</span>
               </div>
             </div>
           );
@@ -157,7 +161,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input */}
       <form onSubmit={handleSend} className="chat-input-bar">
         <input
           type="text"
