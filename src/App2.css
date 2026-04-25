@@ -575,3 +575,11 @@
   align-items: center;
   justify-content: center;
 }
+
+.chat-header-info-tappable {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  cursor: pointer;
+}
