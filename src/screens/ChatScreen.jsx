@@ -9,6 +9,7 @@ import {
   onSnapshot,
   serverTimestamp,
   doc,
+  setDoc,
   getDoc,
 } from 'firebase/firestore';
 
@@ -30,15 +31,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
     if (!user) return;
     setCurrentUserId(user.id);
 
-    // Get or create chat document
     const chatIdToUse = chatId || [user.id, otherUserId].sort().join('_');
     chatDocRef.current = doc(db, 'chats', chatIdToUse);
-
-    // Check if chat doc exists, if not it'll be created on first message
-    const chatSnap = await getDoc(chatDocRef.current);
-    if (!chatSnap.exists()) {
-      // Chat doc will be created when first message is sent
-    }
 
     // Fetch other user's profile
     const { data: profile } = await supabase
@@ -87,15 +81,13 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack }) {
       createdAt: serverTimestamp(),
     });
 
-    // Update chat metadata
-    await addDoc(collection(db, 'chats'), {
+    // Update the EXISTING chat document — NOT create a new one
+    await setDoc(chatDocRef.current, {
       participants: [currentUserId, otherUserId],
       lastMessage: newMessage.trim(),
       lastMessageAt: serverTimestamp(),
       lastMessageBy: currentUserId,
-    }).catch(() => {
-      // Chat doc may already exist, update it instead
-    });
+    }, { merge: true });
 
     setNewMessage('');
   };
