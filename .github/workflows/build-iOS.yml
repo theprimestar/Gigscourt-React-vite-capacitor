@@ -35,53 +35,30 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'GigsCourt needs photo library access for profile picture and work photo uploads.'" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 'GigsCourt needs to save photos to your library.'" "$PLIST"
 
-      - name: Create ExportOptions.plist
-        run: |
-          cat > ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>debugging</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>provisioningProfiles</key>
-              <dict/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Build unsigned archive
+      - name: Build unsigned IPA
         run: |
           cd ios/App
-          xcodebuild \
+          xcodebuild clean build \
             -workspace App.xcworkspace \
             -scheme App \
             -configuration Release \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            -sdk iphoneos \
+            -derivedDataPath ./build \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
-            IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            -archivePath ../build/App.xcarchive \
-            clean archive
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Export unsigned IPA
+      - name: Create IPA
         run: |
-          cd ios
-          xcodebuild \
-            -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath build \
-            -exportOptionsPlist ../ExportOptions.plist
+          mkdir -p Payload
+          cp -r ios/App/build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -r GigsCourt-iOS-Unsigned.ipa Payload/
+          mkdir -p output
+          mv GigsCourt-iOS-Unsigned.ipa output/
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: gigscourt-ios-unsigned
-          path: ios/build/App.ipa
+          path: output/GigsCourt-iOS-Unsigned.ipa
+          retention-days: 30
