@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
-import { API_BASE } from '../lib/config';
+import { IMAGEKIT_AUTH_URL } from '../lib/config';
 
 function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings }) {
   const [profile, setProfile] = useState(null);
@@ -71,7 +71,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     setUploadingPhoto(true);
 
     try {
-      const authRes = await fetch(`${API_BASE}/api/imagekit-auth`);
+      const authRes = await fetch(IMAGEKIT_AUTH_URL);
       const auth = await authRes.json();
 
       const formData = new FormData();
