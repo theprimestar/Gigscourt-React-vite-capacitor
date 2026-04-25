@@ -366,7 +366,7 @@ function StepPhotoBio({ onNext, onBack }) {
     setError('');
 
     try {
-      const authRes = await fetch('/api/imagekit-auth');
+      const authRes = await fetch('https://gigscourt-react-vite-capacitor.vercel.app/api/imagekit-auth');
       const auth = await authRes.json();
 
       const formData = new FormData();
