@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
+import { API_BASE } from '../lib/config';
 import L from 'leaflet';
 import 'leaflet-rotate';
 
@@ -366,7 +367,7 @@ function StepPhotoBio({ onNext, onBack }) {
     setError('');
 
     try {
-      const authRes = await fetch('https://gigscourt-react-vite-capacitor.vercel.app/api/imagekit-auth');
+      const authRes = await fetch(`${API_BASE}/api/imagekit-auth`);
       const auth = await authRes.json();
 
       const formData = new FormData();
