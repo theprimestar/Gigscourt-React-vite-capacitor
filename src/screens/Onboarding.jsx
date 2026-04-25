@@ -326,16 +326,17 @@ function StepLocation({ onNext, onBack }) {
   );
 }
 
-// Step 3: Profile Picture + Bio
+// Step 3: Profile Picture + Bio + Phone
 function StepPhotoBio({ onNext, onBack }) {
   const [bio, setBio] = useState('');
+  const [phone, setPhone] = useState('');
   const [profilePic, setProfilePic] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
   const handleSkip = () => {
-    onNext({ bio: bio.trim(), profilePicUrl: null });
+    onNext({ bio: bio.trim(), phone: phone.trim(), profilePicUrl: null });
   };
 
   const handleNext = () => {
@@ -343,7 +344,11 @@ function StepPhotoBio({ onNext, onBack }) {
       setError('Please tell us about yourself');
       return;
     }
-    onNext({ bio: bio.trim(), profilePicUrl: profilePic });
+    if (!phone.trim()) {
+      setError('Please enter your phone number');
+      return;
+    }
+    onNext({ bio: bio.trim(), phone: phone.trim(), profilePicUrl: profilePic });
   };
 
   const handleAvatarClick = (e) => {
@@ -449,6 +454,15 @@ function StepPhotoBio({ onNext, onBack }) {
         rows={4}
       />
 
+      <label>Phone Number</label>
+      <input
+        type="tel"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="+234 800 000 0000"
+        className="onboarding-input"
+      />
+
       {error && <p className="onboarding-error">{error}</p>}
 
       <div className="onboarding-buttons">
@@ -535,6 +549,7 @@ function Onboarding({ onComplete }) {
       workspace_lng: profileData.workspaceLng,
       workspace_address: profileData.workspaceAddress,
       bio: profileData.bio,
+      phone: profileData.phone,
       profile_pic_url: profileData.profilePicUrl,
       onboarding_completed: true,
       updated_at: new Date().toISOString(),
