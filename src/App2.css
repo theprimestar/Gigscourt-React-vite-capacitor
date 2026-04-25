@@ -583,3 +583,75 @@
   flex: 1;
   cursor: pointer;
 }
+
+/* Edit Profile Screen */
+.edit-profile-screen {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  background: #f5f5f7;
+}
+
+.edit-profile-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.edit-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.edit-profile-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.edit-profile-back {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #007aff;
+  cursor: pointer;
+}
+
+.edit-profile-save {
+  background: none;
+  border: none;
+  color: #007aff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-profile-save:disabled {
+  opacity: 0.5;
+}
+
+.edit-profile-body {
+  padding: 16px;
+  padding-bottom: 40px;
+}
+
+.edit-section {
+  margin-bottom: 20px;
+}
+
+.edit-section label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
