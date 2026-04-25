@@ -655,3 +655,163 @@
   letter-spacing: 0.5px;
   margin-bottom: 8px;
 }
+
+/* Settings Screen */
+.settings-screen {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  background: #f5f5f7;
+}
+
+.settings-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.settings-header h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.settings-back {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #007aff;
+  cursor: pointer;
+}
+
+.settings-body {
+  padding: 0 0 40px;
+}
+
+.settings-section {
+  margin-top: 24px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 16px 8px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: white;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+.settings-item:first-of-type {
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+.settings-item-info {
+  flex: 1;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.settings-item-label {
+  font-size: 15px;
+  color: #1d1d1f;
+  display: block;
+}
+
+.settings-item-sub {
+  font-size: 12px;
+  color: #8e8e93;
+  display: block;
+  margin-top: 2px;
+}
+
+.settings-arrow {
+  font-size: 22px;
+  color: #c7c7cc;
+}
+
+.settings-item-value {
+  font-size: 15px;
+  color: #8e8e93;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  width: 51px;
+  height: 31px;
+  border-radius: 16px;
+  background: #e5e5ea;
+  border: none;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch.active {
+  background: #34c759;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  transition: transform 0.2s;
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
+}
+
+.settings-logout-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 24px 16px 8px;
+  padding: 14px;
+  background: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #ff3b30;
+  cursor: pointer;
+}
+
+.settings-delete-btn {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px;
+  padding: 14px;
+  background: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #8e8e93;
+  cursor: pointer;
+}
