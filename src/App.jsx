@@ -18,6 +18,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
   const [firebaseReady, setFirebaseReady] = useState(false);
+  const [initError, setInitError] = useState(null);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -29,6 +30,7 @@ function App() {
           setFirebaseReady(true);
         } catch (err) {
           console.error('Firebase auth failed:', err);
+          setInitError('Firebase auth: ' + (err.message || 'Unknown error'));
         }
         determineScreen(session.user);
       } else {
@@ -45,10 +47,12 @@ function App() {
           setFirebaseReady(true);
         } catch (err) {
           console.error('Firebase auth failed:', err);
+          setInitError('Firebase auth: ' + (err.message || 'Unknown error'));
         }
         determineScreen(session.user);
       } else {
         setFirebaseReady(false);
+        setInitError(null);
         setScreen('auth');
       }
     });
@@ -62,11 +66,16 @@ function App() {
       return;
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('onboarding_completed')
       .eq('id', user.id)
       .maybeSingle();
+
+    if (error) {
+      setInitError('Supabase profile check: ' + error.message);
+      return;
+    }
 
     if (data?.onboarding_completed) {
       setScreen('home');
@@ -93,12 +102,38 @@ function App() {
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
-  if (screen === 'loading' || (screen === 'home' && !firebaseReady)) {
+  if (screen === 'loading' || (screen === 'home' && !firebaseReady && !initError)) {
     return (
       <div className="app">
         <div className="home-loading">
           <div className="spinner"></div>
           <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (initError) {
+    return (
+      <div className="app">
+        <div className="home-empty" style={{ padding: 40 }}>
+          <p style={{ color: '#ff3b30', fontWeight: 600, marginBottom: 8 }}>Startup Error</p>
+          <p style={{ fontSize: 13, color: '#8e8e93', wordBreak: 'break-word' }}>{initError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: 20,
+              padding: '12px 24px',
+              background: '#007aff',
+              color: 'white',
+              border: 'none',
+              borderRadius: 10,
+              fontSize: 15,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -139,7 +174,6 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-content">
-        {/* Home Tab */}
         <div style={{ display: activeTab === 'home' && !currentDeepScreen ? 'block' : 'none' }}>
           <HomeScreen
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
@@ -147,7 +181,6 @@ function App() {
           />
         </div>
 
-        {/* Search Tab */}
         <div style={{ display: activeTab === 'search' && !currentDeepScreen ? 'block' : 'none' }}>
           <SearchScreen
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
@@ -155,14 +188,12 @@ function App() {
           />
         </div>
 
-        {/* Chats Tab */}
         <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
           <ChatListScreen
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           />
         </div>
 
-        {/* Profile Tab — own profile */}
         <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
           <ProfileScreen
             isOwn={true}
@@ -172,7 +203,6 @@ function App() {
           />
         </div>
 
-        {/* Deep Screen: Chat */}
         {currentDeepScreen?.screen === 'chat' && (
           <ChatScreen
             chatId={null}
@@ -183,7 +213,6 @@ function App() {
           />
         )}
 
-        {/* Deep Screen: View Another User's Profile */}
         {currentDeepScreen?.screen === 'profile' && (
           <ProfileScreen
             userId={currentDeepScreen.userId}
@@ -193,12 +222,10 @@ function App() {
           />
         )}
 
-        {/* Deep Screen: Edit Profile */}
         {currentDeepScreen?.screen === 'editProfile' && (
           <EditProfileScreen onBack={goBack} />
         )}
 
-        {/* Deep Screen: Settings */}
         {currentDeepScreen?.screen === 'settings' && (
           <SettingsScreen
             onBack={goBack}
@@ -206,6 +233,7 @@ function App() {
               await supabase.auth.signOut();
               setNavStack([]);
               setFirebaseReady(false);
+              setInitError(null);
               setScreen('auth');
             }}
           />
