@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
-import { ensureFirebaseAuth } from './lib/firebase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
@@ -17,21 +16,12 @@ function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
-  const [firebaseReady, setFirebaseReady] = useState(false);
-  const [initError, setInitError] = useState(null);
 
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        try {
-          await ensureFirebaseAuth(session.access_token);
-          setFirebaseReady(true);
-        } catch (err) {
-          console.error('Firebase auth failed:', err);
-          setInitError('Firebase auth: ' + (err.message || 'Unknown error'));
-        }
         determineScreen(session.user);
       } else {
         setScreen('auth');
@@ -40,19 +30,10 @@ function App() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        try {
-          await ensureFirebaseAuth(session.access_token);
-          setFirebaseReady(true);
-        } catch (err) {
-          console.error('Firebase auth failed:', err);
-          setInitError('Firebase auth: ' + (err.message || 'Unknown error'));
-        }
         determineScreen(session.user);
       } else {
-        setFirebaseReady(false);
-        setInitError(null);
         setScreen('auth');
       }
     });
@@ -66,16 +47,11 @@ function App() {
       return;
     }
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('onboarding_completed')
       .eq('id', user.id)
       .maybeSingle();
-
-    if (error) {
-      setInitError('Supabase profile check: ' + error.message);
-      return;
-    }
 
     if (data?.onboarding_completed) {
       setScreen('home');
@@ -102,38 +78,12 @@ function App() {
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
-  if (screen === 'loading' || (screen === 'home' && !firebaseReady && !initError)) {
+  if (screen === 'loading') {
     return (
       <div className="app">
         <div className="home-loading">
           <div className="spinner"></div>
           <p>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (initError) {
-    return (
-      <div className="app">
-        <div className="home-empty" style={{ padding: 40 }}>
-          <p style={{ color: '#ff3b30', fontWeight: 600, marginBottom: 8 }}>Startup Error</p>
-          <p style={{ fontSize: 13, color: '#8e8e93', wordBreak: 'break-word' }}>{initError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: 20,
-              padding: '12px 24px',
-              background: '#007aff',
-              color: 'white',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 15,
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
         </div>
       </div>
     );
@@ -232,8 +182,6 @@ function App() {
             onLogout={async () => {
               await supabase.auth.signOut();
               setNavStack([]);
-              setFirebaseReady(false);
-              setInitError(null);
               setScreen('auth');
             }}
           />
