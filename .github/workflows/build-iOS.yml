@@ -18,7 +18,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build web app
         run: npm run build
@@ -27,6 +27,14 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+
+      - name: Add iOS Permission Strings
+        run: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'GigsCourt needs your location to show nearby service providers.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GigsCourt needs camera access for profile picture uploads.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'GigsCourt needs photo library access for profile picture and work photo uploads.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 'GigsCourt needs to save photos to your library.'" "$PLIST"
 
       - name: Create ExportOptions.plist
         run: |
