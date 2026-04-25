@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
+import { API_BASE } from '../lib/config';
 import L from 'leaflet';
 import 'leaflet-rotate';
 
@@ -54,7 +55,6 @@ function EditProfileScreen({ onBack }) {
     if (data) setAllServices(data);
   };
 
-  // Initialize map after coordinates load
   useEffect(() => {
     if (lat === null || lng === null || !mapContainer.current || map.current) return;
 
@@ -128,7 +128,7 @@ function EditProfileScreen({ onBack }) {
     setError('');
 
     try {
-      const authRes = await fetch('https://gigscourt-react-vite-capacitor.vercel.app/api/imagekit-auth');
+      const authRes = await fetch(`${API_BASE}/api/imagekit-auth`);
       const auth = await authRes.json();
       const formData = new FormData();
       formData.append('file', file);
@@ -225,7 +225,6 @@ function EditProfileScreen({ onBack }) {
 
   return (
     <div className="edit-profile-screen">
-      {/* Header */}
       <div className="edit-profile-header">
         <button onClick={onBack} className="edit-profile-back">←</button>
         <h2>Edit Profile</h2>
@@ -235,7 +234,6 @@ function EditProfileScreen({ onBack }) {
       </div>
 
       <div className="edit-profile-body">
-        {/* Profile Picture */}
         <div className="edit-section">
           <label>Profile Picture</label>
           <div className="profile-pic-section">
@@ -254,7 +252,6 @@ function EditProfileScreen({ onBack }) {
           </div>
         </div>
 
-        {/* Full Name */}
         <div className="edit-section">
           <label>Full Name / Business Name</label>
           <input
@@ -265,7 +262,6 @@ function EditProfileScreen({ onBack }) {
           />
         </div>
 
-        {/* Bio */}
         <div className="edit-section">
           <label>Bio</label>
           <textarea
@@ -276,7 +272,6 @@ function EditProfileScreen({ onBack }) {
           />
         </div>
 
-        {/* Phone */}
         <div className="edit-section">
           <label>Phone Number</label>
           <input
@@ -287,7 +282,6 @@ function EditProfileScreen({ onBack }) {
           />
         </div>
 
-        {/* Services */}
         <div className="edit-section">
           <label>Services</label>
           {selectedServices.length > 0 && (
@@ -339,7 +333,6 @@ function EditProfileScreen({ onBack }) {
           </div>
         </div>
 
-        {/* Workspace Location */}
         <div className="edit-section">
           <label>Workspace Location</label>
           <div className="map-container" style={{ height: 250 }}>
