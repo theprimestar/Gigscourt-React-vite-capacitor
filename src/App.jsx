@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import { ensureFirebaseAuth } from './lib/firebase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
@@ -22,6 +23,7 @@ function App() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
+        await ensureFirebaseAuth(session.access_token);
         determineScreen(session.user);
       } else {
         setScreen('auth');
@@ -30,8 +32,9 @@ function App() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        await ensureFirebaseAuth(session.access_token);
         determineScreen(session.user);
       } else {
         setScreen('auth');
