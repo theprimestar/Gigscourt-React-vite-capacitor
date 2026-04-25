@@ -5,9 +5,11 @@ const config = {
   server: {
     androidScheme: 'https',
     iosScheme: 'capacitor',
+    allowNavigation: ['gigscourt-react-vite-capacitor.vercel.app'],
   },
   ios: {
     minVersion: '15.0',
+    limitsNavigationsToAppBoundDomains: false,
   },
 };
 
