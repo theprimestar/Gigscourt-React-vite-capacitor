@@ -167,13 +167,14 @@ function App() {
 
         {/* Deep Screen: Chat */}
         {currentDeepScreen?.screen === 'chat' && (
-          <ChatScreen
-            chatId={null}
-            otherUserId={currentDeepScreen.userId}
-            otherUserName={currentDeepScreen.userName}
-            onBack={goBack}
-          />
-        )}
+  <ChatScreen
+    chatId={null}
+    otherUserId={currentDeepScreen.userId}
+    otherUserName={currentDeepScreen.userName}
+    onBack={goBack}
+    onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
+  />
+)}
 
         {/* Deep Screen: View Another User's Profile */}
         {currentDeepScreen?.screen === 'profile' && (
