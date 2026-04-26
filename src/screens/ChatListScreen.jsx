@@ -69,6 +69,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   const refetchChatListInternal = async (userId) => {
     try {
+      const shortId = userId.replace(/-/g, '').substring(0, 8);
       const { data, error: rpcError } = await supabase.rpc('get_chat_list', {
         p_user_id: userId,
         p_limit: 30,
@@ -77,12 +78,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       if (rpcError) throw new Error('Failed to load chats: ' + rpcError.message);
 
       if (isMounted.current && data) {
-        const newChats = data || [];
-        setChats((prev) => {
-          // Smart merge: only update if data actually changed
-          if (JSON.stringify(prev) === JSON.stringify(newChats)) return prev;
-          return newChats;
-        });
+        const newChats = (data || []).filter(c => c.other_user_id !== null);
+        setChats(newChats);
       }
     } catch (err) {
       console.error('Refetch error:', err);
@@ -102,8 +99,10 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         if (!isMounted.current) return;
         const update = payload?.payload;
         if (!update || !update.channel_id) return;
-        if (seenIds.current.has(update.channel_id + '_' + update.last_message_at)) return;
-        seenIds.current.add(update.channel_id + '_' + update.last_message_at);
+        
+        const dedupeKey = update.channel_id + '_' + update.last_message_at;
+        if (seenIds.current.has(dedupeKey)) return;
+        seenIds.current.add(dedupeKey);
 
         setChats((prev) => {
           const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
