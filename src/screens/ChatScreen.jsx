@@ -18,18 +18,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   useEffect(() => {
     isMounted.current = true;
-    console.log('[CHAT] Mounting. chatId:', chatId, 'otherUserId:', otherUserId);
     init();
 
     return () => {
-      console.log('[CHAT] Unmounting');
       isMounted.current = false;
-      // Stop polling
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
-      // Disconnect channel
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
@@ -49,16 +45,13 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       if (!isMounted.current) return;
 
       setCurrentUserId(user.id);
-      console.log('[CHAT] Current user ID:', user.id);
 
       const id1 = user.id.replace(/-/g, '').substring(0, 8);
       const id2 = otherUserId.replace(/-/g, '').substring(0, 8);
       const ids = [id1, id2].sort();
       const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
-      console.log('[CHAT] Channel ID:', channelId);
 
-      // Fetch other user's profile
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id')
@@ -72,73 +65,55 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       if (isMounted.current) {
         if (profile) {
           setOtherUser(profile);
-          console.log('[CHAT] Other user:', profile.full_name);
         } else {
           setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
-          console.log('[CHAT] Other user fallback:', otherUserName);
         }
       }
 
-      // Load message history
-      console.log('[CHAT] Loading history for channel:', channelId);
       const { data: history, error: historyError } = await supabase.rpc('get_messages', {
         p_channel_id: channelId,
         p_cursor: null,
         p_limit: 50,
       });
 
-      if (historyError) {
-        console.warn('[CHAT] History load error:', historyError.message);
-      }
+      if (historyError) console.warn('[CHAT] History load error:', historyError.message);
 
       if (isMounted.current && history) {
-        console.log('[CHAT] History loaded:', history.length, 'messages');
         history.forEach((m) => seenIds.current.add(m.id));
         setMessages(history.reverse());
       }
 
       if (isMounted.current) setLoading(false);
 
-      // Subscribe to Broadcast
       if (channelRef.current) {
-        console.log('[CHAT] Removing old channel');
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
       }
 
-      console.log('[CHAT] Creating channel:', channelId);
       channelRef.current = supabase.channel(channelId);
 
       channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-        console.log('[CHAT] 📨 Broadcast RECEIVED:', payload?.payload?.text);
         if (!isMounted.current) return;
         const msg = payload?.payload;
         if (!msg || !msg.id) return;
         if (seenIds.current.has(msg.id)) return;
-        console.log('[CHAT] Adding message to UI:', msg.text);
         seenIds.current.add(msg.id);
         setMessages((prev) => [...prev, msg]);
         scrollToBottom();
       });
 
       channelRef.current.subscribe((status) => {
-        console.log('[CHAT] Subscription status:', status);
         if (!isMounted.current) return;
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          console.warn('[CHAT] Channel disconnected, reconnecting in 2s...');
           setTimeout(() => {
             if (isMounted.current && channelRef.current) {
-              console.log('[CHAT] Reconnecting...');
               channelRef.current.subscribe();
             }
           }, 2000);
         }
       });
 
-      console.log('[CHAT] Channel subscribed');
-
-      // Start 5-second polling to catch missed broadcasts
-      console.log('[CHAT] Starting 5s polling fallback');
+      // 5-second polling fallback
       if (!isMounted.current) return;
       pollIntervalRef.current = setInterval(async () => {
         if (!isMounted.current || !channelIdRef.current) return;
@@ -157,7 +132,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
             }
           });
           if (newMessages > 0) {
-            console.log('[CHAT] 🔄 Poll caught', newMessages, 'missed messages');
             setMessages((prev) => {
               const allMessages = [...prev];
               data.forEach((m) => {
@@ -171,7 +145,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
             });
           }
         } catch (err) {
-          // Silently fail — poll will retry in 5 seconds
+          // Silently fail
         }
       }, 5000);
 
@@ -198,7 +172,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     const text = newMessage.trim();
     const channelId = channelIdRef.current;
 
-    console.log('[CHAT] 📤 SEND START - text:', text);
     setNewMessage('');
     setSending(true);
     setError(null);
@@ -213,8 +186,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       if (sendError) throw new Error('Failed to send: ' + sendError.message);
       if (!savedMessage) throw new Error('No response from server');
 
-      console.log('[CHAT] ✅ Message saved:', savedMessage.id);
-
       if (isMounted.current) {
         if (!seenIds.current.has(savedMessage.id)) {
           seenIds.current.add(savedMessage.id);
@@ -222,6 +193,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         }
         scrollToBottom();
 
+        // Broadcast to chat channel
         if (channelRef.current) {
           try {
             await channelRef.current.send({
@@ -229,14 +201,45 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
               event: 'message',
               payload: savedMessage,
             });
-            console.log('[CHAT] ✅ Broadcast sent');
           } catch (broadcastErr) {
-            console.warn('[CHAT] ⚠️ Broadcast failed (will be caught by poll):', broadcastErr.message);
+            console.warn('[CHAT] Broadcast failed (will be caught by poll):', broadcastErr.message);
           }
         }
+
+        // Broadcast to both users' chat lists
+        const chatListUpdate = {
+          channel_id: channelId,
+          other_user_id: otherUserId,
+          other_user_name: otherUser?.full_name || otherUserName || 'User',
+          other_user_pic: otherUser?.profile_pic_url || null,
+          last_message: text,
+          last_message_at: savedMessage.created_at,
+          last_message_by: currentUserId,
+        };
+
+        // Send to other user's chat list
+        const otherShortId = otherUserId.replace(/-/g, '');
+        supabase.channel('chatlist-' + otherShortId).send({
+          type: 'broadcast',
+          event: 'chat_updated',
+          payload: chatListUpdate,
+        });
+
+        // Send to own chat list
+        const ownShortId = currentUserId.replace(/-/g, '');
+        supabase.channel('chatlist-' + ownShortId).send({
+          type: 'broadcast',
+          event: 'chat_updated',
+          payload: {
+            ...chatListUpdate,
+            other_user_id: currentUserId,
+            other_user_name: otherUser?.full_name || otherUserName || 'User',
+            other_user_pic: otherUser?.profile_pic_url || null,
+          },
+        });
       }
     } catch (err) {
-      console.error('[CHAT] ❌ Send error:', err);
+      console.error('[CHAT] Send error:', err);
       if (isMounted.current) {
         setError(err.message);
         setNewMessage(text);
