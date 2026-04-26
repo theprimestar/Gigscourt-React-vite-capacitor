@@ -6,22 +6,23 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const channelRef = useRef(null);
-  const reconnectTimerRef = useRef(null);
   const initialLoadDone = useRef(false);
+  const isMounted = useRef(true);
 
-  // Load chat list on mount
   useEffect(() => {
+    isMounted.current = true;
     loadChatList();
+
     return () => {
-      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
+      isMounted.current = false;
       if (channelRef.current) {
+        channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
   }, []);
 
-  // Handle visibility changes — subscribe/unsubscribe
   useEffect(() => {
     if (!currentUserId || !initialLoadDone.current) return;
 
@@ -29,15 +30,14 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       refetchChatList();
       subscribeToUpdates();
     } else {
-      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
       if (channelRef.current) {
+        channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     }
   }, [isVisible, currentUserId]);
 
-  // Handle chatTarget (opening chat from another tab)
   useEffect(() => {
     if (chatTarget && currentUserId) {
       if (onStartChat) {
@@ -66,47 +66,27 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       p_user_id: userId,
       p_limit: 30,
     });
-    if (data) setChats(data);
-    setLoading(false);
+    if (isMounted.current && data) setChats(data);
+    if (isMounted.current) setLoading(false);
   };
 
   const subscribeToUpdates = () => {
     if (channelRef.current) return;
 
-    channelRef.current = supabase
-      .channel('chatlist-db')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          const channelId = payload.new.channel_id;
-          if (channelId && channelId.includes(currentUserId)) {
-            refetchChatList();
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
-          // Only reconnect if still visible
-          if (isVisible) {
-            reconnectTimerRef.current = setTimeout(() => {
-              if (channelRef.current) {
-                supabase.removeChannel(channelRef.current);
-                channelRef.current = null;
-              }
-              subscribeToUpdates();
-            }, 3000);
-          }
-        }
+    channelRef.current = supabase.channel('chatlist:' + currentUserId);
+
+    channelRef.current.on('broadcast', { event: 'chat_updated' }, (payload) => {
+      if (!isMounted.current) return;
+      const update = payload.payload;
+      setChats((prev) => {
+        const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
+        return [update, ...filtered];
       });
+    });
+
+    channelRef.current.subscribe();
   };
 
-  // Refetch on window focus
   useEffect(() => {
     const handleFocus = () => {
       if (initialLoadDone.current && currentUserId && isVisible) {
