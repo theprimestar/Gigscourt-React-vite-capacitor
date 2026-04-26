@@ -5,6 +5,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
@@ -15,79 +17,108 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   useEffect(() => {
     isMounted.current = true;
-    console.log('[ChatScreen] Mounting with chatId:', chatId, 'otherUserId:', otherUserId);
     init();
 
     return () => {
-      console.log('[ChatScreen] Unmounting');
       isMounted.current = false;
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, [chatId, otherUserId]);
 
   const init = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !isMounted.current) return;
-    setCurrentUserId(user.id);
-    console.log('[ChatScreen] Current user:', user.id);
+    setError(null);
+    setLoading(true);
 
-    const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
-    channelIdRef.current = channelId;
-    console.log('[ChatScreen] Channel ID:', channelId);
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, profile_pic_url, id')
-      .eq('id', otherUserId)
-      .single();
-
-    if (isMounted.current) {
-      if (profile) {
-        setOtherUser(profile);
-        console.log('[ChatScreen] Other user loaded:', profile.full_name);
-      } else {
-        setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
-      }
-    }
-
-    const { data: history } = await supabase.rpc('get_messages', {
-      p_channel_id: channelId,
-      p_cursor: null,
-      p_limit: 50,
-    });
-
-    if (isMounted.current && history) {
-      console.log('[ChatScreen] History loaded:', history.length, 'messages');
-      history.forEach((m) => seenIds.current.add(m.id));
-      setMessages(history.reverse());
-    }
-
-    if (isMounted.current) setLoading(false);
-
-    console.log('[ChatScreen] Subscribing to Broadcast channel:', channelId);
-    channelRef.current = supabase.channel(channelId);
-
-    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-      console.log('[ChatScreen] 📨 Broadcast RECEIVED:', payload.payload.text);
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('Auth failed: ' + authError.message);
+      if (!user) throw new Error('Not authenticated');
       if (!isMounted.current) return;
-      const msg = payload.payload;
-      if (seenIds.current.has(msg.id)) {
-        console.log('[ChatScreen] ⚠️ Duplicate message ignored:', msg.id);
-        return;
+
+      setCurrentUserId(user.id);
+
+      const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
+      channelIdRef.current = channelId;
+
+      // Fetch other user's profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('full_name, profile_pic_url, id')
+        .eq('id', otherUserId)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.warn('Profile fetch warning:', profileError.message);
       }
-      seenIds.current.add(msg.id);
-      setMessages((prev) => [...prev, msg]);
-      scrollToBottom();
-    });
 
-    channelRef.current.subscribe((status) => {
-      console.log('[ChatScreen] Subscription status:', status);
-    });
+      if (isMounted.current) {
+        if (profile) {
+          setOtherUser(profile);
+        } else {
+          setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+        }
+      }
 
-    setTimeout(() => scrollToBottom(), 300);
+      // Load message history
+      const { data: history, error: historyError } = await supabase.rpc('get_messages', {
+        p_channel_id: channelId.replace(/-/g, ''),
+        p_cursor: null,
+        p_limit: 50,
+      });
+
+      if (historyError) {
+        console.warn('History load warning:', historyError.message);
+      }
+
+      if (isMounted.current && history) {
+        history.forEach((m) => seenIds.current.add(m.id));
+        setMessages(history.reverse());
+      }
+
+      if (isMounted.current) setLoading(false);
+
+      // Subscribe to Broadcast
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        supabase.removeChannel(channelRef.current);
+      }
+
+      channelRef.current = supabase.channel(channelId);
+
+      channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+        if (!isMounted.current) return;
+        const msg = payload?.payload;
+        if (!msg || !msg.id) return;
+        if (seenIds.current.has(msg.id)) return;
+        seenIds.current.add(msg.id);
+        setMessages((prev) => [...prev, msg]);
+        scrollToBottom();
+      });
+
+      channelRef.current.subscribe((status) => {
+        if (!isMounted.current) return;
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.warn('Channel disconnected, reconnecting...');
+          setTimeout(() => {
+            if (isMounted.current && channelRef.current) {
+              channelRef.current.subscribe();
+            }
+          }, 2000);
+        }
+      });
+
+      setTimeout(() => scrollToBottom(), 300);
+    } catch (err) {
+      console.error('Chat init error:', err);
+      if (isMounted.current) {
+        setError(err.message);
+        setLoading(false);
+      }
+    }
   };
 
   const scrollToBottom = () => {
@@ -98,42 +129,53 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentUserId) return;
+    if (!newMessage.trim() || !currentUserId || sending) return;
 
     const text = newMessage.trim();
     const channelId = channelIdRef.current;
 
     setNewMessage('');
+    setSending(true);
+    setError(null);
 
-    console.log('[ChatScreen] 📤 Saving message to DB...');
-    const { data: savedMessage } = await supabase.rpc('send_message', {
-      p_channel_id: channelId,
-      p_sender_id: currentUserId,
-      p_text: text,
-    });
+    try {
+      const { data: savedMessage, error: sendError } = await supabase.rpc('send_message', {
+        p_channel_id: channelId,
+        p_sender_id: currentUserId,
+        p_text: text,
+      });
 
-    if (savedMessage && isMounted.current) {
-      console.log('[ChatScreen] ✅ Message saved:', savedMessage.id);
-      if (!seenIds.current.has(savedMessage.id)) {
-        seenIds.current.add(savedMessage.id);
-        setMessages((prev) => [...prev, savedMessage]);
+      if (sendError) throw new Error('Failed to send: ' + sendError.message);
+      if (!savedMessage) throw new Error('No response from server');
+
+      if (isMounted.current) {
+        if (!seenIds.current.has(savedMessage.id)) {
+          seenIds.current.add(savedMessage.id);
+          setMessages((prev) => [...prev, savedMessage]);
+        }
+        scrollToBottom();
+
+        if (channelRef.current) {
+          try {
+            await channelRef.current.send({
+              type: 'broadcast',
+              event: 'message',
+              payload: savedMessage,
+            });
+          } catch (broadcastErr) {
+            console.warn('Broadcast failed (message saved to DB):', broadcastErr.message);
+          }
+        }
       }
-      scrollToBottom();
-
-      if (channelRef.current) {
-        console.log('[ChatScreen] 📡 Broadcasting message...');
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).then(() => {
-          console.log('[ChatScreen] ✅ Broadcast sent successfully');
-        }).catch((err) => {
-          console.error('[ChatScreen] ❌ Broadcast failed:', err);
-        });
-      } else {
-        console.error('[ChatScreen] ❌ No channel ref to broadcast on');
+    } catch (err) {
+      console.error('Send error:', err);
+      if (isMounted.current) {
+        setError(err.message);
+        // Restore the message text so user can retry
+        setNewMessage(text);
       }
+    } finally {
+      if (isMounted.current) setSending(false);
     }
   };
 
@@ -182,6 +224,13 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         <p>Did you complete a gig with {otherUser?.full_name?.split(' ')[0]}? <button className="chat-toast-btn">Register it now</button></p>
       </div>
 
+      {error && (
+        <div className="chat-error-banner" onClick={() => setError(null)}>
+          <span>{error}</span>
+          <button>✕</button>
+        </div>
+      )}
+
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
@@ -209,9 +258,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           onChange={(e) => setNewMessage(e.target.value)}
           placeholder="Type a message..."
           className="chat-input"
+          disabled={sending}
         />
-        <button type="submit" disabled={!newMessage.trim()} className="chat-send-btn">
-          ➤
+        <button type="submit" disabled={!newMessage.trim() || sending} className="chat-send-btn">
+          {sending ? '...' : '➤'}
         </button>
       </form>
     </div>
