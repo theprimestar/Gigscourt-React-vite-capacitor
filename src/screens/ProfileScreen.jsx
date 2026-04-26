@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { db } from '../lib/firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
 
@@ -34,29 +32,13 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     if (profileData) {
       setProfile(profileData);
       setWorkPhotos(profileData.work_photos || []);
-    }
-
-    const userDocRef = doc(db, 'users', targetId);
-    const userSnap = await getDoc(userDocRef);
-
-    if (!userSnap.exists()) {
-      await setDoc(userDocRef, {
-        rating: 0,
-        reviewCount: 0,
-        gigCount: 0,
-        updatedAt: new Date().toISOString(),
+      setStats({
+        gigs: profileData.gig_count || 0,
+        rating: profileData.review_count > 0 
+          ? (profileData.rating / profileData.review_count).toFixed(1) 
+          : 'New',
       });
     }
-
-    onSnapshot(userDocRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setStats({
-          gigs: data.gigCount || 0,
-          rating: data.reviewCount > 0 ? (data.rating / data.reviewCount).toFixed(1) : 'New',
-        });
-      }
-    });
 
     setLoading(false);
   };
