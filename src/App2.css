@@ -815,3 +815,23 @@
   color: #8e8e93;
   cursor: pointer;
 }
+
+.chat-error-banner {
+  background: #fff3cd;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #856404;
+  cursor: pointer;
+}
+
+.chat-error-banner button {
+  background: none;
+  border: none;
+  color: #856404;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+}
