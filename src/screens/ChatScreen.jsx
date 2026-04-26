@@ -9,7 +9,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
-  const chatlistChannelRef = useRef(null);
+  const dbSubscriptionRef = useRef(null);
   const channelIdRef = useRef(null);
 
   useEffect(() => {
@@ -19,9 +19,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
       }
-      if (chatlistChannelRef.current) {
-        chatlistChannelRef.current.unsubscribe();
-        supabase.removeChannel(chatlistChannelRef.current);
+      if (dbSubscriptionRef.current) {
+        dbSubscriptionRef.current.unsubscribe();
+        supabase.removeChannel(dbSubscriptionRef.current);
       }
     };
   }, [chatId, otherUserId]);
@@ -58,23 +58,52 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     }
     setLoading(false);
 
-    // Subscribe to real-time broadcast
+    // Subscribe to Broadcast for instant delivery
     channelRef.current = supabase.channel(channelId, {
       config: { broadcast: { self: true } },
     });
 
     channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-      setMessages((prev) => [...prev, payload.payload]);
+      const msg = payload.payload;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
       scrollToBottom();
     });
 
     channelRef.current.subscribe();
 
-    // Subscribe to chat list updates
-    chatlistChannelRef.current = supabase.channel('chatlist:' + user.id, {
-      config: { broadcast: { self: false } },
-    });
-    chatlistChannelRef.current.subscribe();
+    // Subscribe to database changes as safety net
+    dbSubscriptionRef.current = supabase
+      .channel('db-changes-' + channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `channel_id=eq.${channelId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          setMessages((prev) => {
+            // Only add if not already received via Broadcast
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, {
+              id: newMsg.id,
+              channel_id: newMsg.channel_id,
+              sender_id: newMsg.sender_id,
+              text: newMsg.text,
+              created_at: newMsg.created_at,
+              sender_name: otherUser?.full_name || otherUserName,
+              sender_pic: otherUser?.profile_pic_url || null,
+            }];
+          });
+          scrollToBottom();
+        }
+      )
+      .subscribe();
   };
 
   const scrollToBottom = () => {
@@ -95,47 +124,18 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       p_text: newMessage.trim(),
     });
 
-    if (savedMessage && channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      });
+    if (savedMessage) {
+      // Add to sender's messages immediately
+      setMessages((prev) => [...prev, savedMessage]);
+
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        });
+      }
     }
-
-    // Broadcast to the other user's chat list
-    const chatListUpdate = {
-      channel_id: channelId,
-      other_user_id: currentUserId,
-      other_user_name: otherUser?.full_name || otherUserName || 'User',
-      other_user_pic: null,
-      last_message: newMessage.trim(),
-      last_message_at: savedMessage?.created_at || new Date().toISOString(),
-      last_message_by: currentUserId,
-    };
-
-    supabase.channel('chatlist:' + otherUserId).send({
-      type: 'broadcast',
-      event: 'chat_updated',
-      payload: chatListUpdate,
-    });
-
-    // Update own chat list
-    const ownUpdate = {
-      channel_id: channelId,
-      other_user_id: otherUserId,
-      other_user_name: otherUser?.full_name || otherUserName || 'User',
-      other_user_pic: otherUser?.profile_pic_url || null,
-      last_message: newMessage.trim(),
-      last_message_at: savedMessage?.created_at || new Date().toISOString(),
-      last_message_by: currentUserId,
-    };
-
-    supabase.channel('chatlist:' + currentUserId).send({
-      type: 'broadcast',
-      event: 'chat_updated',
-      payload: ownUpdate,
-    });
 
     setNewMessage('');
   };
