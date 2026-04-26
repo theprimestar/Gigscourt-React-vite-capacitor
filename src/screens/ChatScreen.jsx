@@ -14,6 +14,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const channelIdRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
     isMounted.current = true;
@@ -23,6 +24,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     return () => {
       console.log('[CHAT] Unmounting');
       isMounted.current = false;
+      // Stop polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      // Disconnect channel
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
@@ -44,11 +51,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       setCurrentUserId(user.id);
       console.log('[CHAT] Current user ID:', user.id);
 
-      // Use only the first 8 chars of each UUID to create a short channel name
-const id1 = user.id.replace(/-/g, '').substring(0, 8);
-const id2 = otherUserId.replace(/-/g, '').substring(0, 8);
-const ids = [id1, id2].sort();
-const channelId = 'chat_' + ids[0] + '_' + ids[1];
+      const id1 = user.id.replace(/-/g, '').substring(0, 8);
+      const id2 = otherUserId.replace(/-/g, '').substring(0, 8);
+      const ids = [id1, id2].sort();
+      const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
       console.log('[CHAT] Channel ID:', channelId);
 
@@ -105,19 +111,10 @@ const channelId = 'chat_' + ids[0] + '_' + ids[1];
 
       channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
         console.log('[CHAT] 📨 Broadcast RECEIVED:', payload?.payload?.text);
-        if (!isMounted.current) {
-          console.log('[CHAT] Ignored - not mounted');
-          return;
-        }
+        if (!isMounted.current) return;
         const msg = payload?.payload;
-        if (!msg || !msg.id) {
-          console.log('[CHAT] Ignored - invalid payload');
-          return;
-        }
-        if (seenIds.current.has(msg.id)) {
-          console.log('[CHAT] Ignored - duplicate:', msg.id);
-          return;
-        }
+        if (!msg || !msg.id) return;
+        if (seenIds.current.has(msg.id)) return;
         console.log('[CHAT] Adding message to UI:', msg.text);
         seenIds.current.add(msg.id);
         setMessages((prev) => [...prev, msg]);
@@ -139,6 +136,45 @@ const channelId = 'chat_' + ids[0] + '_' + ids[1];
       });
 
       console.log('[CHAT] Channel subscribed');
+
+      // Start 5-second polling to catch missed broadcasts
+      console.log('[CHAT] Starting 5s polling fallback');
+      if (!isMounted.current) return;
+      pollIntervalRef.current = setInterval(async () => {
+        if (!isMounted.current || !channelIdRef.current) return;
+        try {
+          const { data, error: pollError } = await supabase.rpc('get_messages', {
+            p_channel_id: channelIdRef.current,
+            p_cursor: null,
+            p_limit: 50,
+          });
+          if (pollError || !data || !isMounted.current) return;
+          let newMessages = 0;
+          data.forEach((m) => {
+            if (!seenIds.current.has(m.id)) {
+              seenIds.current.add(m.id);
+              newMessages++;
+            }
+          });
+          if (newMessages > 0) {
+            console.log('[CHAT] 🔄 Poll caught', newMessages, 'missed messages');
+            setMessages((prev) => {
+              const allMessages = [...prev];
+              data.forEach((m) => {
+                if (!allMessages.some((existing) => existing.id === m.id)) {
+                  allMessages.push(m);
+                }
+              });
+              return allMessages.sort((a, b) => 
+                new Date(a.created_at) - new Date(b.created_at)
+              );
+            });
+          }
+        } catch (err) {
+          // Silently fail — poll will retry in 5 seconds
+        }
+      }, 5000);
+
       setTimeout(() => scrollToBottom(), 300);
     } catch (err) {
       console.error('[CHAT] Init error:', err);
@@ -163,9 +199,6 @@ const channelId = 'chat_' + ids[0] + '_' + ids[1];
     const channelId = channelIdRef.current;
 
     console.log('[CHAT] 📤 SEND START - text:', text);
-    console.log('[CHAT] 📤 Channel ID:', channelId);
-    console.log('[CHAT] 📤 Sender ID:', currentUserId);
-
     setNewMessage('');
     setSending(true);
     setError(null);
@@ -177,14 +210,8 @@ const channelId = 'chat_' + ids[0] + '_' + ids[1];
         p_text: text,
       });
 
-      if (sendError) {
-        console.error('[CHAT] ❌ RPC error:', sendError);
-        throw new Error('Failed to send: ' + sendError.message);
-      }
-      if (!savedMessage) {
-        console.error('[CHAT] ❌ No response from RPC');
-        throw new Error('No response from server');
-      }
+      if (sendError) throw new Error('Failed to send: ' + sendError.message);
+      if (!savedMessage) throw new Error('No response from server');
 
       console.log('[CHAT] ✅ Message saved:', savedMessage.id);
 
@@ -192,24 +219,20 @@ const channelId = 'chat_' + ids[0] + '_' + ids[1];
         if (!seenIds.current.has(savedMessage.id)) {
           seenIds.current.add(savedMessage.id);
           setMessages((prev) => [...prev, savedMessage]);
-          console.log('[CHAT] Added to own UI');
         }
         scrollToBottom();
 
         if (channelRef.current) {
-          console.log('[CHAT] 📡 Broadcasting to channel:', channelId);
           try {
-            const result = await channelRef.current.send({
+            await channelRef.current.send({
               type: 'broadcast',
               event: 'message',
               payload: savedMessage,
             });
-            console.log('[CHAT] ✅ Broadcast sent, result:', result);
+            console.log('[CHAT] ✅ Broadcast sent');
           } catch (broadcastErr) {
-            console.error('[CHAT] ❌ Broadcast error:', broadcastErr);
+            console.warn('[CHAT] ⚠️ Broadcast failed (will be caught by poll):', broadcastErr.message);
           }
-        } else {
-          console.error('[CHAT] ❌ No channel ref available');
         }
       }
     } catch (err) {
