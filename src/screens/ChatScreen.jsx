@@ -9,6 +9,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,45 +50,65 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       if (isMounted) setLoading(false);
 
-      // Subscribe to database changes — single source of truth
-      channelRef.current = supabase
-        .channel('chat-' + channelId)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'messages',
-            filter: `channel_id=eq.${channelId}`,
-          },
-          (payload) => {
-            if (!isMounted) return;
-            const newMsg = payload.new;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, {
-                id: newMsg.id,
-                channel_id: newMsg.channel_id,
-                sender_id: newMsg.sender_id,
-                text: newMsg.text,
-                created_at: newMsg.created_at,
-              }];
-            });
-            scrollToBottom();
-          }
-        )
-        .subscribe();
+      // Subscribe to database changes
+      subscribeToChannel(channelId, isMounted);
     };
 
     init();
 
     return () => {
       isMounted = false;
+      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
   }, [chatId, otherUserId]);
+
+  const subscribeToChannel = (channelId, isMounted) => {
+    // Remove existing channel if any
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    channelRef.current = supabase
+      .channel('chat-' + channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `channel_id=eq.${channelId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, {
+              id: newMsg.id,
+              channel_id: newMsg.channel_id,
+              sender_id: newMsg.sender_id,
+              text: newMsg.text,
+              created_at: newMsg.created_at,
+            }];
+          });
+          scrollToBottom();
+        }
+      )
+      .subscribe((status) => {
+        // If subscription drops, reconnect after 3 seconds
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
+          reconnectTimerRef.current = setTimeout(() => {
+            if (isMounted !== false) {
+              subscribeToChannel(channelId, isMounted);
+            }
+          }, 3000);
+        }
+      });
+  };
 
   const scrollToBottom = () => {
     setTimeout(() => {
