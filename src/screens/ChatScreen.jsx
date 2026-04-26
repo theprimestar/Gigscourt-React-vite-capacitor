@@ -15,9 +15,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   useEffect(() => {
     isMounted.current = true;
+    console.log('[ChatScreen] Mounting with chatId:', chatId, 'otherUserId:', otherUserId);
     init();
 
     return () => {
+      console.log('[ChatScreen] Unmounting');
       isMounted.current = false;
       if (channelRef.current) {
         channelRef.current.unsubscribe();
@@ -30,9 +32,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || !isMounted.current) return;
     setCurrentUserId(user.id);
+    console.log('[ChatScreen] Current user:', user.id);
 
     const channelId = chatId || [user.id, otherUserId].sort().join('_');
     channelIdRef.current = channelId;
+    console.log('[ChatScreen] Channel ID:', channelId);
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -43,6 +47,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     if (isMounted.current) {
       if (profile) {
         setOtherUser(profile);
+        console.log('[ChatScreen] Other user loaded:', profile.full_name);
       } else {
         setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
       }
@@ -55,26 +60,33 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     });
 
     if (isMounted.current && history) {
+      console.log('[ChatScreen] History loaded:', history.length, 'messages');
       history.forEach((m) => seenIds.current.add(m.id));
       setMessages(history.reverse());
     }
 
     if (isMounted.current) setLoading(false);
 
+    console.log('[ChatScreen] Subscribing to Broadcast channel:', channelId);
     channelRef.current = supabase.channel(channelId);
 
     channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+      console.log('[ChatScreen] 📨 Broadcast RECEIVED:', payload.payload.text);
       if (!isMounted.current) return;
       const msg = payload.payload;
-      if (seenIds.current.has(msg.id)) return;
+      if (seenIds.current.has(msg.id)) {
+        console.log('[ChatScreen] ⚠️ Duplicate message ignored:', msg.id);
+        return;
+      }
       seenIds.current.add(msg.id);
       setMessages((prev) => [...prev, msg]);
       scrollToBottom();
     });
 
-    channelRef.current.subscribe();
+    channelRef.current.subscribe((status) => {
+      console.log('[ChatScreen] Subscription status:', status);
+    });
 
-    // Initial scroll to bottom after history loads
     setTimeout(() => scrollToBottom(), 300);
   };
 
@@ -93,6 +105,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
     setNewMessage('');
 
+    console.log('[ChatScreen] 📤 Saving message to DB...');
     const { data: savedMessage } = await supabase.rpc('send_message', {
       p_channel_id: channelId,
       p_sender_id: currentUserId,
@@ -100,6 +113,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     });
 
     if (savedMessage && isMounted.current) {
+      console.log('[ChatScreen] ✅ Message saved:', savedMessage.id);
       if (!seenIds.current.has(savedMessage.id)) {
         seenIds.current.add(savedMessage.id);
         setMessages((prev) => [...prev, savedMessage]);
@@ -107,11 +121,18 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       scrollToBottom();
 
       if (channelRef.current) {
+        console.log('[ChatScreen] 📡 Broadcasting message...');
         channelRef.current.send({
           type: 'broadcast',
           event: 'message',
           payload: savedMessage,
+        }).then(() => {
+          console.log('[ChatScreen] ✅ Broadcast sent successfully');
+        }).catch((err) => {
+          console.error('[ChatScreen] ❌ Broadcast failed:', err);
         });
+      } else {
+        console.error('[ChatScreen] ❌ No channel ref to broadcast on');
       }
     }
   };
