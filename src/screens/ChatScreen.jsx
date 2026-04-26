@@ -9,102 +9,85 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
-  const dbSubscriptionRef = useRef(null);
-  const channelIdRef = useRef(null);
 
   useEffect(() => {
-    setupChat();
-    return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
+    let isMounted = true;
+
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isMounted) return;
+
+      setCurrentUserId(user.id);
+
+      const channelId = chatId || [user.id, otherUserId].sort().join('_');
+
+      // Fetch other user's profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, profile_pic_url, id')
+        .eq('id', otherUserId)
+        .single();
+
+      if (isMounted) {
+        if (profile) {
+          setOtherUser(profile);
+        } else {
+          setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+        }
       }
-      if (dbSubscriptionRef.current) {
-        dbSubscriptionRef.current.unsubscribe();
-        supabase.removeChannel(dbSubscriptionRef.current);
+
+      // Load message history
+      const { data: history } = await supabase.rpc('get_messages', {
+        p_channel_id: channelId,
+        p_cursor: null,
+        p_limit: 50,
+      });
+
+      if (isMounted && history) {
+        setMessages(history.reverse());
+      }
+
+      if (isMounted) setLoading(false);
+
+      // Subscribe to database changes — single source of truth
+      channelRef.current = supabase
+        .channel('chat-' + channelId)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `channel_id=eq.${channelId}`,
+          },
+          (payload) => {
+            if (!isMounted) return;
+            const newMsg = payload.new;
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, {
+                id: newMsg.id,
+                channel_id: newMsg.channel_id,
+                sender_id: newMsg.sender_id,
+                text: newMsg.text,
+                created_at: newMsg.created_at,
+              }];
+            });
+            scrollToBottom();
+          }
+        )
+        .subscribe();
+    };
+
+    init();
+
+    return () => {
+      isMounted = false;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
       }
     };
   }, [chatId, otherUserId]);
-
-  const setupChat = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setCurrentUserId(user.id);
-
-    const channelId = chatId || [user.id, otherUserId].sort().join('_');
-    channelIdRef.current = channelId;
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, profile_pic_url, id')
-      .eq('id', otherUserId)
-      .single();
-
-    if (profile) {
-      setOtherUser(profile);
-    } else {
-      setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
-    }
-
-    // Load message history
-    const { data: history } = await supabase.rpc('get_messages', {
-      p_channel_id: channelId,
-      p_cursor: null,
-      p_limit: 50,
-    });
-
-    if (history) {
-      setMessages(history.reverse());
-    }
-    setLoading(false);
-
-    // Subscribe to Broadcast for instant delivery
-    channelRef.current = supabase.channel(channelId, {
-      config: { broadcast: { self: true } },
-    });
-
-    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-      const msg = payload.payload;
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-      scrollToBottom();
-    });
-
-    channelRef.current.subscribe();
-
-    // Subscribe to database changes as safety net
-    dbSubscriptionRef.current = supabase
-      .channel('db-changes-' + channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `channel_id=eq.${channelId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new;
-          setMessages((prev) => {
-            // Only add if not already received via Broadcast
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, {
-              id: newMsg.id,
-              channel_id: newMsg.channel_id,
-              sender_id: newMsg.sender_id,
-              text: newMsg.text,
-              created_at: newMsg.created_at,
-              sender_name: otherUser?.full_name || otherUserName,
-              sender_pic: otherUser?.profile_pic_url || null,
-            }];
-          });
-          scrollToBottom();
-        }
-      )
-      .subscribe();
-  };
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -116,7 +99,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId) return;
 
-    const channelId = channelIdRef.current;
+    const channelId = chatId || [currentUserId, otherUserId].sort().join('_');
 
     const { data: savedMessage } = await supabase.rpc('send_message', {
       p_channel_id: channelId,
@@ -125,16 +108,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     });
 
     if (savedMessage) {
-      // Add to sender's messages immediately
       setMessages((prev) => [...prev, savedMessage]);
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        });
-      }
+      scrollToBottom();
     }
 
     setNewMessage('');
