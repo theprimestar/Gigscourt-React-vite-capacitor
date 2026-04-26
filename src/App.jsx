@@ -140,6 +140,7 @@ function App() {
 
         <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
           <ChatListScreen
+            isVisible={activeTab === 'chats' && !currentDeepScreen}
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           />
         </div>
@@ -147,6 +148,7 @@ function App() {
         <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
           <ProfileScreen
             isOwn={true}
+            isVisible={activeTab === 'profile' && !currentDeepScreen}
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
             onEditProfile={() => navigateTo('editProfile')}
             onOpenSettings={() => navigateTo('settings')}
