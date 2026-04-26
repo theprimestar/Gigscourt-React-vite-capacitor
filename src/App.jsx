@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
-import { ensureFirebaseAuth } from './lib/firebase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
@@ -17,36 +16,25 @@ function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
-  const [initError, setInitError] = useState(null);
 
   useEffect(() => {
     const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
 
-        if (session?.user) {
-          await ensureFirebaseAuth(session.access_token);
-          determineScreen(session.user);
-        } else {
-          setScreen('auth');
-        }
-      } catch (err) {
-        setInitError(err.message || 'Startup error');
+      if (session?.user) {
+        determineScreen(session.user);
+      } else {
+        setScreen('auth');
       }
     };
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        if (session?.user) {
-          await ensureFirebaseAuth(session.access_token);
-          determineScreen(session.user);
-        } else {
-          setScreen('auth');
-        }
-      } catch (err) {
-        setInitError(err.message || 'Startup error');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        determineScreen(session.user);
+      } else {
+        setScreen('auth');
       }
     });
 
@@ -89,32 +77,6 @@ function App() {
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
-
-  if (initError) {
-    return (
-      <div className="app">
-        <div style={{ padding: 40, textAlign: 'center' }}>
-          <p style={{ color: '#ff3b30', fontWeight: 600, marginBottom: 8 }}>Startup Error</p>
-          <p style={{ fontSize: 13, color: '#8e8e93', wordBreak: 'break-word' }}>{initError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              marginTop: 20,
-              padding: '12px 24px',
-              background: '#007aff',
-              color: 'white',
-              border: 'none',
-              borderRadius: 10,
-              fontSize: 15,
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (screen === 'loading') {
     return (
