@@ -12,21 +12,25 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   useEffect(() => {
     loadChatList();
     return () => {
-      disconnectChannel();
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, []);
 
   // Handle visibility changes — subscribe/unsubscribe
   useEffect(() => {
     if (!currentUserId || !initialLoadDone.current) return;
-    
+
     if (isVisible) {
-      // Tab became visible — refetch and subscribe
       refetchChatList();
       subscribeToUpdates();
     } else {
-      // Tab hidden — unsubscribe to save connections
-      disconnectChannel();
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     }
   }, [isVisible, currentUserId]);
 
@@ -64,29 +68,25 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   };
 
   const subscribeToUpdates = () => {
-    if (channelRef.current) return; // Already subscribed
+    if (channelRef.current) return;
 
-    channelRef.current = supabase.channel('chatlist:' + currentUserId, {
-      config: { broadcast: { self: false } },
-    });
-
-    channelRef.current.on('broadcast', { event: 'chat_updated' }, (payload) => {
-      const update = payload.payload;
-      setChats((prev) => {
-        const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
-        return [update, ...filtered];
-      });
-    });
-
-    channelRef.current.subscribe();
-  };
-
-  const disconnectChannel = () => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
+    channelRef.current = supabase
+      .channel('chatlist-db')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const channelId = payload.new.channel_id;
+          if (channelId && channelId.includes(currentUserId)) {
+            refetchChatList();
+          }
+        }
+      )
+      .subscribe();
   };
 
   // Refetch on window focus
