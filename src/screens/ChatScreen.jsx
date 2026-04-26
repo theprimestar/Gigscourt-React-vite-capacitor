@@ -44,7 +44,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       setCurrentUserId(user.id);
       console.log('[CHAT] Current user ID:', user.id);
 
-      const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
+      // Use only the first 8 chars of each UUID to create a short channel name
+const id1 = user.id.replace(/-/g, '').substring(0, 8);
+const id2 = otherUserId.replace(/-/g, '').substring(0, 8);
+const ids = [id1, id2].sort();
+const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
       console.log('[CHAT] Channel ID:', channelId);
 
