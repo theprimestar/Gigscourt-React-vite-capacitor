@@ -9,131 +9,111 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
-  const reconnectTimerRef = useRef(null);
+  const channelIdRef = useRef(null);
+  const seenIds = useRef(new Set());
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    let isMounted = true;
-
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !isMounted) return;
-
-      setCurrentUserId(user.id);
-
-      const channelId = chatId || [user.id, otherUserId].sort().join('_');
-
-      // Fetch other user's profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, profile_pic_url, id')
-        .eq('id', otherUserId)
-        .single();
-
-      if (isMounted) {
-        if (profile) {
-          setOtherUser(profile);
-        } else {
-          setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
-        }
-      }
-
-      // Load message history
-      const { data: history } = await supabase.rpc('get_messages', {
-        p_channel_id: channelId,
-        p_cursor: null,
-        p_limit: 50,
-      });
-
-      if (isMounted && history) {
-        setMessages(history.reverse());
-      }
-
-      if (isMounted) setLoading(false);
-
-      // Subscribe to database changes
-      subscribeToChannel(channelId, isMounted);
-    };
-
+    isMounted.current = true;
     init();
 
     return () => {
-      isMounted = false;
-      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
+      isMounted.current = false;
       if (channelRef.current) {
+        channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
       }
     };
   }, [chatId, otherUserId]);
 
-  const subscribeToChannel = (channelId, isMounted) => {
-    // Remove existing channel if any
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
+  const init = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !isMounted.current) return;
+    setCurrentUserId(user.id);
+
+    const channelId = chatId || [user.id, otherUserId].sort().join('_');
+    channelIdRef.current = channelId;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, profile_pic_url, id')
+      .eq('id', otherUserId)
+      .single();
+
+    if (isMounted.current) {
+      if (profile) {
+        setOtherUser(profile);
+      } else {
+        setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+      }
     }
 
-    channelRef.current = supabase
-      .channel('chat-' + channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `channel_id=eq.${channelId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, {
-              id: newMsg.id,
-              channel_id: newMsg.channel_id,
-              sender_id: newMsg.sender_id,
-              text: newMsg.text,
-              created_at: newMsg.created_at,
-            }];
-          });
-          scrollToBottom();
-        }
-      )
-      .subscribe((status) => {
-        // If subscription drops, reconnect after 3 seconds
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
-          reconnectTimerRef.current = setTimeout(() => {
-            if (isMounted !== false) {
-              subscribeToChannel(channelId, isMounted);
-            }
-          }, 3000);
-        }
-      });
+    const { data: history } = await supabase.rpc('get_messages', {
+      p_channel_id: channelId,
+      p_cursor: null,
+      p_limit: 50,
+    });
+
+    if (isMounted.current && history) {
+      history.forEach((m) => seenIds.current.add(m.id));
+      setMessages(history.reverse());
+    }
+
+    if (isMounted.current) setLoading(false);
+
+    channelRef.current = supabase.channel(channelId);
+
+    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+      if (!isMounted.current) return;
+      const msg = payload.payload;
+      if (seenIds.current.has(msg.id)) return;
+      seenIds.current.add(msg.id);
+      setMessages((prev) => [...prev, msg]);
+      scrollToBottom();
+    });
+
+    channelRef.current.subscribe();
+
+    // Initial scroll to bottom after history loads
+    setTimeout(() => scrollToBottom(), 300);
   };
 
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    }, 150);
   };
 
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId) return;
 
-    const channelId = chatId || [currentUserId, otherUserId].sort().join('_');
+    const text = newMessage.trim();
+    const channelId = channelIdRef.current;
+
+    setNewMessage('');
 
     const { data: savedMessage } = await supabase.rpc('send_message', {
       p_channel_id: channelId,
       p_sender_id: currentUserId,
-      p_text: newMessage.trim(),
+      p_text: text,
     });
 
-    if (savedMessage) {
-      setMessages((prev) => [...prev, savedMessage]);
+    if (savedMessage && isMounted.current) {
+      if (!seenIds.current.has(savedMessage.id)) {
+        seenIds.current.add(savedMessage.id);
+        setMessages((prev) => [...prev, savedMessage]);
+      }
       scrollToBottom();
-    }
 
-    setNewMessage('');
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        });
+      }
+    }
   };
 
   const formatTime = (timestamp) => {
