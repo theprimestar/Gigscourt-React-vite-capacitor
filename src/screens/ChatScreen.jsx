@@ -34,7 +34,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     setCurrentUserId(user.id);
     console.log('[ChatScreen] Current user:', user.id);
 
-    const channelId = chatId || [user.id, otherUserId].sort().join('_');
+    const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
     channelIdRef.current = channelId;
     console.log('[ChatScreen] Channel ID:', channelId);
 
