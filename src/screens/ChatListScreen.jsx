@@ -4,40 +4,36 @@ import { supabase } from '../lib/supabase';
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const channelRef = useRef(null);
-  const initialLoadDone = useRef(false);
+  const seenIds = useRef(new Set());
   const isMounted = useRef(true);
 
+  // Load on mount
   useEffect(() => {
     isMounted.current = true;
     loadChatList();
 
     return () => {
       isMounted.current = false;
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      disconnectChannel();
     };
   }, []);
 
+  // Handle visibility
   useEffect(() => {
-    if (!currentUserId || !initialLoadDone.current) return;
+    if (!currentUserId) return;
 
     if (isVisible) {
       refetchChatList();
       subscribeToUpdates();
     } else {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      disconnectChannel();
     }
   }, [isVisible, currentUserId]);
 
+  // Handle chatTarget from other tabs
   useEffect(() => {
     if (chatTarget && currentUserId) {
       if (onStartChat) {
@@ -49,47 +45,100 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   }, [chatTarget, currentUserId]);
 
   const loadChatList = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setCurrentUserId(user.id);
-    await refetchChatListInternal(user.id);
-    initialLoadDone.current = true;
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw new Error('Auth failed');
+      if (!user) throw new Error('Not authenticated');
+      if (!isMounted.current) return;
+
+      setCurrentUserId(user.id);
+      await refetchChatListInternal(user.id);
+    } catch (err) {
+      console.error('Chat list load error:', err);
+      if (isMounted.current) {
+        setError(err.message);
+        setLoading(false);
+      }
+    }
   };
 
   const refetchChatList = async () => {
-    if (!currentUserId) return;
+    if (!currentUserId || !isMounted.current) return;
     await refetchChatListInternal(currentUserId);
   };
 
   const refetchChatListInternal = async (userId) => {
-    const { data } = await supabase.rpc('get_chat_list', {
-      p_user_id: userId,
-      p_limit: 30,
-    });
-    if (isMounted.current && data) setChats(data);
-    if (isMounted.current) setLoading(false);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_chat_list', {
+        p_user_id: userId,
+        p_limit: 30,
+      });
+
+      if (rpcError) throw new Error('Failed to load chats: ' + rpcError.message);
+
+      if (isMounted.current && data) {
+        const newChats = data || [];
+        setChats((prev) => {
+          // Smart merge: only update if data actually changed
+          if (JSON.stringify(prev) === JSON.stringify(newChats)) return prev;
+          return newChats;
+        });
+      }
+    } catch (err) {
+      console.error('Refetch error:', err);
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
   };
 
   const subscribeToUpdates = () => {
     if (channelRef.current) return;
 
-    channelRef.current = supabase.channel('chatlist:' + currentUserId);
+    try {
+      const channelName = 'chatlist-' + currentUserId.replace(/-/g, '');
+      channelRef.current = supabase.channel(channelName);
 
-    channelRef.current.on('broadcast', { event: 'chat_updated' }, (payload) => {
-      if (!isMounted.current) return;
-      const update = payload.payload;
-      setChats((prev) => {
-        const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
-        return [update, ...filtered];
+      channelRef.current.on('broadcast', { event: 'chat_updated' }, (payload) => {
+        if (!isMounted.current) return;
+        const update = payload?.payload;
+        if (!update || !update.channel_id) return;
+        if (seenIds.current.has(update.channel_id + '_' + update.last_message_at)) return;
+        seenIds.current.add(update.channel_id + '_' + update.last_message_at);
+
+        setChats((prev) => {
+          const filtered = prev.filter((c) => c.channel_id !== update.channel_id);
+          return [update, ...filtered];
+        });
       });
-    });
 
-    channelRef.current.subscribe();
+      channelRef.current.subscribe((status) => {
+        if (!isMounted.current) return;
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.warn('Chat list channel disconnected, reconnecting...');
+          setTimeout(() => {
+            if (isMounted.current && isVisible && channelRef.current) {
+              channelRef.current.subscribe();
+            }
+          }, 2000);
+        }
+      });
+    } catch (err) {
+      console.error('Subscribe error:', err);
+    }
   };
 
+  const disconnectChannel = () => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+
+  // Refetch on window focus
   useEffect(() => {
     const handleFocus = () => {
-      if (initialLoadDone.current && currentUserId && isVisible) {
+      if (isMounted.current && currentUserId && isVisible) {
         refetchChatList();
       }
     };
@@ -126,6 +175,13 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       <header className="chat-list-header">
         <h1>Chats</h1>
       </header>
+
+      {error && (
+        <div className="chat-error-banner" onClick={() => setError(null)}>
+          <span>{error}</span>
+          <button>✕</button>
+        </div>
+      )}
 
       {chats.length === 0 ? (
         <div className="chat-list-empty">
