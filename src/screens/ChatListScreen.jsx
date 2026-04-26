@@ -6,12 +6,14 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const channelRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
   const initialLoadDone = useRef(false);
 
   // Load chat list on mount
   useEffect(() => {
     loadChatList();
     return () => {
+      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -27,6 +29,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       refetchChatList();
       subscribeToUpdates();
     } else {
+      if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -86,7 +89,21 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          if (reconnectTimerRef.current) clearInterval(reconnectTimerRef.current);
+          // Only reconnect if still visible
+          if (isVisible) {
+            reconnectTimerRef.current = setTimeout(() => {
+              if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+              }
+              subscribeToUpdates();
+            }, 3000);
+          }
+        }
+      });
   };
 
   // Refetch on window focus
