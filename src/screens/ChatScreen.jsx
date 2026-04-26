@@ -11,6 +11,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
+  const chatListChannelRef = useRef(null);
   const channelIdRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
@@ -30,6 +31,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
+      }
+      if (chatListChannelRef.current) {
+        chatListChannelRef.current.unsubscribe();
+        supabase.removeChannel(chatListChannelRef.current);
+        chatListChannelRef.current = null;
       }
     };
   }, [chatId, otherUserId]);
@@ -85,6 +91,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       if (isMounted.current) setLoading(false);
 
+      // Chat channel for messages
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
@@ -112,6 +119,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           }, 2000);
         }
       });
+
+      // Chat list channel — created ONCE, reused for all sends
+      const ownShortId = user.id.replace(/-/g, '');
+      chatListChannelRef.current = supabase.channel('chatlist-' + ownShortId);
+      chatListChannelRef.current.subscribe();
 
       // 5-second polling fallback
       if (!isMounted.current) return;
@@ -206,37 +218,37 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           }
         }
 
-        // Broadcast to both users' chat lists
-        const chatListUpdate = {
-          channel_id: channelId,
-          other_user_id: otherUserId,
-          other_user_name: otherUser?.full_name || otherUserName || 'User',
-          other_user_pic: otherUser?.profile_pic_url || null,
-          last_message: text,
-          last_message_at: savedMessage.created_at,
-          last_message_by: currentUserId,
-        };
-
-        // Send to other user's chat list
-        const otherShortId = otherUserId.replace(/-/g, '');
-        supabase.channel('chatlist-' + otherShortId).send({
-          type: 'broadcast',
-          event: 'chat_updated',
-          payload: chatListUpdate,
-        });
-
-        // Send to own chat list
-        const ownShortId = currentUserId.replace(/-/g, '');
-        supabase.channel('chatlist-' + ownShortId).send({
-          type: 'broadcast',
-          event: 'chat_updated',
-          payload: {
-            ...chatListUpdate,
-            other_user_id: currentUserId,
+        // Broadcast to both users' chat lists using persistent channel
+        if (chatListChannelRef.current) {
+          const chatListUpdate = {
+            channel_id: channelId,
+            other_user_id: otherUserId,
             other_user_name: otherUser?.full_name || otherUserName || 'User',
             other_user_pic: otherUser?.profile_pic_url || null,
-          },
-        });
+            last_message: text,
+            last_message_at: savedMessage.created_at,
+            last_message_by: currentUserId,
+          };
+
+          // Send to other user's chat list
+          chatListChannelRef.current.send({
+            type: 'broadcast',
+            event: 'chat_updated',
+            payload: chatListUpdate,
+          });
+
+          // Send to own chat list
+          chatListChannelRef.current.send({
+            type: 'broadcast',
+            event: 'chat_updated',
+            payload: {
+              ...chatListUpdate,
+              other_user_id: currentUserId,
+              other_user_name: otherUser?.full_name || otherUserName || 'User',
+              other_user_pic: otherUser?.profile_pic_url || null,
+            },
+          });
+        }
       }
     } catch (err) {
       console.error('[CHAT] Send error:', err);
