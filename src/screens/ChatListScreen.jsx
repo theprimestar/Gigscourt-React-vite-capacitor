@@ -1,32 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import ChatScreen from './ChatScreen';
 
-function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat }) {
+function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeChat, setActiveChat] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const channelRef = useRef(null);
   const initialLoadDone = useRef(false);
 
+  // Load chat list on mount
   useEffect(() => {
     loadChatList();
     return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-      }
+      disconnectChannel();
     };
   }, []);
 
+  // Handle visibility changes — subscribe/unsubscribe
+  useEffect(() => {
+    if (!currentUserId || !initialLoadDone.current) return;
+    
+    if (isVisible) {
+      // Tab became visible — refetch and subscribe
+      refetchChatList();
+      subscribeToUpdates();
+    } else {
+      // Tab hidden — unsubscribe to save connections
+      disconnectChannel();
+    }
+  }, [isVisible, currentUserId]);
+
+  // Handle chatTarget (opening chat from another tab)
   useEffect(() => {
     if (chatTarget && currentUserId) {
-      const chatId = [currentUserId, chatTarget.id].sort().join('_');
-      setActiveChat({
-        id: chatId,
-        participants: [currentUserId, chatTarget.id],
-      });
+      if (onStartChat) {
+        onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User' });
+      }
       if (onClearChatTarget) onClearChatTarget();
       if (onDeepScreen) onDeepScreen('chat');
     }
@@ -36,20 +45,28 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentUserId(user.id);
+    await refetchChatListInternal(user.id);
+    initialLoadDone.current = true;
+  };
 
+  const refetchChatList = async () => {
+    if (!currentUserId) return;
+    await refetchChatListInternal(currentUserId);
+  };
+
+  const refetchChatListInternal = async (userId) => {
     const { data } = await supabase.rpc('get_chat_list', {
-      p_user_id: user.id,
+      p_user_id: userId,
       p_limit: 30,
     });
-
-    if (data) {
-      setChats(data);
-    }
+    if (data) setChats(data);
     setLoading(false);
-    initialLoadDone.current = true;
+  };
 
-    // Subscribe to real-time chat list updates
-    channelRef.current = supabase.channel('chatlist:' + user.id, {
+  const subscribeToUpdates = () => {
+    if (channelRef.current) return; // Already subscribed
+
+    channelRef.current = supabase.channel('chatlist:' + currentUserId, {
       config: { broadcast: { self: false } },
     });
 
@@ -64,22 +81,25 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     channelRef.current.subscribe();
   };
 
-  // Refetch on focus (covers any missed broadcasts)
+  const disconnectChannel = () => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+
+  // Refetch on window focus
   useEffect(() => {
     const handleFocus = () => {
-      if (initialLoadDone.current && currentUserId) {
-        supabase.rpc('get_chat_list', {
-          p_user_id: currentUserId,
-          p_limit: 30,
-        }).then(({ data }) => {
-          if (data) setChats(data);
-        });
+      if (initialLoadDone.current && currentUserId && isVisible) {
+        refetchChatList();
       }
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [currentUserId]);
+  }, [currentUserId, isVisible]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -93,30 +113,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
     return date.toLocaleDateString();
   };
-
-  const handleBack = () => {
-    setActiveChat(null);
-    if (onDeepScreen) onDeepScreen(null);
-    if (currentUserId) {
-      supabase.rpc('get_chat_list', {
-        p_user_id: currentUserId,
-        p_limit: 30,
-      }).then(({ data }) => {
-        if (data) setChats(data);
-      });
-    }
-  };
-
-  if (activeChat) {
-    return (
-      <ChatScreen
-        chatId={activeChat.id}
-        otherUserId={activeChat.participants.find((p) => p !== currentUserId)}
-        otherUserName={null}
-        onBack={handleBack}
-      />
-    );
-  }
 
   if (loading) {
     return (
@@ -146,10 +142,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
               key={chat.channel_id}
               className="chat-list-item"
               onClick={() => {
-                setActiveChat({
-                  id: chat.channel_id,
-                  participants: [currentUserId, chat.other_user_id],
-                });
+                if (onStartChat) {
+                  onStartChat({ id: chat.other_user_id, full_name: chat.other_user_name });
+                }
                 if (onDeepScreen) onDeepScreen('chat');
               }}
             >
