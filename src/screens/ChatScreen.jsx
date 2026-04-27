@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { PUSH_NOTIFICATION_URL } from '../lib/config';
+import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL, imagekitPublicKey } from '../lib/config';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const [messages, setMessages] = useState([]);
@@ -17,6 +17,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const channelRef = useRef(null);
   const channelIdRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const fileInputRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
 
@@ -176,6 +177,69 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }, 100);
   };
 
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUserId) return;
+
+    setSending(true);
+    try {
+      const authRes = await fetch(IMAGEKIT_AUTH_URL);
+      const auth = await authRes.json();
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', 'chat-photo.jpg');
+      formData.append('folder', '/chat-photos');
+      formData.append('useUniqueFileName', 'true');
+      formData.append('publicKey', imagekitPublicKey);
+      formData.append('token', auth.token);
+      formData.append('signature', auth.signature);
+      formData.append('expire', auth.expire);
+
+      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
+
+      const channelKey = channelIdRef.current;
+      const { data: savedMessage } = await supabase.rpc('send_message', {
+        p_channel_key: channelKey,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: '',
+        p_image_url: result.url,
+      });
+
+      if (savedMessage && channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
+
+      if (otherUser?.onesignal_player_id) {
+        fetch(PUSH_NOTIFICATION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            include_player_ids: [otherUser.onesignal_player_id],
+            headings: { en: currentUserName || 'New photo' },
+            contents: { en: '📷 Photo' },
+            data: { channel_id: channelKey },
+          }),
+        }).catch(() => {});
+      }
+    } catch (err) {
+      if (isMounted.current) setError('Photo upload failed');
+    } finally {
+      if (isMounted.current) setSending(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !currentUserId || sending) return;
@@ -299,6 +363,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       </div>
 
       <form onSubmit={handleSend} className="chat-input-bar">
+        <button type="button" className="chat-photo-btn" disabled={sending} onClick={() => fileInputRef.current?.click()}>
+          📷
+        </button>
         <input
           type="text"
           value={newMessage}
@@ -307,7 +374,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           className="chat-input"
           disabled={sending}
         />
-        <button type="submit" disabled={!newMessage.trim() || sending} className="chat-send-btn">
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handlePhotoUpload}
+        />
+        <button type="submit" disabled={(!newMessage.trim() && !sending) || sending} className="chat-send-btn">
           {sending ? '...' : '➤'}
         </button>
       </form>
