@@ -133,7 +133,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       });
 
       const ownShortId = user.id.replace(/-/g, '');
-      chatListChannelRef.current = supabase.channel('chatlist:' + ownShortId);
+      chatListChannelRef.current = supabase.channel('chatlist-' + ownShortId);
       chatListChannelRef.current.subscribe();
 
       if (!isMounted.current) return;
