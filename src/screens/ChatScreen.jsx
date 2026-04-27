@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { PUSH_NOTIFICATION_URL } from '../lib/config';
 
@@ -11,48 +11,24 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentUserName, setCurrentUserName] = useState('');
-  const [editingMessageId, setEditingMessageId] = useState(null);
-  const [editText, setEditText] = useState('');
-  const [pinnedMessages, setPinnedMessages] = useState([]);
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
   const channelIdRef = useRef(null);
+  const pollIntervalRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
 
-  // Initialize chat
   useEffect(() => {
     isMounted.current = true;
-    if (isVisible) {
-      init();
-    }
-
+    if (isVisible) init();
     return () => {
       isMounted.current = false;
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
+      stopPolling();
+      unsubscribeChannel();
     };
   }, [chatId, otherUserId, isVisible]);
-
-  // Subscribe/unsubscribe when visibility changes
-  useEffect(() => {
-    if (!channelIdRef.current || !currentUserId) return;
-
-    if (isVisible) {
-      subscribeToChannel(channelIdRef.current);
-    } else {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    }
-  }, [isVisible, currentUserId]);
 
   const init = async () => {
     setError(null);
@@ -64,7 +40,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       if (!user || !isMounted.current) return;
       setCurrentUserId(user.id);
 
-      // Get sender's name for push notifications
       const { data: myProfile } = await supabase
         .from('profiles')
         .select('full_name')
@@ -74,30 +49,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         setCurrentUserName(myProfile.full_name || '');
       }
 
-      // Get or create the channel — database owns the ID, not the client
-      let activeChannelId = chatId;
+      const channelKey = chatId || [user.id, otherUserId].sort().join(':');
+      channelIdRef.current = channelKey;
 
-      if (!activeChannelId) {
-        const { data: channelId } = await supabase.rpc('get_or_create_channel', {
-          p_user_id: user.id,
-          p_other_user_id: otherUserId,
-        });
-        activeChannelId = channelId;
-      }
-
-      if (!activeChannelId) {
-        throw new Error('Could not create or find channel');
-      }
-
-      channelIdRef.current = activeChannelId;
-
-      // Reset unread for this channel
       await supabase.rpc('reset_unread', {
         p_user_id: user.id,
-        p_channel_id: activeChannelId,
+        p_channel_id: channelKey,
       });
 
-      // Fetch other user's profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id, onesignal_player_id')
@@ -112,112 +71,103 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         });
       }
 
-      // Fetch message history
-      const { data: history } = await supabase.rpc('get_messages', {
-        p_channel_id: activeChannelId,
-        p_cursor: null,
-        p_cursor_id: null,
-        p_limit: 50,
-      });
-
-      if (isMounted.current && history) {
-        const sorted = [...history].reverse();
-        sorted.forEach(m => seenIds.current.add(m.id));
-        setMessages(sorted);
-        setTimeout(() => {
-          if (chatContainerRef.current) {
-            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-          }
-        }, 100);
-      }
-
-      // Fetch pinned messages
-      const { data: pins } = await supabase
-        .from('pinned_messages')
-        .select('message_id')
-        .eq('channel_id', activeChannelId);
-
-      if (isMounted.current && pins) {
-        setPinnedMessages(pins.map(p => p.message_id));
-      }
+      await loadMessages(channelKey, user.id);
 
       if (isMounted.current) setLoading(false);
 
-      // Subscribe to realtime Broadcast
-      subscribeToChannel(activeChannelId);
+      subscribeToChannel(channelKey);
+      startPolling(channelKey, user.id);
 
     } catch (err) {
-      if (isMounted.current) setError(err.message);
-      if (isMounted.current) setLoading(false);
+      if (isMounted.current) {
+        setError(err.message);
+        setLoading(false);
+      }
+    }
+  };
+
+  const loadMessages = async (channelId, userId) => {
+    const { data: history } = await supabase.rpc('get_messages', {
+      p_channel_id: channelId,
+      p_user_id: userId,
+      p_cursor: null,
+      p_cursor_id: null,
+      p_limit: 50,
+    });
+
+    if (isMounted.current && history) {
+      const sorted = [...history].reverse();
+      sorted.forEach(m => seenIds.current.add(m.id));
+      setMessages(sorted);
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
     }
   };
 
   const subscribeToChannel = (channelId) => {
+    unsubscribeChannel();
+
+    channelRef.current = supabase.channel(`chat:${channelId}`, {
+      config: { broadcast: { self: true, ack: true } },
+    });
+
+    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+      if (!isMounted.current) return;
+      const msg = payload?.payload;
+      if (!msg?.id || seenIds.current.has(msg.id)) return;
+      seenIds.current.add(msg.id);
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      scrollToBottom();
+    });
+
+    channelRef.current.subscribe();
+  };
+
+  const unsubscribeChannel = () => {
     if (channelRef.current) {
       channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
     }
+  };
 
-    channelRef.current = supabase.channel(`chat:${channelId}`, {
-      config: {
-        broadcast: {
-          self: true,
-          ack: true,
-        },
-      },
-    });
-
-    channelRef.current.on(
-      'broadcast',
-      { event: 'message' },
-      (payload) => {
-        if (!isMounted.current) return;
-        const msg = payload?.payload;
-        if (!msg?.id || seenIds.current.has(msg.id)) return;
-
-        seenIds.current.add(msg.id);
-
-        switch (msg.type) {
-          case 'new':
-            setMessages(prev => {
-              if (prev.some(m => m.id === msg.id)) return prev;
-              return [...prev, msg];
-            });
-            scrollToBottom();
-            break;
-
-          case 'edit':
-            setMessages(prev =>
-              prev.map(m => m.id === msg.id ? { ...m, text: msg.text, edited_at: msg.edited_at } : m)
-            );
-            break;
-
-          case 'delete':
-            setMessages(prev =>
-              prev.map(m => m.id === msg.id ? { ...m, deleted_at: msg.deleted_at } : m)
-            );
-            break;
-
-          case 'pin':
-            setPinnedMessages(prev => [...prev, msg.message_id]);
-            break;
-
-          case 'unpin':
-            setPinnedMessages(prev => prev.filter(id => id !== msg.message_id));
-            break;
-        }
+  const startPolling = (channelId, userId) => {
+    stopPolling();
+    pollIntervalRef.current = setInterval(async () => {
+      if (!isMounted.current) return;
+      const { data } = await supabase.rpc('get_messages', {
+        p_channel_id: channelId,
+        p_user_id: userId,
+        p_cursor: null,
+        p_cursor_id: null,
+        p_limit: 50,
+      });
+      if (!data || !isMounted.current) return;
+      const newMessages = data.filter(m => !seenIds.current.has(m.id));
+      if (newMessages.length > 0) {
+        newMessages.forEach(m => seenIds.current.add(m.id));
+        setMessages(prev => {
+          const existing = new Set(prev.map(p => p.id));
+          const unique = newMessages.filter(m => !existing.has(m.id));
+          return [...prev, ...unique].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+          );
+        });
       }
-    );
+    }, 5000);
+  };
 
-    channelRef.current.subscribe((status) => {
-      if (status === 'CLOSED') {
-        setTimeout(() => {
-          if (isMounted.current && isVisible) {
-            subscribeToChannel(channelId);
-          }
-        }, 2000);
-      }
-    });
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
   };
 
   const scrollToBottom = () => {
@@ -231,14 +181,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     if (!newMessage.trim() || !currentUserId || sending) return;
 
     const text = newMessage.trim();
-    const channelId = channelIdRef.current;
+    const channelKey = channelIdRef.current;
 
     setNewMessage('');
     setSending(true);
 
     try {
       const { data: savedMessage } = await supabase.rpc('send_message', {
-        p_channel_id: channelId,
+        p_channel_key: channelKey,
         p_sender_id: currentUserId,
         p_other_user_id: otherUserId,
         p_text: text,
@@ -246,27 +196,23 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
       if (!savedMessage) throw new Error('Failed to send');
 
-      const broadcastPayload = { ...savedMessage, type: 'new' };
-
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event: 'message',
-          payload: broadcastPayload,
+          payload: savedMessage,
         }).catch(() => {});
       }
 
-      // Push notification to other user
       if (otherUser?.onesignal_player_id) {
-        const notificationHeading = currentUserName || otherUserName || 'New message';
         fetch(PUSH_NOTIFICATION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             include_player_ids: [otherUser.onesignal_player_id],
-            headings: { en: notificationHeading },
+            headings: { en: currentUserName || 'New message' },
             contents: { en: text },
-            data: { channel_id: channelId },
+            data: { channel_id: channelKey },
           }),
         }).catch(() => {});
       }
@@ -278,139 +224,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     } finally {
       if (isMounted.current) setSending(false);
     }
-  };
-
-  const handleEditMessage = async (messageId) => {
-    if (!editText.trim() || !currentUserId) return;
-
-    const originalText = messages.find(m => m.id === messageId)?.text;
-    setEditingMessageId(null);
-    setEditText('');
-
-    try {
-      const { data: result } = await supabase.rpc('edit_message', {
-        p_message_id: messageId,
-        p_sender_id: currentUserId,
-        p_new_text: editText.trim(),
-      });
-
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-
-      if (channelRef.current && result) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: { ...result, type: 'edit' },
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) {
-        setError(err.message);
-        setMessages(prev =>
-          prev.map(m => m.id === messageId ? { ...m, text: originalText } : m)
-        );
-      }
-    }
-  };
-
-  const handleDeleteMessage = async (messageId) => {
-    try {
-      const { data: result } = await supabase.rpc('delete_message', {
-        p_message_id: messageId,
-        p_sender_id: currentUserId,
-      });
-
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: {
-            id: messageId,
-            channel_id: channelIdRef.current,
-            deleted_at: new Date().toISOString(),
-            type: 'delete',
-          },
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) setError(err.message);
-    }
-  };
-
-  const handlePinMessage = async (messageId) => {
-    try {
-      await supabase.rpc('pin_message', {
-        p_channel_id: channelIdRef.current,
-        p_message_id: messageId,
-        p_user_id: currentUserId,
-      });
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: { channel_id: channelIdRef.current, message_id: messageId, type: 'pin' },
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) setError(err.message);
-    }
-  };
-
-  const handleUnpinMessage = async (messageId) => {
-    try {
-      await supabase.rpc('unpin_message', {
-        p_channel_id: channelIdRef.current,
-        p_message_id: messageId,
-        p_user_id: currentUserId,
-      });
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: { channel_id: channelIdRef.current, message_id: messageId, type: 'unpin' },
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) setError(err.message);
-    }
-  };
-
-  const handleDeleteConversation = async () => {
-    if (!confirm('Delete this conversation? It will only be removed for you.')) return;
-
-    try {
-      const { data: result } = await supabase.rpc('delete_channel', {
-        p_channel_id: channelIdRef.current,
-        p_user_id: currentUserId,
-      });
-
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-
-      if (onBack) onBack();
-    } catch (err) {
-      if (isMounted.current) setError(err.message);
-    }
-  };
-
-  const canEditMessage = (message) => {
-    if (!message || message.sender_id !== currentUserId) return false;
-    if (message.deleted_at) return false;
-    const messageTime = new Date(message.created_at).getTime();
-    const now = Date.now();
-    return (now - messageTime) < 10 * 60 * 1000;
   };
 
   const formatTime = (timestamp) => {
@@ -449,9 +262,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
             <h3>{otherUser?.full_name || 'User'}</h3>
           </div>
         </div>
-        <button onClick={handleDeleteConversation} className="chat-delete-btn" title="Delete conversation">
-          🗑️
-        </button>
+        <span style={{ width: 40 }} />
       </div>
 
       {error && (
@@ -468,77 +279,19 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
         {messages.map(msg => {
           const isMine = msg.sender_id === currentUserId;
-          const isPinned = pinnedMessages.includes(msg.id);
-          const isDeleted = !!msg.deleted_at;
-          const isEdited = !!msg.edited_at;
-
           return (
             <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
-              {isPinned && (
-                <div className="message-pin-indicator">📌 Pinned</div>
-              )}
-
-              <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'} ${isDeleted ? 'bubble-deleted' : ''}`}>
-                {isDeleted ? (
-                  <p className="message-text deleted-text">This message was deleted</p>
-                ) : editingMessageId === msg.id ? (
-                  <div className="message-edit-form">
-                    <input
-                      type="text"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      className="message-edit-input"
-                      autoFocus
-                    />
-                    <button onClick={() => handleEditMessage(msg.id)} className="message-edit-save">✓</button>
-                    <button onClick={() => { setEditingMessageId(null); setEditText(''); }} className="message-edit-cancel">✕</button>
-                  </div>
-                ) : (
-                  <p className="message-text">{msg.text}</p>
-                )}
+              <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
+                {msg.image_url ? (
+                  <img src={msg.image_url} alt="" style={{ maxWidth: 200, borderRadius: 12, marginBottom: 4 }} />
+                ) : null}
+                {msg.text ? <p className="message-text">{msg.text}</p> : null}
                 <span className="message-time">
                   {formatTime(msg.created_at)}
-                  {isEdited && <span className="edited-label"> (edited)</span>}
+                  {isMine && msg.is_read && <span className="read-receipt"> ✓✓</span>}
+                  {isMine && !msg.is_read && <span className="read-receipt"> ✓</span>}
                 </span>
               </div>
-
-              {isMine && !isDeleted && editingMessageId !== msg.id && (
-                <div className="message-actions">
-                  {canEditMessage(msg) && (
-                    <button
-                      className="message-action-btn"
-                      onClick={() => { setEditingMessageId(msg.id); setEditText(msg.text); }}
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                  )}
-                  <button
-                    className="message-action-btn"
-                    onClick={() => handleDeleteMessage(msg.id)}
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
-                  {isPinned ? (
-                    <button
-                      className="message-action-btn"
-                      onClick={() => handleUnpinMessage(msg.id)}
-                      title="Unpin"
-                    >
-                      📌❌
-                    </button>
-                  ) : (
-                    <button
-                      className="message-action-btn"
-                      onClick={() => handlePinMessage(msg.id)}
-                      title="Pin"
-                    >
-                      📌
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           );
         })}
