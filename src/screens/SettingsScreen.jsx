@@ -30,11 +30,18 @@ function SettingsScreen({ onBack, onLogout }) {
     setShowPhone(newValue);
 
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('profiles').upsert({
-      id: user.id,
-      show_phone: newValue,
-      updated_at: new Date().toISOString(),
-    });
+
+    // FIXED: Use update() instead of upsert() to prevent data loss
+    // This only changes the show_phone column and updated_at timestamp.
+    // All other profile data (full_name, services, work_photos, bio, etc.)
+    // is preserved. upsert() would nullify every column not listed here.
+    await supabase
+      .from('profiles')
+      .update({
+        show_phone: newValue,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
   };
 
   if (loading) {
