@@ -115,7 +115,7 @@ function App() {
     if (screen === 'home') {
       checkUnreadBadge();
     }
-  }, [screen, checkUnreadBadge]);
+  }, [screen, activeTab, checkUnreadBadge]);
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
