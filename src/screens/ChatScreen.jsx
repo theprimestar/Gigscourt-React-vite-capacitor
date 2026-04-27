@@ -13,7 +13,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
-  const chatListChannelRef = useRef(null);
   const channelIdRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
@@ -25,19 +24,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
     return () => {
       isMounted.current = false;
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-      if (chatListChannelRef.current) {
-        chatListChannelRef.current.unsubscribe();
-        supabase.removeChannel(chatListChannelRef.current);
-        chatListChannelRef.current = null;
       }
     };
   }, [chatId, otherUserId]);
@@ -47,53 +37,39 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     setLoading(true);
 
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError) throw new Error('Auth failed: ' + authError.message);
-      if (!user) throw new Error('Not authenticated');
-      if (!isMounted.current) return;
-
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isMounted.current) return;
       setCurrentUserId(user.id);
 
-      const id1 = user.id.replace(/-/g, '').substring(0, 8);
-      const id2 = otherUserId.replace(/-/g, '').substring(0, 8);
-      const ids = [id1, id2].sort();
-      const channelId = 'chat_' + ids[0] + '_' + ids[1];
+      const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
       channelIdRef.current = channelId;
 
-      // Await reset_unread so it completes before any new messages arrive
+      // Clear unread
       await supabase.rpc('reset_unread', {
         p_user_id: user.id,
         p_channel_id: channelId,
       });
 
-      const { data: profile, error: profileError } = await supabase
+      // Fetch other user
+      const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id, onesignal_player_id')
         .eq('id', otherUserId)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.warn('[CHAT] Profile fetch warning:', profileError.message);
-      }
-
       if (isMounted.current) {
-        if (profile) {
-          setOtherUser(profile);
-        } else {
-          setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
-        }
+        setOtherUser(profile || { full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
       }
 
-      const { data: history, error: historyError } = await supabase.rpc('get_messages', {
+      // Load history
+      const { data: history } = await supabase.rpc('get_messages', {
         p_channel_id: channelId,
         p_cursor: null,
         p_limit: 50,
       });
 
-      if (historyError) console.warn('[CHAT] History load error:', historyError.message);
-
       if (isMounted.current && history) {
-        history.forEach((m) => seenIds.current.add(m.id));
+        history.forEach(m => seenIds.current.add(m.id));
         setMessages(history.reverse());
         setTimeout(() => {
           if (chatContainerRef.current) {
@@ -104,78 +80,48 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       if (isMounted.current) setLoading(false);
 
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-        supabase.removeChannel(channelRef.current);
-      }
-
+      // Subscribe to broadcast
       channelRef.current = supabase.channel(channelId);
-
       channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
         if (!isMounted.current) return;
         const msg = payload?.payload;
-        if (!msg || !msg.id) return;
-        if (seenIds.current.has(msg.id)) return;
+        if (!msg?.id || seenIds.current.has(msg.id)) return;
         seenIds.current.add(msg.id);
-        setMessages((prev) => [...prev, msg]);
+        setMessages(prev => [...prev, msg]);
         scrollToBottom();
       });
+      channelRef.current.subscribe();
 
-      channelRef.current.subscribe((status) => {
-        if (!isMounted.current) return;
-        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          setTimeout(() => {
-            if (isMounted.current && channelRef.current) {
-              channelRef.current.subscribe();
-            }
-          }, 2000);
-        }
-      });
-
-      const ownShortId = user.id.replace(/-/g, '');
-      chatListChannelRef.current = supabase.channel('chatlist-' + ownShortId);
-      chatListChannelRef.current.subscribe();
-
-      if (!isMounted.current) return;
+      // Polling fallback
       pollIntervalRef.current = setInterval(async () => {
-        if (!isMounted.current || !channelIdRef.current) return;
-        try {
-          const { data, error: pollError } = await supabase.rpc('get_messages', {
-            p_channel_id: channelIdRef.current,
-            p_cursor: null,
-            p_limit: 50,
-          });
-          if (pollError || !data || !isMounted.current) return;
-          let newMessages = 0;
-          data.forEach((m) => {
-            if (!seenIds.current.has(m.id)) {
-              seenIds.current.add(m.id);
-              newMessages++;
-            }
-          });
-          if (newMessages > 0) {
-            setMessages((prev) => {
-              const allMessages = [...prev];
-              data.forEach((m) => {
-                if (!allMessages.some((existing) => existing.id === m.id)) {
-                  allMessages.push(m);
-                }
-              });
-              return allMessages.sort((a, b) => 
-                new Date(a.created_at) - new Date(b.created_at)
-              );
-            });
+        if (!isMounted.current) return;
+        const { data } = await supabase.rpc('get_messages', {
+          p_channel_id: channelIdRef.current,
+          p_cursor: null,
+          p_limit: 50,
+        });
+        if (!data || !isMounted.current) return;
+        let added = false;
+        data.forEach(m => {
+          if (!seenIds.current.has(m.id)) {
+            seenIds.current.add(m.id);
+            added = true;
           }
-        } catch (err) {
-          // Silently fail
+        });
+        if (added) {
+          setMessages(prev => {
+            const all = [...prev];
+            data.forEach(m => {
+              if (!all.some(e => e.id === m.id)) all.push(m);
+            });
+            return all.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          });
         }
       }, 5000);
+
     } catch (err) {
-      console.error('[CHAT] Init error:', err);
-      if (isMounted.current) {
-        setError(err.message);
-        setLoading(false);
-      }
+      if (isMounted.current) setError(err.message);
+      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -194,68 +140,68 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
     setNewMessage('');
     setSending(true);
-    setError(null);
 
     try {
-      const { data: savedMessage, error: sendError } = await supabase.rpc('send_message', {
+      const { data: savedMessage } = await supabase.rpc('send_message', {
         p_channel_id: channelId,
         p_sender_id: currentUserId,
         p_text: text,
       });
 
-      if (sendError) throw new Error('Failed to send: ' + sendError.message);
-      if (!savedMessage) throw new Error('No response from server');
+      if (!savedMessage) throw new Error('Failed to send');
 
       if (isMounted.current) {
         if (!seenIds.current.has(savedMessage.id)) {
           seenIds.current.add(savedMessage.id);
-          setMessages((prev) => [...prev, savedMessage]);
+          setMessages(prev => [...prev, savedMessage]);
         }
         scrollToBottom();
 
+        // Broadcast to chat channel
         if (channelRef.current) {
-          try {
-            await channelRef.current.send({
-              type: 'broadcast',
-              event: 'message',
-              payload: savedMessage,
-            });
-          } catch (broadcastErr) {
-            console.warn('[CHAT] Broadcast failed (will be caught by poll):', broadcastErr.message);
-          }
-        }
-
-        if (chatListChannelRef.current) {
-          chatListChannelRef.current.send({
+          channelRef.current.send({
             type: 'broadcast',
-            event: 'chat_updated',
-            payload: {
-              channel_id: channelId,
-              other_user_id: otherUserId,
-              other_user_name: otherUser?.full_name || otherUserName || 'User',
-              other_user_pic: otherUser?.profile_pic_url || null,
-              last_message: text,
-              last_message_at: savedMessage.created_at,
-              last_message_by: currentUserId,
-            },
-          });
+            event: 'message',
+            payload: savedMessage,
+          }).catch(() => {});
         }
 
+        // Broadcast to chat list channels (both users)
+        const otherShortId = otherUserId.replace(/-/g, '');
+        const ownShortId = currentUserId.replace(/-/g, '');
+
+        const listUpdate = {
+          channel_id: channelId,
+          last_message: text,
+          last_message_at: savedMessage.created_at,
+        };
+
+        // Tell other user's chat list to refresh
+        supabase.channel('chatlist-' + otherShortId).send({
+          type: 'broadcast',
+          event: 'chat_updated',
+          payload: listUpdate,
+        }).catch(() => {});
+
+        // Tell own chat list to refresh
+        supabase.channel('chatlist-' + ownShortId).send({
+          type: 'broadcast',
+          event: 'chat_updated',
+          payload: listUpdate,
+        }).catch(() => {});
+
+        // Push notification
         if (otherUser?.onesignal_player_id) {
-          try {
-            await fetch(PUSH_NOTIFICATION_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userIds: [otherUser.onesignal_player_id],
-                heading: otherUser.full_name || otherUserName || 'New message',
-                content: text,
-                data: { channel_id: channelId },
-              }),
-            });
-          } catch (pushErr) {
-            // Silent — push is optional
-          }
+          fetch(PUSH_NOTIFICATION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userIds: [otherUser.onesignal_player_id],
+              heading: otherUser.full_name || otherUserName || 'New message',
+              content: text,
+              data: { channel_id: channelId },
+            }),
+          }).catch(() => {});
         }
       }
     } catch (err) {
@@ -270,22 +216,13 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleHeaderTap = () => {
-    if (otherUser?.id && onViewProfile) {
-      onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
-    }
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   if (loading) {
     return (
       <div className="chat-screen">
-        <div className="chat-loading">
-          <div className="spinner"></div>
-        </div>
+        <div className="chat-loading"><div className="spinner"></div></div>
       </div>
     );
   }
@@ -294,7 +231,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     <div className="chat-screen">
       <div className="chat-header">
         <button onClick={onBack} className="chat-back-btn">←</button>
-        <div className="chat-header-info-tappable" onClick={handleHeaderTap}>
+        <div className="chat-header-info-tappable" onClick={() => {
+          if (otherUser?.id && onViewProfile) onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
+        }}>
           <div className="chat-header-avatar">
             {otherUser?.profile_pic_url ? (
               <img src={otherUser.profile_pic_url} alt="" />
@@ -322,21 +261,16 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       <div className="chat-messages" ref={chatContainerRef}>
         {messages.length === 0 && (
-          <div className="chat-empty">
-            <p>No messages yet. Say hello!</p>
-          </div>
+          <div className="chat-empty"><p>No messages yet. Say hello!</p></div>
         )}
-        {messages.map((msg) => {
-          const isMine = msg.sender_id === currentUserId;
-          return (
-            <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
-              <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
-                <p className="message-text">{msg.text}</p>
-                <span className="message-time">{formatTime(msg.created_at)}</span>
-              </div>
+        {messages.map(msg => (
+          <div key={msg.id} className={`message-row ${msg.sender_id === currentUserId ? 'message-mine' : 'message-other'}`}>
+            <div className={`message-bubble ${msg.sender_id === currentUserId ? 'bubble-mine' : 'bubble-other'}`}>
+              <p className="message-text">{msg.text}</p>
+              <span className="message-time">{formatTime(msg.created_at)}</span>
             </div>
-          );
-        })}
+          </div>
+        ))}
         <div ref={messagesEndRef} />
       </div>
 
@@ -344,7 +278,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={e => setNewMessage(e.target.value)}
           placeholder="Type a message..."
           className="chat-input"
           disabled={sending}
