@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
+import { initOneSignal, getOneSignalUserId } from './lib/onesignal';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Onboarding from './screens/Onboarding';
@@ -24,6 +25,7 @@ function App() {
 
       if (session?.user) {
         determineScreen(session.user);
+        registerOneSignal(session.user.id);
       } else {
         setScreen('auth');
       }
@@ -34,6 +36,7 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         determineScreen(session.user);
+        registerOneSignal(session.user.id);
       } else {
         setScreen('auth');
       }
@@ -41,6 +44,29 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const registerOneSignal = async (userId) => {
+    try {
+      initOneSignal((notification) => {
+        // Handle notification opened — navigate to chat if applicable
+        if (notification?.data?.channel_id) {
+          setActiveTab('chats');
+        }
+      });
+
+      const playerId = await getOneSignalUserId();
+      if (playerId) {
+        // Store the OneSignal player ID in Supabase profiles
+        await supabase.from('profiles').upsert({
+          id: userId,
+          onesignal_player_id: playerId,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.warn('OneSignal registration:', err.message);
+    }
+  };
 
   const determineScreen = async (user) => {
     if (!user.email_confirmed_at) {
@@ -83,7 +109,6 @@ function App() {
     if (data !== null) setUnreadCount(data);
   }, []);
 
-  // Check badge on mount and every 30 seconds
   useEffect(() => {
     if (screen === 'home') {
       checkUnreadBadge();
