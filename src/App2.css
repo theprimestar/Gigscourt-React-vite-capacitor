@@ -876,6 +876,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  color: #8e8e93;
 }
 
 .chat-photo-btn:disabled {
