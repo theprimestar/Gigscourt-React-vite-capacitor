@@ -181,18 +181,27 @@ function EditProfileScreen({ onBack }) {
     setError('');
 
     const { data: { user } } = await supabase.auth.getUser();
-    const { error: updateError } = await supabase.from('profiles').upsert({
-      id: user.id,
-      full_name: fullName.trim(),
-      bio: bio.trim(),
-      phone: phone.trim(),
-      profile_pic_url: profilePic,
-      services: selectedServices,
-      workspace_lat: lat,
-      workspace_lng: lng,
-      workspace_address: address.trim(),
-      updated_at: new Date().toISOString(),
-    });
+
+    // FIXED: Use update() instead of upsert() to prevent data loss
+    // update() only modifies the columns specified, leaving all other
+    // profile data intact (work_photos, onboarding_completed, gig_count,
+    // rating, review_count, show_phone, onesignal_player_id)
+    // The profile always exists at this point (user completed onboarding),
+    // so upsert is unnecessary and destructive
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: fullName.trim(),
+        bio: bio.trim(),
+        phone: phone.trim(),
+        profile_pic_url: profilePic,
+        services: selectedServices,
+        workspace_lat: lat,
+        workspace_lng: lng,
+        workspace_address: address.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
 
     if (updateError) {
       setError(updateError.message);
