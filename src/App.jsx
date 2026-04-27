@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import AuthScreen from './screens/AuthScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
@@ -16,6 +16,7 @@ function App() {
   const [screen, setScreen] = useState('loading');
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -74,6 +75,22 @@ function App() {
       return prev.slice(0, -1);
     });
   };
+
+  const checkUnreadBadge = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.rpc('get_unread_count', { p_user_id: user.id });
+    if (data !== null) setUnreadCount(data);
+  }, []);
+
+  // Check badge on mount and every 30 seconds
+  useEffect(() => {
+    if (screen === 'home') {
+      checkUnreadBadge();
+      const interval = setInterval(checkUnreadBadge, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [screen, checkUnreadBadge]);
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
@@ -208,9 +225,17 @@ function App() {
           </button>
           <button
             className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chats')}
+            onClick={() => {
+              setActiveTab('chats');
+              if (unreadCount > 0) setUnreadCount(0);
+            }}
           >
-            <span className="nav-icon">💬</span>
+            <span className="nav-icon" style={{ position: 'relative' }}>
+              💬
+              {unreadCount > 0 && (
+                <span className="badge-dot"></span>
+              )}
+            </span>
             <span className="nav-label">Chats</span>
           </button>
           <button
