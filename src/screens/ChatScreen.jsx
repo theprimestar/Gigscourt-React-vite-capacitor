@@ -11,6 +11,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
   const chatListChannelRef = useRef(null);
   const channelIdRef = useRef(null);
@@ -93,6 +94,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       if (isMounted.current && history) {
         history.forEach((m) => seenIds.current.add(m.id));
         setMessages(history.reverse());
+        // Instant scroll to bottom after history loads — no animation
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        }, 50);
       }
 
       if (isMounted.current) setLoading(false);
@@ -163,8 +170,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           // Silently fail
         }
       }, 5000);
-
-      setTimeout(() => scrollToBottom(), 300);
     } catch (err) {
       console.error('[CHAT] Init error:', err);
       if (isMounted.current) {
@@ -249,7 +254,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           });
         }
 
-        // Send push notification to the other user
         if (otherUser?.onesignal_player_id) {
           try {
             await fetch(PUSH_NOTIFICATION_URL, {
@@ -330,7 +334,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         </div>
       )}
 
-      <div className="chat-messages">
+      <div className="chat-messages" ref={chatContainerRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <p>No messages yet. Say hello!</p>
