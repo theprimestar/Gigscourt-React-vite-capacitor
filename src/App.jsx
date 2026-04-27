@@ -48,9 +48,7 @@ function App() {
   const registerOneSignal = async (userId) => {
     try {
       initOneSignal((notification) => {
-        // Update badge silently when push arrives (foreground)
         checkUnreadBadge();
-        // Navigate to chat if notification is tapped
         if (notification?.data?.channel_id) {
           setActiveTab('chats');
         }
@@ -110,7 +108,6 @@ function App() {
     if (data !== null) setUnreadCount(data);
   }, []);
 
-  // Check badge on app start and when screen changes
   useEffect(() => {
     if (screen === 'home') {
       checkUnreadBadge();
@@ -250,10 +247,7 @@ function App() {
           </button>
           <button
             className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('chats');
-              setUnreadCount(0);
-            }}
+            onClick={() => setActiveTab('chats')}
           >
             <span className="nav-icon" style={{ position: 'relative' }}>
               💬
