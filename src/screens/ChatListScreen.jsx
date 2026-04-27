@@ -7,24 +7,18 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [currentUserId, setCurrentUserId] = useState(null);
   const isMounted = useRef(true);
 
-  // Load on mount
   useEffect(() => {
     isMounted.current = true;
     loadChatList();
-
-    return () => {
-      isMounted.current = false;
-    };
+    return () => { isMounted.current = false; };
   }, []);
 
-  // Refetch when tab becomes visible
   useEffect(() => {
     if (isVisible && currentUserId && isMounted.current) {
       loadChatList();
     }
   }, [isVisible, currentUserId]);
 
-  // Handle opening a chat from another tab
   useEffect(() => {
     if (chatTarget && currentUserId && onStartChat) {
       onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User' });
@@ -33,12 +27,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     }
   }, [chatTarget, currentUserId]);
 
-  // Refetch on window focus
   useEffect(() => {
     const handleFocus = () => {
-      if (isMounted.current && currentUserId && isVisible) {
-        loadChatList();
-      }
+      if (isMounted.current && currentUserId && isVisible) loadChatList();
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
@@ -56,7 +47,14 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       });
 
       if (isMounted.current && data) {
-        const validChats = data.filter(c => c.other_user_id !== null);
+        // Filter out chats with no valid other user, and deduplicate by channel_id
+        const seen = new Set();
+        const validChats = data.filter(c => {
+          if (!c.other_user_id) return false;
+          if (seen.has(c.channel_id)) return false;
+          seen.add(c.channel_id);
+          return true;
+        });
         setChats(validChats);
       }
     } catch (err) {
@@ -72,7 +70,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     const now = new Date();
     const diff = now - date;
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
     if (days === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     if (days === 1) return 'Yesterday';
     if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
@@ -82,9 +79,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   if (loading) {
     return (
       <div className="chat-list-screen">
-        <div className="chat-list-loading">
-          <div className="spinner"></div>
-        </div>
+        <div className="chat-list-loading"><div className="spinner"></div></div>
       </div>
     );
   }
@@ -113,19 +108,24 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
                 if (onDeepScreen) onDeepScreen('chat');
               }}
             >
-              <div className="chat-list-avatar">
+              <div className="chat-list-avatar" style={{ position: 'relative' }}>
                 {chat.other_user_pic ? (
                   <img src={chat.other_user_pic} alt="" />
                 ) : (
                   <div className="chat-list-avatar-placeholder">👤</div>
                 )}
+                {chat.has_unread && (
+                  <span className="unread-dot"></span>
+                )}
               </div>
               <div className="chat-list-info">
                 <div className="chat-list-top">
-                  <h3>{chat.other_user_name}</h3>
+                  <h3 style={{ fontWeight: chat.has_unread ? 600 : 400 }}>{chat.other_user_name}</h3>
                   <span className="chat-list-time">{formatTime(chat.last_message_at)}</span>
                 </div>
-                <p className="chat-list-preview">{chat.last_message || ''}</p>
+                <p className="chat-list-preview" style={{ fontWeight: chat.has_unread ? 500 : 400 }}>
+                  {chat.last_message || ''}
+                </p>
               </div>
             </div>
           ))}
