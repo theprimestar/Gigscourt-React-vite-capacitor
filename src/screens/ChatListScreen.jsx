@@ -21,7 +21,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   useEffect(() => {
     if (chatTarget && currentUserId && onStartChat) {
-      onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User' });
+      onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User', chatId: chatTarget.channel_id || null });
       if (onClearChatTarget) onClearChatTarget();
       if (onDeepScreen) onDeepScreen('chat');
     }
@@ -47,7 +47,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       });
 
       if (isMounted.current && data) {
-        // Filter out chats with no valid other user, and deduplicate by channel_id
+        // Deduplicate by channel_id (our new schema guarantees uniqueness,
+        // but this is a safety guard that costs almost nothing)
         const seen = new Set();
         const validChats = data.filter(c => {
           if (!c.other_user_id) return false;
@@ -103,7 +104,12 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
               className="chat-list-item"
               onClick={() => {
                 if (onStartChat) {
-                  onStartChat({ id: chat.other_user_id, full_name: chat.other_user_name });
+                  // Now includes chatId so ChatScreen uses the real channel UUID
+                  onStartChat({
+                    id: chat.other_user_id,
+                    full_name: chat.other_user_name,
+                    chatId: chat.channel_id,
+                  });
                 }
                 if (onDeepScreen) onDeepScreen('chat');
               }}
