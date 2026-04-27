@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { PUSH_NOTIFICATION_URL } from '../lib/config';
+import { PUSH_NOTIFICATION_URL } from './lib/config';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const [messages, setMessages] = useState([]);
