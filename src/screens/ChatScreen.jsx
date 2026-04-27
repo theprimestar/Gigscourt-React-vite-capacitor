@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL } from '../lib/config';
 import { imagekitPublicKey } from '../lib/imagekit';
@@ -12,6 +12,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentUserName, setCurrentUserName] = useState('');
+  const [fullScreenImage, setFullScreenImage] = useState(null);
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -21,6 +22,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const fileInputRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
+  const sendQueue = useRef([]);
+  const processingQueue = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -123,7 +126,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       seenIds.current.add(msg.id);
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, msg];
+        return [...prev, { ...msg, status: 'sent' }];
       });
       scrollToBottom();
     });
@@ -151,13 +154,24 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         p_limit: 50,
       });
       if (!data || !isMounted.current) return;
+      
+      // Update read status for existing messages
+      setMessages(prev => prev.map(msg => {
+        const updated = data.find(m => m.id === msg.id);
+        if (updated && updated.is_read && msg.status !== 'read') {
+          return { ...msg, is_read: true, status: 'read' };
+        }
+        return msg;
+      }));
+      
+      // Add new messages
       const newMessages = data.filter(m => !seenIds.current.has(m.id));
       if (newMessages.length > 0) {
         newMessages.forEach(m => seenIds.current.add(m.id));
         setMessages(prev => {
           const existing = new Set(prev.map(p => p.id));
           const unique = newMessages.filter(m => !existing.has(m.id));
-          return [...prev, ...unique].sort((a, b) =>
+          return [...prev, ...unique.map(m => ({ ...m, status: 'sent' }))].sort((a, b) =>
             new Date(a.created_at) - new Date(b.created_at)
           );
         });
@@ -178,116 +192,222 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }, 100);
   };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUserId) return;
+  const processQueue = useCallback(async () => {
+    if (processingQueue.current || sendQueue.current.length === 0) return;
+    processingQueue.current = true;
 
-    setSending(true);
-    try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
+    while (sendQueue.current.length > 0) {
+      const item = sendQueue.current[0];
+      try {
+        if (item.type === 'text') {
+          await sendTextMessage(item.text, item.tempId);
+        } else if (item.type === 'photo') {
+          await uploadPhoto(item.file, item.tempId);
+        }
+      } catch (err) {
+        // Failed — status shows Retry button
+        setMessages(prev => prev.map(m => m.id === item.tempId ? { ...m, status: 'failed' } : m));
+      }
+      sendQueue.current.shift();
+    }
+    processingQueue.current = false;
+  }, [otherUserId, otherUser, currentUserId, currentUserName]);
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', 'chat-photo.jpg');
-      formData.append('folder', '/chat-photos');
-      formData.append('useUniqueFileName', 'true');
-      formData.append('publicKey', imagekitPublicKey);
-      formData.append('token', auth.token);
-      formData.append('signature', auth.signature);
-      formData.append('expire', auth.expire);
+  const sendTextMessage = async (text, tempId) => {
+    const channelKey = channelIdRef.current;
+    const { data: savedMessage } = await supabase.rpc('send_message', {
+      p_channel_key: channelKey,
+      p_sender_id: currentUserId,
+      p_other_user_id: otherUserId,
+      p_text: text,
+    });
 
-      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+    if (!savedMessage) throw new Error('Failed to send');
+
+    // Replace temp message with real one
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+    seenIds.current.add(savedMessage.id);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      }).catch(() => {});
+    }
+
+    if (otherUser?.onesignal_player_id) {
+      fetch(PUSH_NOTIFICATION_URL, {
         method: 'POST',
-        body: formData,
-      });
-      const result = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          include_player_ids: [otherUser.onesignal_player_id],
+          headings: { en: currentUserName || 'New message' },
+          contents: { en: text },
+          data: { channel_id: channelKey },
+        }),
+      }).catch(() => {});
+    }
+  };
 
-      const channelKey = channelIdRef.current;
-      const { data: savedMessage } = await supabase.rpc('send_message', {
-        p_channel_key: channelKey,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: '',
-        p_image_url: result.url,
-      });
+  const uploadPhoto = async (file, tempId) => {
+    // Upload to ImageKit
+    const authRes = await fetch(IMAGEKIT_AUTH_URL);
+    const auth = await authRes.json();
 
-      if (savedMessage && channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('fileName', 'chat-photo.jpg');
+    formData.append('folder', '/chat-photos');
+    formData.append('useUniqueFileName', 'true');
+    formData.append('publicKey', imagekitPublicKey);
+    formData.append('token', auth.token);
+    formData.append('signature', auth.signature);
+    formData.append('expire', auth.expire);
 
-      if (otherUser?.onesignal_player_id) {
-        fetch(PUSH_NOTIFICATION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            include_player_ids: [otherUser.onesignal_player_id],
-            headings: { en: currentUserName || 'New photo' },
-            contents: { en: '📷 Photo' },
-            data: { channel_id: channelKey },
-          }),
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) setError('Photo upload failed');
-    } finally {
-      if (isMounted.current) setSending(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    const result = await uploadRes.json();
+    if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
+
+    // Optimize URL
+    const optimizedUrl = result.url + '?tr=f-webp,fo-lossless';
+
+    // Save to database
+    const channelKey = channelIdRef.current;
+    const { data: savedMessage } = await supabase.rpc('send_message', {
+      p_channel_key: channelKey,
+      p_sender_id: currentUserId,
+      p_other_user_id: otherUserId,
+      p_text: '',
+      p_image_url: optimizedUrl,
+    });
+
+    if (!savedMessage) throw new Error('Failed to save photo');
+
+    // Replace temp message with real one
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+    seenIds.current.add(savedMessage.id);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      }).catch(() => {});
+    }
+
+    if (otherUser?.onesignal_player_id) {
+      fetch(PUSH_NOTIFICATION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          include_player_ids: [otherUser.onesignal_player_id],
+          headings: { en: currentUserName || 'New photo' },
+          contents: { en: '📷 Photo' },
+          data: { channel_id: channelKey },
+        }),
+      }).catch(() => {});
     }
   };
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !currentUserId || sending) return;
+    if (!newMessage.trim() || !currentUserId) return;
 
     const text = newMessage.trim();
-    const channelKey = channelIdRef.current;
+    const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 
     setNewMessage('');
-    setSending(true);
 
-    try {
-      const { data: savedMessage } = await supabase.rpc('send_message', {
-        p_channel_key: channelKey,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: text,
-      });
+    // Add temp message with "sending" status
+    const tempMsg = {
+      id: tempId,
+      channel_id: channelIdRef.current,
+      sender_id: currentUserId,
+      text: text,
+      image_url: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      status: 'sending',
+    };
+    setMessages(prev => [...prev, tempMsg]);
+    scrollToBottom();
 
-      if (!savedMessage) throw new Error('Failed to send');
+    // Add to queue
+    sendQueue.current.push({ type: 'text', text, tempId });
+    processQueue();
+  };
 
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
+  const retryMessage = (tempId, text) => {
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m));
+    sendQueue.current.push({ type: 'text', text, tempId });
+    processQueue();
+  };
 
-      if (otherUser?.onesignal_player_id) {
-        fetch(PUSH_NOTIFICATION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            include_player_ids: [otherUser.onesignal_player_id],
-            headings: { en: currentUserName || 'New message' },
-            contents: { en: text },
-            data: { channel_id: channelKey },
-          }),
-        }).catch(() => {});
-      }
-    } catch (err) {
-      if (isMounted.current) {
-        setError(err.message);
-        setNewMessage(text);
-      }
-    } finally {
-      if (isMounted.current) setSending(false);
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUserId) return;
+
+    const tempId = 'temp-photo-' + Date.now();
+
+    // Add temp placeholder with loading bar
+    const tempMsg = {
+      id: tempId,
+      channel_id: channelIdRef.current,
+      sender_id: currentUserId,
+      text: '',
+      image_url: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      status: 'uploading',
+    };
+    setMessages(prev => [...prev, tempMsg]);
+    scrollToBottom();
+
+    sendQueue.current.push({ type: 'photo', file, tempId });
+    processQueue();
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const retryPhoto = (tempId, file) => {
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'uploading' } : m));
+    sendQueue.current.push({ type: 'photo', file, tempId });
+    processQueue();
+  };
+
+  const getStatusText = (msg) => {
+    if (msg.sender_id !== currentUserId) return null;
+    switch (msg.status) {
+      case 'sending':
+        return <span className="message-status sending">...</span>;
+      case 'sent':
+        return <span className="message-status sent">Sent</span>;
+      case 'read':
+        return <span className="message-status read">Read</span>;
+      case 'failed':
+        return (
+          <button 
+            className="message-retry-btn" 
+            onClick={() => {
+              if (msg.image_url) {
+                // Can't retry photo without the file reference — show error
+                setError('Please reselect the photo to retry');
+              } else {
+                retryMessage(msg.id, msg.text);
+              }
+            }}
+          >
+            Retry
+          </button>
+        );
+      case 'uploading':
+        return <span className="message-status sending">Uploading...</span>;
+      default:
+        return null;
     }
   };
 
@@ -347,25 +467,52 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           return (
             <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
               <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
-                {msg.image_url ? (
-                  <img src={msg.image_url} alt="" style={{ maxWidth: 200, borderRadius: 12, marginBottom: 4 }} />
+                {msg.status === 'uploading' && !msg.image_url ? (
+                  <div className="chat-photo-uploading">
+                    <div className="upload-progress-bar">
+                      <div className="upload-progress-fill"></div>
+                    </div>
+                    <span className="upload-progress-text">Uploading photo...</span>
+                  </div>
+                ) : msg.image_url ? (
+                  <img 
+                    src={msg.image_url} 
+                    alt="" 
+                    className="chat-photo"
+                    onClick={() => setFullScreenImage(msg.image_url)}
+                  />
                 ) : null}
                 {msg.text ? <p className="message-text">{msg.text}</p> : null}
                 <span className="message-time">
                   {formatTime(msg.created_at)}
-                  {isMine && msg.is_read && <span className="read-receipt"> ✓✓</span>}
-                  {isMine && !msg.is_read && <span className="read-receipt"> ✓</span>}
+                  {isMine && getStatusText(msg)}
                 </span>
               </div>
+              {isMine && msg.status === 'failed' && !msg.image_url && (
+                <button 
+                  className="message-retry-btn standalone-retry"
+                  onClick={() => retryMessage(msg.id, msg.text)}
+                >
+                  Retry
+                </button>
+              )}
             </div>
           );
         })}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Full-screen image viewer */}
+      {fullScreenImage && (
+        <div className="fullscreen-image-overlay" onClick={() => setFullScreenImage(null)}>
+          <button className="fullscreen-close-btn" onClick={() => setFullScreenImage(null)}>✕</button>
+          <img src={fullScreenImage} alt="" className="fullscreen-image" />
+        </div>
+      )}
+
       <form onSubmit={handleSend} className="chat-input-bar">
-        <button type="button" className="chat-photo-btn" disabled={sending} onClick={() => fileInputRef.current?.click()}>
-          📷
+        <button type="button" className="chat-photo-btn" onClick={() => fileInputRef.current?.click()}>
+          <span className="plus-icon">+</span>
         </button>
         <input
           type="text"
@@ -373,7 +520,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           onChange={e => setNewMessage(e.target.value)}
           placeholder="Type a message..."
           className="chat-input"
-          disabled={sending}
         />
         <input
           type="file"
@@ -382,8 +528,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           style={{ display: 'none' }}
           onChange={handlePhotoUpload}
         />
-        <button type="submit" disabled={(!newMessage.trim() && !sending) || sending} className="chat-send-btn">
-          {sending ? '...' : '➤'}
+        <button type="submit" disabled={!newMessage.trim()} className="chat-send-btn">
+          ➤
         </button>
       </form>
     </div>
