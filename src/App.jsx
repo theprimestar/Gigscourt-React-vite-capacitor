@@ -1,292 +1,335 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from './lib/supabase';
-import { initOneSignal, getOneSignalUserId } from './lib/onesignal';
-import AuthScreen from './screens/AuthScreen';
-import VerifyEmailScreen from './screens/VerifyEmailScreen';
-import Onboarding from './screens/Onboarding';
-import HomeScreen from './screens/HomeScreen';
-import SearchScreen from './screens/SearchScreen';
-import ChatListScreen from './screens/ChatListScreen';
-import ChatScreen from './screens/ChatScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import EditProfileScreen from './screens/EditProfileScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import './App.css';
+import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import { PUSH_NOTIFICATION_URL } from '../lib/config';
 
-function App() {
-  const [screen, setScreen] = useState('loading');
-  const [activeTab, setActiveTab] = useState('home');
-  const [navStack, setNavStack] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+  const [otherUser, setOtherUser] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserName, setCurrentUserName] = useState('');
 
+  const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const channelRef = useRef(null);
+  const channelIdRef = useRef(null);
+  const pollIntervalRef = useRef(null);
+  const seenIds = useRef(new Set());
+  const isMounted = useRef(true);
+
+  // Initialize
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        determineScreen(session.user);
-        registerOneSignal(session.user.id);
-      } else {
-        setScreen('auth');
-      }
+    isMounted.current = true;
+    if (isVisible) init();
+    return () => {
+      isMounted.current = false;
+      stopPolling();
+      unsubscribeChannel();
     };
+  }, [chatId, otherUserId, isVisible]);
 
-    checkSession();
+  const init = async () => {
+    setError(null);
+    setLoading(true);
+    seenIds.current = new Set();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        determineScreen(session.user);
-        registerOneSignal(session.user.id);
-      } else {
-        setScreen('auth');
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const registerOneSignal = async (userId) => {
     try {
-      initOneSignal((notification) => {
-        checkUnreadBadge();
-        if (notification?.data?.channel_id) {
-          setActiveTab('chats');
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isMounted.current) return;
+      setCurrentUserId(user.id);
+
+      // Get sender's name for push notifications
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+      if (isMounted.current && myProfile) {
+        setCurrentUserName(myProfile.full_name || '');
+      }
+
+      // Channel key is deterministic: sorted UUIDs joined by colon
+      const channelKey = chatId || [user.id, otherUserId].sort().join(':');
+      channelIdRef.current = channelKey;
+
+      // Reset unread
+      await supabase.rpc('reset_unread', {
+        p_user_id: user.id,
+        p_channel_id: channelKey,
       });
 
-      const playerId = await getOneSignalUserId();
-      if (!playerId) return;
-
-      const { data: existingProfile } = await supabase
+      // Fetch other user's profile
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .maybeSingle();
+        .select('full_name, profile_pic_url, id, onesignal_player_id')
+        .eq('id', otherUserId)
+        .single();
 
-      if (existingProfile) {
-        await supabase
-          .from('profiles')
-          .update({
-            onesignal_player_id: playerId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', userId);
-      } else {
-        await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            onesignal_player_id: playerId,
-            updated_at: new Date().toISOString(),
-          });
+      if (isMounted.current) {
+        setOtherUser(profile || {
+          full_name: otherUserName || 'User',
+          profile_pic_url: null,
+          id: otherUserId,
+        });
+      }
+
+      // Load messages
+      await loadMessages(channelKey, user.id);
+
+      if (isMounted.current) setLoading(false);
+
+      // Subscribe to Broadcast
+      subscribeToChannel(channelKey);
+
+      // Start polling as fallback
+      startPolling(channelKey, user.id);
+
+    } catch (err) {
+      if (isMounted.current) {
+        setError(err.message);
+        setLoading(false);
+      }
+    }
+  };
+
+  const loadMessages = async (channelId, userId) => {
+    const { data: history } = await supabase.rpc('get_messages', {
+      p_channel_id: channelId,
+      p_user_id: userId,
+      p_cursor: null,
+      p_cursor_id: null,
+      p_limit: 50,
+    });
+
+    if (isMounted.current && history) {
+      const sorted = [...history].reverse();
+      sorted.forEach(m => seenIds.current.add(m.id));
+      setMessages(sorted);
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }, 100);
+    }
+  };
+
+  // Broadcast
+  const subscribeToChannel = (channelId) => {
+    unsubscribeChannel();
+
+    channelRef.current = supabase.channel(`chat:${channelId}`, {
+      config: { broadcast: { self: true, ack: true } },
+    });
+
+    channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
+      if (!isMounted.current) return;
+      const msg = payload?.payload;
+      if (!msg?.id || seenIds.current.has(msg.id)) return;
+      seenIds.current.add(msg.id);
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      scrollToBottom();
+    });
+
+    channelRef.current.subscribe();
+  };
+
+  const unsubscribeChannel = () => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+
+  // Polling fallback (every 5 seconds)
+  const startPolling = (channelId, userId) => {
+    stopPolling();
+    pollIntervalRef.current = setInterval(async () => {
+      if (!isMounted.current) return;
+      const { data } = await supabase.rpc('get_messages', {
+        p_channel_id: channelId,
+        p_user_id: userId,
+        p_cursor: null,
+        p_cursor_id: null,
+        p_limit: 50,
+      });
+      if (!data || !isMounted.current) return;
+      const newMessages = data.filter(m => !seenIds.current.has(m.id));
+      if (newMessages.length > 0) {
+        newMessages.forEach(m => seenIds.current.add(m.id));
+        setMessages(prev => {
+          const existing = new Set(prev.map(p => p.id));
+          const unique = newMessages.filter(m => !existing.has(m.id));
+          return [...prev, ...unique].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+          );
+        });
+      }
+    }, 5000);
+  };
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleSend = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !currentUserId || sending) return;
+
+    const text = newMessage.trim();
+    const channelKey = channelIdRef.current;
+
+    setNewMessage('');
+    setSending(true);
+
+    try {
+      const { data: savedMessage } = await supabase.rpc('send_message', {
+        p_channel_key: channelKey,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: text,
+      });
+
+      if (!savedMessage) throw new Error('Failed to send');
+
+      // Broadcast to channel
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
+
+      // Push notification via OneSignal
+      if (otherUser?.onesignal_player_id) {
+        fetch(PUSH_NOTIFICATION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            include_player_ids: [otherUser.onesignal_player_id],
+            headings: { en: currentUserName || 'New message' },
+            contents: { en: text },
+            data: { channel_id: channelKey },
+          }),
+        }).catch(() => {});
       }
     } catch (err) {
-      console.warn('OneSignal registration:', err.message);
+      if (isMounted.current) {
+        setError(err.message);
+        setNewMessage(text);
+      }
+    } finally {
+      if (isMounted.current) setSending(false);
     }
   };
 
-  const determineScreen = async (user) => {
-    if (!user.email_confirmed_at) {
-      setScreen('verify');
-      return;
-    }
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('onboarding_completed')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (data?.onboarding_completed) {
-      setScreen('home');
-    } else {
-      setScreen('onboarding');
-    }
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleOnboardingComplete = () => {
-    setScreen('home');
-  };
-
-  const navigateTo = (screenType, data) => {
-    setNavStack((prev) => [...prev, { screen: screenType, ...data }]);
-  };
-
-  const goBack = () => {
-    setNavStack((prev) => {
-      if (prev.length === 0) return prev;
-      return prev.slice(0, -1);
-    });
-  };
-
-  const checkUnreadBadge = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.rpc('get_unread_count', { p_user_id: user.id });
-    if (data !== null) setUnreadCount(data);
-  }, []);
-
-  useEffect(() => {
-    if (screen === 'home') {
-      checkUnreadBadge();
-    }
-  }, [screen, activeTab, checkUnreadBadge]);
-
-  const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
-  const showBottomNav = screen === 'home' && navStack.length === 0;
-
-  if (screen === 'loading') {
+  if (loading) {
     return (
-      <div className="app">
-        <div className="home-loading">
-          <div className="spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (screen === 'auth') {
-    return (
-      <div className="app">
-        <AuthScreen onVerifyEmail={() => setScreen('verify')} />
-      </div>
-    );
-  }
-
-  if (screen === 'verify') {
-    return (
-      <div className="app">
-        <VerifyEmailScreen onVerified={() => {
-          const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user?.email_confirmed_at) {
-              determineScreen(user);
-            }
-          };
-          checkUser();
-        }} />
-      </div>
-    );
-  }
-
-  if (screen === 'onboarding') {
-    return (
-      <div className="app">
-        <Onboarding onComplete={handleOnboardingComplete} />
+      <div className="chat-screen">
+        <div className="chat-loading"><div className="spinner"></div></div>
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
-      <div className="app-content">
-        <div style={{ display: activeTab === 'home' && !currentDeepScreen ? 'block' : 'none' }}>
-          <HomeScreen
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
-            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
-          />
+    <div className="chat-screen">
+      {/* Header */}
+      <div className="chat-header">
+        <button onClick={onBack} className="chat-back-btn">←</button>
+        <div
+          className="chat-header-info-tappable"
+          onClick={() => {
+            if (otherUser?.id && onViewProfile) {
+              onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
+            }
+          }}
+        >
+          <div className="chat-header-avatar">
+            {otherUser?.profile_pic_url ? (
+              <img src={otherUser.profile_pic_url} alt="" />
+            ) : (
+              <div className="chat-header-avatar-placeholder">👤</div>
+            )}
+          </div>
+          <div className="chat-header-info">
+            <h3>{otherUser?.full_name || 'User'}</h3>
+          </div>
         </div>
-
-        <div style={{ display: activeTab === 'search' && !currentDeepScreen ? 'block' : 'none' }}>
-          <SearchScreen
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
-            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
-          />
-        </div>
-
-        <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
-          <ChatListScreen
-            isVisible={activeTab === 'chats' && !currentDeepScreen}
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name, chatId: user.chatId || null })}
-          />
-        </div>
-
-        <div style={{ display: activeTab === 'profile' && !currentDeepScreen ? 'block' : 'none' }}>
-          <ProfileScreen
-            isOwn={true}
-            isVisible={activeTab === 'profile' && !currentDeepScreen}
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
-            onEditProfile={() => navigateTo('editProfile')}
-            onOpenSettings={() => navigateTo('settings')}
-          />
-        </div>
-
-        {currentDeepScreen?.screen === 'chat' && (
-          <ChatScreen
-            chatId={currentDeepScreen.chatId || null}
-            otherUserId={currentDeepScreen.userId}
-            otherUserName={currentDeepScreen.userName}
-            onBack={goBack}
-            onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
-            isVisible={currentDeepScreen?.screen === 'chat'}
-          />
-        )}
-
-        {currentDeepScreen?.screen === 'profile' && (
-          <ProfileScreen
-            userId={currentDeepScreen.userId}
-            isOwn={false}
-            onBack={goBack}
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
-          />
-        )}
-
-        {currentDeepScreen?.screen === 'editProfile' && (
-          <EditProfileScreen onBack={goBack} />
-        )}
-
-        {currentDeepScreen?.screen === 'settings' && (
-          <SettingsScreen
-            onBack={goBack}
-            onLogout={async () => {
-              await supabase.auth.signOut();
-              setNavStack([]);
-              setScreen('auth');
-            }}
-          />
-        )}
+        <span style={{ width: 40 }} />
       </div>
 
-      {showBottomNav && (
-        <nav className="bottom-nav">
-          <button
-            className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
-            onClick={() => setActiveTab('home')}
-          >
-            <span className="nav-icon">🏠</span>
-            <span className="nav-label">Home</span>
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
-            onClick={() => setActiveTab('search')}
-          >
-            <span className="nav-icon">🔍</span>
-            <span className="nav-label">Search</span>
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chats')}
-          >
-            <span className="nav-icon" style={{ position: 'relative' }}>
-              💬
-              {unreadCount > 0 && (
-                <span className="badge-dot"></span>
-              )}
-            </span>
-            <span className="nav-label">Chats</span>
-          </button>
-          <button
-            className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-          >
-            <span className="nav-icon">👤</span>
-            <span className="nav-label">Profile</span>
-          </button>
-        </nav>
+      {/* Error banner */}
+      {error && (
+        <div className="chat-error-banner" onClick={() => setError(null)}>
+          <span>{error}</span>
+          <button>✕</button>
+        </div>
       )}
+
+      {/* Messages */}
+      <div className="chat-messages" ref={chatContainerRef}>
+        {messages.length === 0 && (
+          <div className="chat-empty"><p>No messages yet. Say hello!</p></div>
+        )}
+
+        {messages.map(msg => {
+          const isMine = msg.sender_id === currentUserId;
+          return (
+            <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
+              <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'}`}>
+                {msg.image_url ? (
+                  <img src={msg.image_url} alt="" style={{ maxWidth: 200, borderRadius: 12, marginBottom: 4 }} />
+                ) : null}
+                {msg.text ? <p className="message-text">{msg.text}</p> : null}
+                <span className="message-time">
+                  {formatTime(msg.created_at)}
+                  {isMine && msg.is_read && <span className="read-receipt"> ✓✓</span>}
+                  {isMine && !msg.is_read && <span className="read-receipt"> ✓</span>}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input bar */}
+      <form onSubmit={handleSend} className="chat-input-bar">
+        <input
+          type="text"
+          value={newMessage}
+          onChange={e => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+          className="chat-input"
+          disabled={sending}
+        />
+        <button type="submit" disabled={!newMessage.trim() || sending} className="chat-send-btn">
+          {sending ? '...' : '➤'}
+        </button>
+      </form>
     </div>
   );
 }
 
-export default App;
+export default ChatScreen;
