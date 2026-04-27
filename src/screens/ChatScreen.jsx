@@ -74,21 +74,19 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         setCurrentUserName(myProfile.full_name || '');
       }
 
-      // Generate deterministic channel key: sorted UUIDs joined by colon
-      const channelKey = [user.id, otherUserId].sort().join(':');
-
-      // Look up existing channel or use chatId if provided
+      // Get or create the channel — database owns the ID, not the client
       let activeChannelId = chatId;
 
       if (!activeChannelId) {
-        // Check if channel already exists
-        const { data: existingChannel } = await supabase
-          .from('channels')
-          .select('id')
-          .eq('id', channelKey)
-          .maybeSingle();
+        const { data: channelId } = await supabase.rpc('get_or_create_channel', {
+          p_user_id: user.id,
+          p_other_user_id: otherUserId,
+        });
+        activeChannelId = channelId;
+      }
 
-        activeChannelId = existingChannel?.id || channelKey;
+      if (!activeChannelId) {
+        throw new Error('Could not create or find channel');
       }
 
       channelIdRef.current = activeChannelId;
@@ -123,7 +121,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       });
 
       if (isMounted.current && history) {
-        // get_messages returns newest first; reverse for display (oldest at top)
         const sorted = [...history].reverse();
         sorted.forEach(m => seenIds.current.add(m.id));
         setMessages(sorted);
@@ -156,18 +153,16 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   };
 
   const subscribeToChannel = (channelId) => {
-    // Clean up existing subscription
     if (channelRef.current) {
       channelRef.current.unsubscribe();
       supabase.removeChannel(channelRef.current);
     }
 
-    // 2026 standard: Broadcast with ack for delivery confirmation
     channelRef.current = supabase.channel(`chat:${channelId}`, {
       config: {
         broadcast: {
-          self: true,  // sender receives own broadcast (eliminates manual state insertion)
-          ack: true,   // server confirms delivery
+          self: true,
+          ack: true,
         },
       },
     });
@@ -185,7 +180,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         switch (msg.type) {
           case 'new':
             setMessages(prev => {
-              // Avoid duplicates
               if (prev.some(m => m.id === msg.id)) return prev;
               return [...prev, msg];
             });
@@ -217,7 +211,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
     channelRef.current.subscribe((status) => {
       if (status === 'CLOSED') {
-        // Auto-reconnect on WebSocket drop (common on mobile)
         setTimeout(() => {
           if (isMounted.current && isVisible) {
             subscribeToChannel(channelId);
@@ -238,14 +231,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     if (!newMessage.trim() || !currentUserId || sending) return;
 
     const text = newMessage.trim();
-    const channelKey = channelIdRef.current;
+    const channelId = channelIdRef.current;
 
     setNewMessage('');
     setSending(true);
 
     try {
       const { data: savedMessage } = await supabase.rpc('send_message', {
-        p_channel_key: channelKey,
+        p_channel_id: channelId,
         p_sender_id: currentUserId,
         p_other_user_id: otherUserId,
         p_text: text,
@@ -253,10 +246,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
       if (!savedMessage) throw new Error('Failed to send');
 
-      // Add type for broadcast
       const broadcastPayload = { ...savedMessage, type: 'new' };
 
-      // Broadcast to channel
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -275,14 +266,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
             include_player_ids: [otherUser.onesignal_player_id],
             headings: { en: notificationHeading },
             contents: { en: text },
-            data: { channel_id: channelKey },
+            data: { channel_id: channelId },
           }),
         }).catch(() => {});
       }
     } catch (err) {
       if (isMounted.current) {
         setError(err.message);
-        setNewMessage(text); // Restore on failure
+        setNewMessage(text);
       }
     } finally {
       if (isMounted.current) setSending(false);
@@ -308,7 +299,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         return;
       }
 
-      // Broadcast edit
       if (channelRef.current && result) {
         channelRef.current.send({
           type: 'broadcast',
@@ -319,7 +309,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     } catch (err) {
       if (isMounted.current) {
         setError(err.message);
-        // Revert optimistically updated message
         setMessages(prev =>
           prev.map(m => m.id === messageId ? { ...m, text: originalText } : m)
         );
@@ -339,7 +328,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         return;
       }
 
-      // Broadcast deletion
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -365,7 +353,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         p_user_id: currentUserId,
       });
 
-      // Broadcast pin
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -386,7 +373,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         p_user_id: currentUserId,
       });
 
-      // Broadcast unpin
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
@@ -424,7 +410,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     if (message.deleted_at) return false;
     const messageTime = new Date(message.created_at).getTime();
     const now = Date.now();
-    return (now - messageTime) < 10 * 60 * 1000; // 10 minutes
+    return (now - messageTime) < 10 * 60 * 1000;
   };
 
   const formatTime = (timestamp) => {
@@ -442,7 +428,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
   return (
     <div className="chat-screen">
-      {/* Header */}
       <div className="chat-header">
         <button onClick={onBack} className="chat-back-btn">←</button>
         <div
@@ -469,7 +454,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         </button>
       </div>
 
-      {/* Error banner */}
       {error && (
         <div className="chat-error-banner" onClick={() => setError(null)}>
           <span>{error}</span>
@@ -477,7 +461,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         </div>
       )}
 
-      {/* Messages */}
       <div className="chat-messages" ref={chatContainerRef}>
         {messages.length === 0 && (
           <div className="chat-empty"><p>No messages yet. Say hello!</p></div>
@@ -491,7 +474,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
           return (
             <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
-              {/* Pin indicator */}
               {isPinned && (
                 <div className="message-pin-indicator">📌 Pinned</div>
               )}
@@ -520,7 +502,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
                 </span>
               </div>
 
-              {/* Message actions — only for own messages */}
               {isMine && !isDeleted && editingMessageId !== msg.id && (
                 <div className="message-actions">
                   {canEditMessage(msg) && (
@@ -564,7 +545,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input bar */}
       <form onSubmit={handleSend} className="chat-input-bar">
         <input
           type="text"
