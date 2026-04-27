@@ -12,7 +12,10 @@ export function initOneSignal(onNotificationReceived) {
   });
 
   OneSignal.setNotificationWillShowInForegroundHandler((notification) => {
-    notification.display();
+    // Don't show push banner when app is open — silent badge update only
+    if (onNotificationReceived) {
+      onNotificationReceived(notification);
+    }
   });
 }
 
