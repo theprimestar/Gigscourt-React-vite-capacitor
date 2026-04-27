@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { PUSH_NOTIFICATION_URL } from '../lib/config';
 
-function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile }) {
+function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -10,45 +10,96 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
   const [error, setError] = useState(null);
   const [otherUser, setOtherUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserName, setCurrentUserName] = useState('');
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
   const channelIdRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
-  const pollIntervalRef = useRef(null);
 
+  // Initialize chat
   useEffect(() => {
     isMounted.current = true;
-    init();
+    if (isVisible) {
+      init();
+    }
 
     return () => {
       isMounted.current = false;
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
       }
     };
-  }, [chatId, otherUserId]);
+  }, [chatId, otherUserId, isVisible]);
+
+  // Subscribe/unsubscribe when visibility changes
+  useEffect(() => {
+    if (!channelIdRef.current || !currentUserId) return;
+
+    if (isVisible) {
+      subscribeToChannel(channelIdRef.current);
+    } else {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    }
+  }, [isVisible, currentUserId]);
 
   const init = async () => {
     setError(null);
     setLoading(true);
+    seenIds.current = new Set();
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted.current) return;
       setCurrentUserId(user.id);
 
-      const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
-      channelIdRef.current = channelId;
+      // Get sender's name for push notifications
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+      if (isMounted.current && myProfile) {
+        setCurrentUserName(myProfile.full_name || '');
+      }
 
+      // Generate deterministic channel key: sorted UUIDs joined by colon
+      const channelKey = [user.id, otherUserId].sort().join(':');
+
+      // Look up existing channel or use chatId if provided
+      let activeChannelId = chatId;
+
+      if (!activeChannelId) {
+        // Check if channel already exists
+        const { data: existingChannel } = await supabase
+          .from('channels')
+          .select('id')
+          .eq('id', channelKey)
+          .maybeSingle();
+
+        activeChannelId = existingChannel?.id || channelKey;
+      }
+
+      channelIdRef.current = activeChannelId;
+
+      // Reset unread for this channel
       await supabase.rpc('reset_unread', {
         p_user_id: user.id,
-        p_channel_id: channelId,
+        p_channel_id: activeChannelId,
       });
 
+      // Fetch other user's profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id, onesignal_player_id')
@@ -56,63 +107,47 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         .single();
 
       if (isMounted.current) {
-        setOtherUser(profile || { full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+        setOtherUser(profile || {
+          full_name: otherUserName || 'User',
+          profile_pic_url: null,
+          id: otherUserId,
+        });
       }
 
+      // Fetch message history
       const { data: history } = await supabase.rpc('get_messages', {
-        p_channel_id: channelId,
+        p_channel_id: activeChannelId,
         p_cursor: null,
+        p_cursor_id: null,
         p_limit: 50,
       });
 
       if (isMounted.current && history) {
-        history.forEach(m => seenIds.current.add(m.id));
-        setMessages(history.reverse());
+        // get_messages returns newest first; reverse for display (oldest at top)
+        const sorted = [...history].reverse();
+        sorted.forEach(m => seenIds.current.add(m.id));
+        setMessages(sorted);
         setTimeout(() => {
           if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
           }
-        }, 50);
+        }, 100);
+      }
+
+      // Fetch pinned messages
+      const { data: pins } = await supabase
+        .from('pinned_messages')
+        .select('message_id')
+        .eq('channel_id', activeChannelId);
+
+      if (isMounted.current && pins) {
+        setPinnedMessages(pins.map(p => p.message_id));
       }
 
       if (isMounted.current) setLoading(false);
 
-      channelRef.current = supabase.channel(channelId);
-      channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
-        if (!isMounted.current) return;
-        const msg = payload?.payload;
-        if (!msg?.id || seenIds.current.has(msg.id)) return;
-        seenIds.current.add(msg.id);
-        setMessages(prev => [...prev, msg]);
-        scrollToBottom();
-      });
-      channelRef.current.subscribe();
-
-      pollIntervalRef.current = setInterval(async () => {
-        if (!isMounted.current) return;
-        const { data } = await supabase.rpc('get_messages', {
-          p_channel_id: channelIdRef.current,
-          p_cursor: null,
-          p_limit: 50,
-        });
-        if (!data || !isMounted.current) return;
-        let added = false;
-        data.forEach(m => {
-          if (!seenIds.current.has(m.id)) {
-            seenIds.current.add(m.id);
-            added = true;
-          }
-        });
-        if (added) {
-          setMessages(prev => {
-            const all = [...prev];
-            data.forEach(m => {
-              if (!all.some(e => e.id === m.id)) all.push(m);
-            });
-            return all.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-          });
-        }
-      }, 5000);
+      // Subscribe to realtime Broadcast
+      subscribeToChannel(activeChannelId);
 
     } catch (err) {
       if (isMounted.current) setError(err.message);
@@ -120,10 +155,82 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     }
   };
 
+  const subscribeToChannel = (channelId) => {
+    // Clean up existing subscription
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+      supabase.removeChannel(channelRef.current);
+    }
+
+    // 2026 standard: Broadcast with ack for delivery confirmation
+    channelRef.current = supabase.channel(`chat:${channelId}`, {
+      config: {
+        broadcast: {
+          self: true,  // sender receives own broadcast (eliminates manual state insertion)
+          ack: true,   // server confirms delivery
+        },
+      },
+    });
+
+    channelRef.current.on(
+      'broadcast',
+      { event: 'message' },
+      (payload) => {
+        if (!isMounted.current) return;
+        const msg = payload?.payload;
+        if (!msg?.id || seenIds.current.has(msg.id)) return;
+
+        seenIds.current.add(msg.id);
+
+        switch (msg.type) {
+          case 'new':
+            setMessages(prev => {
+              // Avoid duplicates
+              if (prev.some(m => m.id === msg.id)) return prev;
+              return [...prev, msg];
+            });
+            scrollToBottom();
+            break;
+
+          case 'edit':
+            setMessages(prev =>
+              prev.map(m => m.id === msg.id ? { ...m, text: msg.text, edited_at: msg.edited_at } : m)
+            );
+            break;
+
+          case 'delete':
+            setMessages(prev =>
+              prev.map(m => m.id === msg.id ? { ...m, deleted_at: msg.deleted_at } : m)
+            );
+            break;
+
+          case 'pin':
+            setPinnedMessages(prev => [...prev, msg.message_id]);
+            break;
+
+          case 'unpin':
+            setPinnedMessages(prev => prev.filter(id => id !== msg.message_id));
+            break;
+        }
+      }
+    );
+
+    channelRef.current.subscribe((status) => {
+      if (status === 'CLOSED') {
+        // Auto-reconnect on WebSocket drop (common on mobile)
+        setTimeout(() => {
+          if (isMounted.current && isVisible) {
+            subscribeToChannel(channelId);
+          }
+        }, 2000);
+      }
+    });
+  };
+
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 150);
+    }, 100);
   };
 
   const handleSend = async (e) => {
@@ -131,58 +238,193 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
     if (!newMessage.trim() || !currentUserId || sending) return;
 
     const text = newMessage.trim();
-    const channelId = channelIdRef.current;
+    const channelKey = channelIdRef.current;
 
     setNewMessage('');
     setSending(true);
 
     try {
       const { data: savedMessage } = await supabase.rpc('send_message', {
-        p_channel_id: channelId,
+        p_channel_key: channelKey,
         p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
         p_text: text,
       });
 
       if (!savedMessage) throw new Error('Failed to send');
 
-      if (isMounted.current) {
-        if (!seenIds.current.has(savedMessage.id)) {
-          seenIds.current.add(savedMessage.id);
-          setMessages(prev => [...prev, savedMessage]);
-        }
-        scrollToBottom();
+      // Add type for broadcast
+      const broadcastPayload = { ...savedMessage, type: 'new' };
 
-        // Broadcast to chat channel
-        if (channelRef.current) {
-          channelRef.current.send({
-            type: 'broadcast',
-            event: 'message',
-            payload: savedMessage,
-          }).catch(() => {});
-        }
+      // Broadcast to channel
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: broadcastPayload,
+        }).catch(() => {});
+      }
 
-        // Push notification to other user
-        if (otherUser?.onesignal_player_id) {
-          fetch(PUSH_NOTIFICATION_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userIds: [otherUser.onesignal_player_id],
-              heading: otherUser.full_name || otherUserName || 'New message',
-              content: text,
-              data: { channel_id: channelId },
-            }),
-          }).catch(() => {});
-        }
+      // Push notification to other user
+      if (otherUser?.onesignal_player_id) {
+        const notificationHeading = currentUserName || otherUserName || 'New message';
+        fetch(PUSH_NOTIFICATION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            include_player_ids: [otherUser.onesignal_player_id],
+            headings: { en: notificationHeading },
+            contents: { en: text },
+            data: { channel_id: channelKey },
+          }),
+        }).catch(() => {});
       }
     } catch (err) {
       if (isMounted.current) {
         setError(err.message);
-        setNewMessage(text);
+        setNewMessage(text); // Restore on failure
       }
     } finally {
       if (isMounted.current) setSending(false);
     }
+  };
+
+  const handleEditMessage = async (messageId) => {
+    if (!editText.trim() || !currentUserId) return;
+
+    const originalText = messages.find(m => m.id === messageId)?.text;
+    setEditingMessageId(null);
+    setEditText('');
+
+    try {
+      const { data: result } = await supabase.rpc('edit_message', {
+        p_message_id: messageId,
+        p_sender_id: currentUserId,
+        p_new_text: editText.trim(),
+      });
+
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+
+      // Broadcast edit
+      if (channelRef.current && result) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: { ...result, type: 'edit' },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        setError(err.message);
+        // Revert optimistically updated message
+        setMessages(prev =>
+          prev.map(m => m.id === messageId ? { ...m, text: originalText } : m)
+        );
+      }
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      const { data: result } = await supabase.rpc('delete_message', {
+        p_message_id: messageId,
+        p_sender_id: currentUserId,
+      });
+
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+
+      // Broadcast deletion
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: {
+            id: messageId,
+            channel_id: channelIdRef.current,
+            deleted_at: new Date().toISOString(),
+            type: 'delete',
+          },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      if (isMounted.current) setError(err.message);
+    }
+  };
+
+  const handlePinMessage = async (messageId) => {
+    try {
+      await supabase.rpc('pin_message', {
+        p_channel_id: channelIdRef.current,
+        p_message_id: messageId,
+        p_user_id: currentUserId,
+      });
+
+      // Broadcast pin
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: { channel_id: channelIdRef.current, message_id: messageId, type: 'pin' },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      if (isMounted.current) setError(err.message);
+    }
+  };
+
+  const handleUnpinMessage = async (messageId) => {
+    try {
+      await supabase.rpc('unpin_message', {
+        p_channel_id: channelIdRef.current,
+        p_message_id: messageId,
+        p_user_id: currentUserId,
+      });
+
+      // Broadcast unpin
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: { channel_id: channelIdRef.current, message_id: messageId, type: 'unpin' },
+        }).catch(() => {});
+      }
+    } catch (err) {
+      if (isMounted.current) setError(err.message);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!confirm('Delete this conversation? It will only be removed for you.')) return;
+
+    try {
+      const { data: result } = await supabase.rpc('delete_channel', {
+        p_channel_id: channelIdRef.current,
+        p_user_id: currentUserId,
+      });
+
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+
+      if (onBack) onBack();
+    } catch (err) {
+      if (isMounted.current) setError(err.message);
+    }
+  };
+
+  const canEditMessage = (message) => {
+    if (!message || message.sender_id !== currentUserId) return false;
+    if (message.deleted_at) return false;
+    const messageTime = new Date(message.created_at).getTime();
+    const now = Date.now();
+    return (now - messageTime) < 10 * 60 * 1000; // 10 minutes
   };
 
   const formatTime = (timestamp) => {
@@ -200,11 +442,17 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
   return (
     <div className="chat-screen">
+      {/* Header */}
       <div className="chat-header">
         <button onClick={onBack} className="chat-back-btn">←</button>
-        <div className="chat-header-info-tappable" onClick={() => {
-          if (otherUser?.id && onViewProfile) onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
-        }}>
+        <div
+          className="chat-header-info-tappable"
+          onClick={() => {
+            if (otherUser?.id && onViewProfile) {
+              onViewProfile({ id: otherUser.id, full_name: otherUser.full_name });
+            }
+          }}
+        >
           <div className="chat-header-avatar">
             {otherUser?.profile_pic_url ? (
               <img src={otherUser.profile_pic_url} alt="" />
@@ -216,13 +464,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
             <h3>{otherUser?.full_name || 'User'}</h3>
           </div>
         </div>
-        <span style={{ width: 40 }} />
+        <button onClick={handleDeleteConversation} className="chat-delete-btn" title="Delete conversation">
+          🗑️
+        </button>
       </div>
 
-      <div className="chat-toast">
-        <p>Did you complete a gig with {otherUser?.full_name?.split(' ')[0]}? <button className="chat-toast-btn">Register it now</button></p>
-      </div>
-
+      {/* Error banner */}
       {error && (
         <div className="chat-error-banner" onClick={() => setError(null)}>
           <span>{error}</span>
@@ -230,21 +477,94 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         </div>
       )}
 
+      {/* Messages */}
       <div className="chat-messages" ref={chatContainerRef}>
         {messages.length === 0 && (
           <div className="chat-empty"><p>No messages yet. Say hello!</p></div>
         )}
-        {messages.map(msg => (
-          <div key={msg.id} className={`message-row ${msg.sender_id === currentUserId ? 'message-mine' : 'message-other'}`}>
-            <div className={`message-bubble ${msg.sender_id === currentUserId ? 'bubble-mine' : 'bubble-other'}`}>
-              <p className="message-text">{msg.text}</p>
-              <span className="message-time">{formatTime(msg.created_at)}</span>
+
+        {messages.map(msg => {
+          const isMine = msg.sender_id === currentUserId;
+          const isPinned = pinnedMessages.includes(msg.id);
+          const isDeleted = !!msg.deleted_at;
+          const isEdited = !!msg.edited_at;
+
+          return (
+            <div key={msg.id} className={`message-row ${isMine ? 'message-mine' : 'message-other'}`}>
+              {/* Pin indicator */}
+              {isPinned && (
+                <div className="message-pin-indicator">📌 Pinned</div>
+              )}
+
+              <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'} ${isDeleted ? 'bubble-deleted' : ''}`}>
+                {isDeleted ? (
+                  <p className="message-text deleted-text">This message was deleted</p>
+                ) : editingMessageId === msg.id ? (
+                  <div className="message-edit-form">
+                    <input
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="message-edit-input"
+                      autoFocus
+                    />
+                    <button onClick={() => handleEditMessage(msg.id)} className="message-edit-save">✓</button>
+                    <button onClick={() => { setEditingMessageId(null); setEditText(''); }} className="message-edit-cancel">✕</button>
+                  </div>
+                ) : (
+                  <p className="message-text">{msg.text}</p>
+                )}
+                <span className="message-time">
+                  {formatTime(msg.created_at)}
+                  {isEdited && <span className="edited-label"> (edited)</span>}
+                </span>
+              </div>
+
+              {/* Message actions — only for own messages */}
+              {isMine && !isDeleted && editingMessageId !== msg.id && (
+                <div className="message-actions">
+                  {canEditMessage(msg) && (
+                    <button
+                      className="message-action-btn"
+                      onClick={() => { setEditingMessageId(msg.id); setEditText(msg.text); }}
+                      title="Edit"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                  <button
+                    className="message-action-btn"
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
+                  {isPinned ? (
+                    <button
+                      className="message-action-btn"
+                      onClick={() => handleUnpinMessage(msg.id)}
+                      title="Unpin"
+                    >
+                      📌❌
+                    </button>
+                  ) : (
+                    <button
+                      className="message-action-btn"
+                      onClick={() => handlePinMessage(msg.id)}
+                      title="Pin"
+                    >
+                      📌
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Input bar */}
       <form onSubmit={handleSend} className="chat-input-bar">
         <input
           type="text"
