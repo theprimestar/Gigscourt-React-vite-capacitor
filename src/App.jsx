@@ -48,7 +48,9 @@ function App() {
   const registerOneSignal = async (userId) => {
     try {
       initOneSignal((notification) => {
-        // Handle notification opened — navigate to chat if applicable
+        // Update badge silently when push arrives (foreground)
+        checkUnreadBadge();
+        // Navigate to chat if notification is tapped
         if (notification?.data?.channel_id) {
           setActiveTab('chats');
         }
@@ -56,7 +58,6 @@ function App() {
 
       const playerId = await getOneSignalUserId();
       if (playerId) {
-        // Store the OneSignal player ID in Supabase profiles
         await supabase.from('profiles').upsert({
           id: userId,
           onesignal_player_id: playerId,
@@ -109,11 +110,10 @@ function App() {
     if (data !== null) setUnreadCount(data);
   }, []);
 
+  // Check badge on app start and when screen changes
   useEffect(() => {
     if (screen === 'home') {
       checkUnreadBadge();
-      const interval = setInterval(checkUnreadBadge, 30000);
-      return () => clearInterval(interval);
     }
   }, [screen, checkUnreadBadge]);
 
@@ -252,7 +252,7 @@ function App() {
             className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('chats');
-              if (unreadCount > 0) setUnreadCount(0);
+              setUnreadCount(0);
             }}
           >
             <span className="nav-icon" style={{ position: 'relative' }}>
