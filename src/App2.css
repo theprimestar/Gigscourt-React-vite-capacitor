@@ -847,3 +847,14 @@
   border-radius: 50%;
   border: 2px solid white;
 }
+
+.unread-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background: #007aff;
+  border-radius: 50%;
+  border: 2px solid white;
+}
