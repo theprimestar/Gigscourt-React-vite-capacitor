@@ -55,12 +55,36 @@ function App() {
       });
 
       const playerId = await getOneSignalUserId();
-      if (playerId) {
-        await supabase.from('profiles').upsert({
-          id: userId,
-          onesignal_player_id: playerId,
-          updated_at: new Date().toISOString(),
-        });
+      if (!playerId) return;
+
+      // FIXED: Check if profile exists first to avoid overwriting data
+      // Using update() for existing rows prevents the upsert data-loss bug
+      // where omitted columns (full_name, services, work_photos, etc.) get nullified
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (existingProfile) {
+        // Profile exists — only update the OneSignal field
+        await supabase
+          .from('profiles')
+          .update({
+            onesignal_player_id: playerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId);
+      } else {
+        // Profile doesn't exist yet — insert a minimal row (rare: only if auth
+        // completes before onboarding creates the profile)
+        await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            onesignal_player_id: playerId,
+            updated_at: new Date().toISOString(),
+          });
       }
     } catch (err) {
       console.warn('OneSignal registration:', err.message);
