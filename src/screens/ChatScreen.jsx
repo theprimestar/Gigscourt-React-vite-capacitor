@@ -58,6 +58,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
 
+      // Reset unread when opening chat
+      supabase.rpc('reset_unread', {
+        p_user_id: user.id,
+        p_channel_id: channelId,
+      }).then(() => console.log('[CHAT] Unread reset'));
+
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id')
@@ -91,7 +97,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       if (isMounted.current) setLoading(false);
 
-      // Chat channel for messages
       if (channelRef.current) {
         channelRef.current.unsubscribe();
         supabase.removeChannel(channelRef.current);
@@ -120,12 +125,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         }
       });
 
-      // Chat list channel — created ONCE, reused for all sends
       const ownShortId = user.id.replace(/-/g, '');
       chatListChannelRef.current = supabase.channel('chatlist-' + ownShortId);
       chatListChannelRef.current.subscribe();
 
-      // 5-second polling fallback
       if (!isMounted.current) return;
       pollIntervalRef.current = setInterval(async () => {
         if (!isMounted.current || !channelIdRef.current) return;
@@ -205,7 +208,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         }
         scrollToBottom();
 
-        // Broadcast to chat channel
         if (channelRef.current) {
           try {
             await channelRef.current.send({
@@ -218,7 +220,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           }
         }
 
-        // Broadcast to both users' chat lists using persistent channel
         if (chatListChannelRef.current) {
           const chatListUpdate = {
             channel_id: channelId,
@@ -230,14 +231,12 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
             last_message_by: currentUserId,
           };
 
-          // Send to other user's chat list
           chatListChannelRef.current.send({
             type: 'broadcast',
             event: 'chat_updated',
             payload: chatListUpdate,
           });
 
-          // Send to own chat list
           chatListChannelRef.current.send({
             type: 'broadcast',
             event: 'chat_updated',
