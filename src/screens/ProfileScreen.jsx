@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
 
-function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings }) {
+function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings, isVisible }) {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({ gigs: 0, rating: 'New' });
   const [loading, setLoading] = useState(true);
@@ -14,33 +14,47 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   const fileInputRef = useRef(null);
   const nameRef = useRef(null);
   const scrollRef = useRef(null);
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     loadProfile();
+    return () => { isMounted.current = false; };
   }, [userId]);
 
-  const loadProfile = async () => {
-    const targetId = userId || (await supabase.auth.getUser()).data.user?.id;
-    if (!targetId) return;
-
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', targetId)
-      .single();
-
-    if (profileData) {
-      setProfile(profileData);
-      setWorkPhotos(profileData.work_photos || []);
-      setStats({
-        gigs: profileData.gig_count || 0,
-        rating: profileData.review_count > 0 
-          ? (profileData.rating / profileData.review_count).toFixed(1) 
-          : 'New',
-      });
+  // Refetch when profile tab becomes visible (after edit or tab switch)
+  useEffect(() => {
+    if (isVisible && !loading) {
+      loadProfile();
     }
+  }, [isVisible]);
 
-    setLoading(false);
+  const loadProfile = async () => {
+    try {
+      const targetId = userId || (await supabase.auth.getUser()).data.user?.id;
+      if (!targetId || !isMounted.current) return;
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', targetId)
+        .single();
+
+      if (isMounted.current && profileData) {
+        setProfile(profileData);
+        setWorkPhotos(profileData.work_photos || []);
+        setStats({
+          gigs: profileData.gig_count || 0,
+          rating: profileData.review_count > 0 
+            ? (profileData.rating / profileData.review_count).toFixed(1) 
+            : 'New',
+        });
+      }
+    } catch (err) {
+      console.error('Profile load error:', err);
+    } finally {
+      if (isMounted.current) setLoading(false);
+    }
   };
 
   const handleScroll = useCallback(() => {
