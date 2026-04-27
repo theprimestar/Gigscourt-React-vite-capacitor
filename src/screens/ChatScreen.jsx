@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { PUSH_NOTIFICATION_URL } from '../lib/config';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile }) {
   const [messages, setMessages] = useState([]);
@@ -58,15 +59,14 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
 
-      // Reset unread when opening chat
       supabase.rpc('reset_unread', {
         p_user_id: user.id,
         p_channel_id: channelId,
-      }).then(() => console.log('[CHAT] Unread reset'));
+      });
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, profile_pic_url, id')
+        .select('full_name, profile_pic_url, id, onesignal_player_id')
         .eq('id', otherUserId)
         .single();
 
@@ -247,6 +247,24 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
               other_user_pic: otherUser?.profile_pic_url || null,
             },
           });
+        }
+
+        // Send push notification to the other user
+        if (otherUser?.onesignal_player_id) {
+          try {
+            await fetch(PUSH_NOTIFICATION_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userIds: [otherUser.onesignal_player_id],
+                heading: otherUser.full_name || otherUserName || 'New message',
+                content: text,
+                data: { channel_id: channelId },
+              }),
+            });
+          } catch (pushErr) {
+            // Silent — push is optional
+          }
         }
       }
     } catch (err) {
