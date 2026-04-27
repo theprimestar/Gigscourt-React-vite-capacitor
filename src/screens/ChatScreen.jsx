@@ -44,13 +44,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       const channelId = (chatId || [user.id, otherUserId].sort().join('_')).replace(/-/g, '');
       channelIdRef.current = channelId;
 
-      // Clear unread
       await supabase.rpc('reset_unread', {
         p_user_id: user.id,
         p_channel_id: channelId,
       });
 
-      // Fetch other user
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, profile_pic_url, id, onesignal_player_id')
@@ -61,7 +59,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         setOtherUser(profile || { full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
       }
 
-      // Load history
       const { data: history } = await supabase.rpc('get_messages', {
         p_channel_id: channelId,
         p_cursor: null,
@@ -80,7 +77,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
 
       if (isMounted.current) setLoading(false);
 
-      // Subscribe to broadcast
       channelRef.current = supabase.channel(channelId);
       channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
         if (!isMounted.current) return;
@@ -92,7 +88,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       });
       channelRef.current.subscribe();
 
-      // Polling fallback
       pollIntervalRef.current = setInterval(async () => {
         if (!isMounted.current) return;
         const { data } = await supabase.rpc('get_messages', {
@@ -166,31 +161,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
           }).catch(() => {});
         }
 
-        // Broadcast to chat list channels (both users)
-        const otherShortId = otherUserId.replace(/-/g, '');
-        const ownShortId = currentUserId.replace(/-/g, '');
-
-        const listUpdate = {
-          channel_id: channelId,
-          last_message: text,
-          last_message_at: savedMessage.created_at,
-        };
-
-        // Tell other user's chat list to refresh
-        supabase.channel('chatlist-' + otherShortId).send({
-          type: 'broadcast',
-          event: 'chat_updated',
-          payload: listUpdate,
-        }).catch(() => {});
-
-        // Tell own chat list to refresh
-        supabase.channel('chatlist-' + ownShortId).send({
-          type: 'broadcast',
-          event: 'chat_updated',
-          payload: listUpdate,
-        }).catch(() => {});
-
-        // Push notification
+        // Push notification to other user
         if (otherUser?.onesignal_player_id) {
           fetch(PUSH_NOTIFICATION_URL, {
             method: 'POST',
