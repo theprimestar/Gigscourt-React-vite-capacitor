@@ -22,8 +22,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const fileInputRef = useRef(null);
   const seenIds = useRef(new Set());
   const isMounted = useRef(true);
-  const sendQueue = useRef([]);
-  const processingQueue = useRef(false);
+  const photoQueue = useRef([]);
+  const processingPhotos = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -155,7 +155,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       });
       if (!data || !isMounted.current) return;
       
-      // Update read status for existing messages
       setMessages(prev => prev.map(msg => {
         const updated = data.find(m => m.id === msg.id);
         if (updated && updated.is_read && msg.status !== 'read') {
@@ -164,7 +163,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         return msg;
       }));
       
-      // Add new messages
       const newMessages = data.filter(m => !seenIds.current.has(m.id));
       if (newMessages.length > 0) {
         newMessages.forEach(m => seenIds.current.add(m.id));
@@ -192,66 +190,65 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }, 100);
   };
 
-  const processQueue = useCallback(async () => {
-    if (processingQueue.current || sendQueue.current.length === 0) return;
-    processingQueue.current = true;
-
-    while (sendQueue.current.length > 0) {
-      const item = sendQueue.current[0];
-      try {
-        if (item.type === 'text') {
-          await sendTextMessage(item.text, item.tempId);
-        } else if (item.type === 'photo') {
-          await uploadPhoto(item.file, item.tempId);
-        }
-      } catch (err) {
-        // Failed — status shows Retry button
-        setMessages(prev => prev.map(m => m.id === item.tempId ? { ...m, status: 'failed' } : m));
-      }
-      sendQueue.current.shift();
-    }
-    processingQueue.current = false;
-  }, [otherUserId, otherUser, currentUserId, currentUserName]);
-
+  // TEXT MESSAGES — send immediately, no queue blocking
   const sendTextMessage = async (text, tempId) => {
     const channelKey = channelIdRef.current;
-    const { data: savedMessage } = await supabase.rpc('send_message', {
-      p_channel_key: channelKey,
-      p_sender_id: currentUserId,
-      p_other_user_id: otherUserId,
-      p_text: text,
-    });
+    try {
+      const { data: savedMessage } = await supabase.rpc('send_message', {
+        p_channel_key: channelKey,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: text,
+      });
 
-    if (!savedMessage) throw new Error('Failed to send');
+      if (!savedMessage) throw new Error('Failed to send');
 
-    // Replace temp message with real one
-    setMessages(prev => prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
-    seenIds.current.add(savedMessage.id);
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+      seenIds.current.add(savedMessage.id);
 
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      }).catch(() => {});
-    }
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
 
-    if (otherUser?.onesignal_player_id) {
-      fetch(PUSH_NOTIFICATION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          include_player_ids: [otherUser.onesignal_player_id],
-          headings: { en: currentUserName || 'New message' },
-          contents: { en: text },
-          data: { channel_id: channelKey },
-        }),
-      }).catch(() => {});
+      if (otherUser?.onesignal_player_id) {
+        fetch(PUSH_NOTIFICATION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            include_player_ids: [otherUser.onesignal_player_id],
+            headings: { en: currentUserName || 'New message' },
+            contents: { en: text },
+            data: { channel_id: channelKey },
+          }),
+        }).catch(() => {});
+      }
+    } catch (err) {
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
   };
 
+  // PHOTO QUEUE — separate, doesn't block text messages
+  const processPhotoQueue = useCallback(async () => {
+    if (processingPhotos.current || photoQueue.current.length === 0) return;
+    processingPhotos.current = true;
+
+    while (photoQueue.current.length > 0) {
+      const item = photoQueue.current[0];
+      try {
+        await uploadPhoto(item.file, item.tempId);
+      } catch (err) {
+        setMessages(prev => prev.map(m => m.id === item.tempId ? { ...m, status: 'failed' } : m));
+      }
+      photoQueue.current.shift();
+    }
+    processingPhotos.current = false;
+  }, [otherUserId, otherUser, currentUserId, currentUserName]);
+
   const uploadPhoto = async (file, tempId) => {
-    // Upload to ImageKit
     const authRes = await fetch(IMAGEKIT_AUTH_URL);
     const auth = await authRes.json();
 
@@ -272,10 +269,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     const result = await uploadRes.json();
     if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
 
-    // Optimize URL
     const optimizedUrl = result.url + '?tr=f-webp,fo-lossless';
 
-    // Save to database
     const channelKey = channelIdRef.current;
     const { data: savedMessage } = await supabase.rpc('send_message', {
       p_channel_key: channelKey,
@@ -287,7 +282,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
     if (!savedMessage) throw new Error('Failed to save photo');
 
-    // Replace temp message with real one
     setMessages(prev => prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
     seenIds.current.add(savedMessage.id);
 
@@ -322,7 +316,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
     setNewMessage('');
 
-    // Add temp message with "sending" status
     const tempMsg = {
       id: tempId,
       channel_id: channelIdRef.current,
@@ -336,15 +329,13 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     setMessages(prev => [...prev, tempMsg]);
     scrollToBottom();
 
-    // Add to queue
-    sendQueue.current.push({ type: 'text', text, tempId });
-    processQueue();
+    // Text messages fire immediately — no queue
+    sendTextMessage(text, tempId);
   };
 
   const retryMessage = (tempId, text) => {
     setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m));
-    sendQueue.current.push({ type: 'text', text, tempId });
-    processQueue();
+    sendTextMessage(text, tempId);
   };
 
   const handlePhotoUpload = (e) => {
@@ -353,7 +344,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
     const tempId = 'temp-photo-' + Date.now();
 
-    // Add temp placeholder with loading bar
     const tempMsg = {
       id: tempId,
       channel_id: channelIdRef.current,
@@ -367,16 +357,17 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     setMessages(prev => [...prev, tempMsg]);
     scrollToBottom();
 
-    sendQueue.current.push({ type: 'photo', file, tempId });
-    processQueue();
+    // Photos use their own queue
+    photoQueue.current.push({ file, tempId });
+    processPhotoQueue();
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const retryPhoto = (tempId, file) => {
     setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'uploading' } : m));
-    sendQueue.current.push({ type: 'photo', file, tempId });
-    processQueue();
+    photoQueue.current.push({ file, tempId });
+    processPhotoQueue();
   };
 
   const getStatusText = (msg) => {
@@ -394,7 +385,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
             className="message-retry-btn" 
             onClick={() => {
               if (msg.image_url) {
-                // Can't retry photo without the file reference — show error
                 setError('Please reselect the photo to retry');
               } else {
                 retryMessage(msg.id, msg.text);
@@ -502,7 +492,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Full-screen image viewer */}
       {fullScreenImage && (
         <div className="fullscreen-image-overlay" onClick={() => setFullScreenImage(null)}>
           <button className="fullscreen-close-btn" onClick={() => setFullScreenImage(null)}>✕</button>
