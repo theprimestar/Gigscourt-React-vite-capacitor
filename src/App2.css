@@ -989,3 +989,12 @@
   padding: 0 4px;
   text-align: center;
 }
+
+.read-receipt {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.bubble-other .read-receipt {
+  color: #8e8e93;
+}
