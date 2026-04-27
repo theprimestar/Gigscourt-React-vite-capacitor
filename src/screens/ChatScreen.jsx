@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL, imagekitPublicKey } from '../lib/config';
+import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL } from '../lib/config';
+import { imagekitPublicKey } from '../lib/imagekit';
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const [messages, setMessages] = useState([]);
