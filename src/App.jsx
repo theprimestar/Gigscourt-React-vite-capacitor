@@ -57,9 +57,6 @@ function App() {
       const playerId = await getOneSignalUserId();
       if (!playerId) return;
 
-      // FIXED: Check if profile exists first to avoid overwriting data
-      // Using update() for existing rows prevents the upsert data-loss bug
-      // where omitted columns (full_name, services, work_photos, etc.) get nullified
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -67,7 +64,6 @@ function App() {
         .maybeSingle();
 
       if (existingProfile) {
-        // Profile exists — only update the OneSignal field
         await supabase
           .from('profiles')
           .update({
@@ -76,8 +72,6 @@ function App() {
           })
           .eq('id', userId);
       } else {
-        // Profile doesn't exist yet — insert a minimal row (rare: only if auth
-        // completes before onboarding creates the profile)
         await supabase
           .from('profiles')
           .insert({
@@ -204,7 +198,7 @@ function App() {
         <div style={{ display: activeTab === 'chats' && !currentDeepScreen ? 'block' : 'none' }}>
           <ChatListScreen
             isVisible={activeTab === 'chats' && !currentDeepScreen}
-            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+            onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name, chatId: user.chatId || null })}
           />
         </div>
 
@@ -220,11 +214,12 @@ function App() {
 
         {currentDeepScreen?.screen === 'chat' && (
           <ChatScreen
-            chatId={null}
+            chatId={currentDeepScreen.chatId || null}
             otherUserId={currentDeepScreen.userId}
             otherUserName={currentDeepScreen.userName}
             onBack={goBack}
             onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
+            isVisible={currentDeepScreen?.screen === 'chat'}
           />
         )}
 
