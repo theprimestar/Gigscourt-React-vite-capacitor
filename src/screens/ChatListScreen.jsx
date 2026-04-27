@@ -5,7 +5,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const channelRef = useRef(null);
   const isMounted = useRef(true);
 
   // Load on mount
@@ -15,19 +14,13 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
     return () => {
       isMounted.current = false;
-      disconnectChannel();
     };
   }, []);
 
-  // Handle visibility — refetch from DB, then subscribe for live updates
+  // Refetch when tab becomes visible
   useEffect(() => {
-    if (!currentUserId || !isMounted.current) return;
-
-    if (isVisible) {
+    if (isVisible && currentUserId && isMounted.current) {
       loadChatList();
-      subscribeToUpdates();
-    } else {
-      disconnectChannel();
     }
   }, [isVisible, currentUserId]);
 
@@ -39,6 +32,17 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       if (onDeepScreen) onDeepScreen('chat');
     }
   }, [chatTarget, currentUserId]);
+
+  // Refetch on window focus
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isMounted.current && currentUserId && isVisible) {
+        loadChatList();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [currentUserId, isVisible]);
 
   const loadChatList = async () => {
     try {
@@ -56,40 +60,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         setChats(validChats);
       }
     } catch (err) {
-      console.error('Chat list load error:', err);
+      console.error('Chat list error:', err);
     } finally {
       if (isMounted.current) setLoading(false);
-    }
-  };
-
-  const subscribeToUpdates = () => {
-    if (channelRef.current) return;
-
-    const channelName = 'chatlist-' + currentUserId.replace(/-/g, '');
-    channelRef.current = supabase.channel(channelName);
-
-    // When a chat_updated event arrives, refetch from DB (not merge)
-    channelRef.current.on('broadcast', { event: 'chat_updated' }, () => {
-      if (!isMounted.current) return;
-      supabase.rpc('get_chat_list', {
-        p_user_id: currentUserId,
-        p_limit: 30,
-      }).then(({ data }) => {
-        if (isMounted.current && data) {
-          const validChats = data.filter(c => c.other_user_id !== null);
-          setChats(validChats);
-        }
-      });
-    });
-
-    channelRef.current.subscribe();
-  };
-
-  const disconnectChannel = () => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
     }
   };
 
