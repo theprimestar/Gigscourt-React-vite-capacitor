@@ -60,7 +60,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       const channelId = 'chat_' + ids[0] + '_' + ids[1];
       channelIdRef.current = channelId;
 
-      supabase.rpc('reset_unread', {
+      // Await reset_unread so it completes before any new messages arrive
+      await supabase.rpc('reset_unread', {
         p_user_id: user.id,
         p_channel_id: channelId,
       });
@@ -94,7 +95,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       if (isMounted.current && history) {
         history.forEach((m) => seenIds.current.add(m.id));
         setMessages(history.reverse());
-        // Instant scroll to bottom after history loads — no animation
         setTimeout(() => {
           if (chatContainerRef.current) {
             chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -133,7 +133,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
       });
 
       const ownShortId = user.id.replace(/-/g, '');
-      chatListChannelRef.current = supabase.channel('chatlist-' + ownShortId);
+      chatListChannelRef.current = supabase.channel('chatlist:' + ownShortId);
       chatListChannelRef.current.subscribe();
 
       if (!isMounted.current) return;
@@ -226,30 +226,17 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         }
 
         if (chatListChannelRef.current) {
-          const chatListUpdate = {
-            channel_id: channelId,
-            other_user_id: otherUserId,
-            other_user_name: otherUser?.full_name || otherUserName || 'User',
-            other_user_pic: otherUser?.profile_pic_url || null,
-            last_message: text,
-            last_message_at: savedMessage.created_at,
-            last_message_by: currentUserId,
-          };
-
-          chatListChannelRef.current.send({
-            type: 'broadcast',
-            event: 'chat_updated',
-            payload: chatListUpdate,
-          });
-
           chatListChannelRef.current.send({
             type: 'broadcast',
             event: 'chat_updated',
             payload: {
-              ...chatListUpdate,
-              other_user_id: currentUserId,
+              channel_id: channelId,
+              other_user_id: otherUserId,
               other_user_name: otherUser?.full_name || otherUserName || 'User',
               other_user_pic: otherUser?.profile_pic_url || null,
+              last_message: text,
+              last_message_at: savedMessage.created_at,
+              last_message_by: currentUserId,
             },
           });
         }
@@ -272,7 +259,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile 
         }
       }
     } catch (err) {
-      console.error('[CHAT] Send error:', err);
       if (isMounted.current) {
         setError(err.message);
         setNewMessage(text);
