@@ -84,6 +84,39 @@ function SearchScreen({ onStartChat, onViewProfile }) {
     }
   }, [view]);
 
+  const enrichCards = async (profiles) => {
+    if (!profiles || profiles.length === 0) return profiles;
+    
+    const ids = profiles.map(p => p.id);
+    
+    const { data: statsData } = await supabase
+      .from('profiles')
+      .select('id, rating, review_count, gig_count')
+      .in('id', ids);
+
+    const activeMap = {};
+    for (const id of ids) {
+      const { data } = await supabase.rpc('is_user_active', { p_user_id: id });
+      activeMap[id] = data || false;
+    }
+
+    const statsMap = {};
+    if (statsData) {
+      statsData.forEach(s => {
+        statsMap[s.id] = {
+          rating: s.review_count > 0 ? (s.rating / s.review_count).toFixed(1) : 'New',
+          gigCount: s.gig_count || 0,
+        };
+      });
+    }
+
+    return profiles.map(p => ({
+      ...p,
+      ...(statsMap[p.id] || { rating: 'New', gigCount: 0 }),
+      isActive: activeMap[p.id] || false,
+    }));
+  };
+
   const handleSearch = useCallback(async (term) => {
     const trimmed = term.trim().toLowerCase().replace(/\s+/g, '-');
     if (!trimmed) return;
@@ -103,7 +136,8 @@ function SearchScreen({ onStartChat, onViewProfile }) {
       p_cursor_id: null,
     });
 
-    setProviders(data || []);
+    const enriched = await enrichCards(data || []);
+    setProviders(enriched);
     setLoading(false);
   }, [viewerLat, viewerLng, radius]);
 
@@ -129,7 +163,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
           justify-content:center;
           font-size:22px;
           box-shadow:0 2px 10px rgba(0,0,0,0.15);
-          border:2px solid #007aff;
+          border:${provider.isActive ? '2px solid #34c759' : '2px solid #007aff'};
           overflow:hidden;
         ">${
           provider.profile_pic_url
@@ -331,14 +365,19 @@ function SearchScreen({ onStartChat, onViewProfile }) {
               )}
             </div>
             <div className="card-info">
-              <h3>{provider.full_name}</h3>
+              <h3>{provider.full_name} {provider.isActive && <span className="active-dot-card"></span>}</h3>
               <p className="card-services">
                 {provider.services?.slice(0, 3).map((s) => s.replace(/-/g, ' ')).join(', ')}
               </p>
               <p className="card-distance">{formatDistance(provider.distance_meters)}</p>
+              <p className="card-gigs">{provider.gigCount || 0} gigs</p>
             </div>
             <div className="card-rating">
-              <span className="rating-badge">New</span>
+              {provider.rating !== 'New' ? (
+                <span className="rating-badge rating-badge-active">⭐ {provider.rating}</span>
+              ) : (
+                <span className="rating-badge">New</span>
+              )}
             </div>
           </div>
         ))}
@@ -356,8 +395,11 @@ function SearchScreen({ onStartChat, onViewProfile }) {
                   <div className="sheet-avatar-placeholder">👤</div>
                 )}
               </div>
-              <h2>{selectedUser.full_name}</h2>
+              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card"></span>}</h2>
               <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
+              <p className="sheet-rating">
+                {selectedUser.rating !== 'New' ? `⭐ ${selectedUser.rating} • ${selectedUser.gigCount || 0} gigs` : 'New • 0 gigs'}
+              </p>
               <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
               <p className="sheet-services">
                 {selectedUser.services?.map((s) => s.replace(/-/g, ' ')).join(' • ')}
