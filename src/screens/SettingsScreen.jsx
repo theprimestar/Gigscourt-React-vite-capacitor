@@ -1,47 +1,82 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { getCredits } from '../gigSystem';
 
 function SettingsScreen({ onBack, onLogout }) {
   const [showPhone, setShowPhone] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPrivacySettings();
+    loadSettings();
   }, []);
 
-  const loadPrivacySettings = async () => {
+  const loadSettings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data } = await supabase
       .from('profiles')
-      .select('show_phone')
+      .select('show_phone, push_enabled, email_enabled')
       .eq('id', user.id)
       .single();
 
     if (data) {
       setShowPhone(data.show_phone !== false);
+      setPushEnabled(data.push_enabled !== false);
+      setEmailEnabled(data.email_enabled === true);
     }
+
+    try {
+      const balance = await getCredits(user.id);
+      setCredits(balance);
+    } catch (err) {
+      console.error('Failed to load credits:', err);
+    }
+
     setLoading(false);
   };
 
   const toggleShowPhone = async () => {
     const newValue = !showPhone;
     setShowPhone(newValue);
-
     const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('profiles').update({
+      show_phone: newValue,
+      updated_at: new Date().toISOString(),
+    }).eq('id', user.id);
+  };
 
-    // FIXED: Use update() instead of upsert() to prevent data loss
-    // This only changes the show_phone column and updated_at timestamp.
-    // All other profile data (full_name, services, work_photos, bio, etc.)
-    // is preserved. upsert() would nullify every column not listed here.
-    await supabase
-      .from('profiles')
-      .update({
-        show_phone: newValue,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', user.id);
+  const togglePush = async () => {
+    const newValue = !pushEnabled;
+    setPushEnabled(newValue);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('profiles').update({
+      push_enabled: newValue,
+      updated_at: new Date().toISOString(),
+    }).eq('id', user.id);
+  };
+
+  const toggleEmail = async () => {
+    const newValue = !emailEnabled;
+    setEmailEnabled(newValue);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('profiles').update({
+      email_enabled: newValue,
+      updated_at: new Date().toISOString(),
+    }).eq('id', user.id);
+  };
+
+  const handleBuyCredits = () => {
+    alert('Credit purchase will be available soon via Paystack.');
+  };
+
+  const handleDeleteAccount = () => {
+    if (confirm('Are you sure you want to delete your account? This cannot be undone.')) {
+      alert('Account deletion will be available soon.');
+    }
   };
 
   if (loading) {
@@ -56,7 +91,6 @@ function SettingsScreen({ onBack, onLogout }) {
 
   return (
     <div className="settings-screen">
-      {/* Header */}
       <div className="settings-header">
         <button onClick={onBack} className="settings-back">←</button>
         <h2>Settings</h2>
@@ -89,7 +123,10 @@ function SettingsScreen({ onBack, onLogout }) {
               <span className="settings-item-label">Push Notifications</span>
               <span className="settings-item-sub">Receive notifications about gigs and messages</span>
             </div>
-            <button className="toggle-switch active" onClick={() => {}}>
+            <button
+              className={`toggle-switch ${pushEnabled ? 'active' : ''}`}
+              onClick={togglePush}
+            >
               <span className="toggle-knob" />
             </button>
           </div>
@@ -98,7 +135,10 @@ function SettingsScreen({ onBack, onLogout }) {
               <span className="settings-item-label">Email Notifications</span>
               <span className="settings-item-sub">Receive email updates about your account</span>
             </div>
-            <button className="toggle-switch" onClick={() => {}}>
+            <button
+              className={`toggle-switch ${emailEnabled ? 'active' : ''}`}
+              onClick={toggleEmail}
+            >
               <span className="toggle-knob" />
             </button>
           </div>
@@ -107,10 +147,10 @@ function SettingsScreen({ onBack, onLogout }) {
         {/* Credits */}
         <div className="settings-section">
           <h3 className="settings-section-title">Credits</h3>
-          <div className="settings-item">
+          <div className="settings-item" onClick={handleBuyCredits} style={{ cursor: 'pointer' }}>
             <div className="settings-item-info">
               <span className="settings-item-label">My Credits</span>
-              <span className="settings-item-sub">View and purchase credits</span>
+              <span className="settings-item-sub">{credits} credits remaining</span>
             </div>
             <span className="settings-arrow">›</span>
           </div>
@@ -119,13 +159,13 @@ function SettingsScreen({ onBack, onLogout }) {
         {/* Support */}
         <div className="settings-section">
           <h3 className="settings-section-title">Support</h3>
-          <div className="settings-item">
+          <div className="settings-item" onClick={() => alert('Help & Support coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Help & Support</span>
             </div>
             <span className="settings-arrow">›</span>
           </div>
-          <div className="settings-item">
+          <div className="settings-item" onClick={() => alert('Report a Problem coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Report a Problem</span>
             </div>
@@ -136,13 +176,13 @@ function SettingsScreen({ onBack, onLogout }) {
         {/* Legal */}
         <div className="settings-section">
           <h3 className="settings-section-title">Legal</h3>
-          <div className="settings-item">
+          <div className="settings-item" onClick={() => alert('Terms of Service coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Terms of Service</span>
             </div>
             <span className="settings-arrow">›</span>
           </div>
-          <div className="settings-item">
+          <div className="settings-item" onClick={() => alert('Privacy Policy coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Privacy Policy</span>
             </div>
@@ -167,7 +207,7 @@ function SettingsScreen({ onBack, onLogout }) {
         </button>
 
         {/* Delete Account */}
-        <button className="settings-delete-btn">
+        <button className="settings-delete-btn" onClick={handleDeleteAccount}>
           Delete Account
         </button>
       </div>
