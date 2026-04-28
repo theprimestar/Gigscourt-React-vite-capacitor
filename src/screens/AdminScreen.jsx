@@ -105,7 +105,13 @@ function AdminScreen({ isVisible }) {
   };
 
   const loadTopProviders = async () => {
-    const { data } = await supabase.rpc('get_top_providers', { p_limit: 20 }).catch(() => ({ data: null }));
+    let data = null;
+try {
+  const result = await supabase.rpc('get_top_providers', { p_limit: 20 });
+  data = result.data;
+} catch (err) {
+  console.error('Top providers error:', err);
+}
     if (isMounted.current && data) setTopProviders(data);
   };
 
