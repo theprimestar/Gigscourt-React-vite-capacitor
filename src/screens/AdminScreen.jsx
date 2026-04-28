@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { getCredits } from '../gigSystem';
-import '../AdminScreen.css';
+import './AdminScreen.css';
 
 function AdminScreen({ isVisible }) {
   const [stats, setStats] = useState({
@@ -16,6 +15,7 @@ function AdminScreen({ isVisible }) {
   const [signupPeriod, setSignupPeriod] = useState('day');
   const [signups, setSignups] = useState([]);
   const [serviceRequests, setServiceRequests] = useState([]);
+  const [services, setServices] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [topProviders, setTopProviders] = useState([]);
   const [reportedIssues, setReportedIssues] = useState([]);
@@ -25,6 +25,22 @@ function AdminScreen({ isVisible }) {
   const [editName, setEditName] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
+  
+  // User search
+  const [userQuery, setUserQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [giftUserId, setGiftUserId] = useState(null);
+  const [giftAmount, setGiftAmount] = useState('');
+  
+  // New service
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceCategory, setNewServiceCategory] = useState('');
+  const [addingService, setAddingService] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [editServiceName, setEditServiceName] = useState('');
+  const [editServiceCategory, setEditServiceCategory] = useState('');
+
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -39,6 +55,7 @@ function AdminScreen({ isVisible }) {
       loadStats(),
       loadSignups(),
       loadServiceRequests(),
+      loadServices(),
       loadPurchases(),
       loadTopProviders(),
       loadReportedIssues(),
@@ -47,23 +64,23 @@ function AdminScreen({ isVisible }) {
   };
 
   const loadStats = async () => {
-  try {
-    const { data } = await supabase.rpc('get_admin_stats');
-    if (isMounted.current && data) {
-      setStats({
-        totalUsers: data.total_users || 0,
-        activeToday: data.active_today || 0,
-        totalGigs: data.total_gigs || 0,
-        completedGigs: data.completed_gigs || 0,
-        pendingGigs: data.pending_gigs || 0,
-        cancelledGigs: data.cancelled_gigs || 0,
-        totalRevenue: data.total_revenue || 0,
-      });
+    try {
+      const { data } = await supabase.rpc('get_admin_stats');
+      if (isMounted.current && data) {
+        setStats({
+          totalUsers: data.total_users || 0,
+          activeToday: data.active_today || 0,
+          totalGigs: data.total_gigs || 0,
+          completedGigs: data.completed_gigs || 0,
+          pendingGigs: data.pending_gigs || 0,
+          cancelledGigs: data.cancelled_gigs || 0,
+          totalRevenue: data.total_revenue || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Stats error:', err);
     }
-  } catch (err) {
-    console.error('Stats error:', err);
-  }
-};
+  };
 
   const loadSignups = async () => {
     const { data } = await supabase.rpc('get_user_signups_by_period', { p_period: signupPeriod });
@@ -79,6 +96,15 @@ function AdminScreen({ isVisible }) {
     if (isMounted.current && data) setServiceRequests(data);
   };
 
+  const loadServices = async () => {
+    const { data } = await supabase
+      .from('services')
+      .select('*')
+      .order('category')
+      .order('name');
+    if (isMounted.current && data) setServices(data);
+  };
+
   const loadPurchases = async () => {
     const { data } = await supabase
       .from('credit_purchases')
@@ -90,12 +116,12 @@ function AdminScreen({ isVisible }) {
 
   const loadTopProviders = async () => {
     let data = null;
-try {
-  const result = await supabase.rpc('get_top_providers', { p_limit: 20 });
-  data = result.data;
-} catch (err) {
-  console.error('Top providers error:', err);
-}
+    try {
+      const result = await supabase.rpc('get_top_providers', { p_limit: 20 });
+      data = result.data;
+    } catch (err) {
+      console.error('Top providers error:', err);
+    }
     if (isMounted.current && data) setTopProviders(data);
   };
 
@@ -108,6 +134,30 @@ try {
     if (isMounted.current && data) setReportedIssues(data);
   };
 
+  // User search
+  const handleSearchUsers = async () => {
+    if (!userQuery.trim()) return;
+    setSearching(true);
+    const { data } = await supabase.rpc('search_users', { p_query: userQuery.trim() });
+    if (isMounted.current) setSearchResults(data || []);
+    setSearching(false);
+  };
+
+  const handleGiftCredits = async () => {
+    if (!giftUserId || !giftAmount || parseInt(giftAmount) < 1) return;
+    const { data } = await supabase.rpc('gift_credits', {
+      p_user_id: giftUserId,
+      p_amount: parseInt(giftAmount),
+    });
+    if (data?.success) {
+      alert(`Gifted ${giftAmount} credits successfully!`);
+      setGiftUserId(null);
+      setGiftAmount('');
+      loadStats();
+    }
+  };
+
+  // Service requests
   const handleApproveService = async (id) => {
     await supabase.from('service_requests').update({ status: 'approved' }).eq('id', id);
     loadServiceRequests();
@@ -118,7 +168,7 @@ try {
     loadServiceRequests();
   };
 
-  const handleEditService = async (id) => {
+  const handleEditRequest = async (id) => {
     if (!editName.trim()) return;
     await supabase.from('service_requests').update({ requested_name: editName.trim(), status: 'approved' }).eq('id', id);
     setEditingService(null);
@@ -126,15 +176,55 @@ try {
     loadServiceRequests();
   };
 
+  // Services catalog
+  const handleAddService = async () => {
+    if (!newServiceName.trim() || !newServiceCategory.trim()) return;
+    const slug = newServiceName.trim().toLowerCase().replace(/\s+/g, '-');
+    await supabase.from('services').insert({
+      name: newServiceName.trim(),
+      slug,
+      category: newServiceCategory.trim(),
+      is_active: true,
+    });
+    setNewServiceName('');
+    setNewServiceCategory('');
+    setAddingService(false);
+    loadServices();
+  };
+
+  const handleToggleService = async (id, currentStatus) => {
+    await supabase.from('services').update({ is_active: !currentStatus }).eq('id', id);
+    loadServices();
+  };
+
+  const handleDeleteService = async (id) => {
+    if (!confirm('Delete this service?')) return;
+    await supabase.from('services').delete().eq('id', id);
+    loadServices();
+  };
+
+  const handleEditServiceCatalog = async (id) => {
+    if (!editServiceName.trim()) return;
+    const slug = editServiceName.trim().toLowerCase().replace(/\s+/g, '-');
+    await supabase.from('services').update({
+      name: editServiceName.trim(),
+      slug,
+      category: editServiceCategory.trim(),
+    }).eq('id', id);
+    setEditingServiceId(null);
+    loadServices();
+  };
+
+  // Issues
   const handleResolveIssue = async (id) => {
     await supabase.from('reported_issues').update({ status: 'resolved' }).eq('id', id);
     loadReportedIssues();
   };
 
+  // Broadcast
   const handleBroadcast = async () => {
     if (!broadcastMessage.trim()) return;
     setBroadcasting(true);
-    // Get all OneSignal player IDs
     const { data: profiles } = await supabase.from('profiles').select('onesignal_player_id').not('onesignal_player_id', 'is', null);
     if (profiles && profiles.length > 0) {
       const playerIds = profiles.map(p => p.onesignal_player_id).filter(Boolean);
@@ -171,20 +261,19 @@ try {
         <p>GigsCourt</p>
       </div>
 
-      {/* Section Tabs */}
       <div className="admin-tabs">
-        {['dashboard', 'services', 'purchases', 'providers', 'issues', 'broadcast'].map(section => (
+        {['dashboard', 'users', 'services', 'purchases', 'providers', 'issues', 'broadcast'].map(section => (
           <button
             key={section}
             className={`admin-tab ${activeSection === section ? 'active' : ''}`}
             onClick={() => setActiveSection(section)}
           >
             {section === 'dashboard' ? '📊 Overview' :
+             section === 'users' ? '👥 Users' :
              section === 'services' ? '📝 Services' :
              section === 'purchases' ? '💳 Revenue' :
              section === 'providers' ? '⭐ Providers' :
-             section === 'issues' ? '🚩 Issues' :
-             '📢 Broadcast'}
+             section === 'issues' ? '🚩 Issues' : '📢 Broadcast'}
           </button>
         ))}
       </div>
@@ -259,49 +348,183 @@ try {
           </>
         )}
 
-        {/* SERVICE REQUESTS */}
-        {activeSection === 'services' && (
+        {/* USERS */}
+        {activeSection === 'users' && (
           <div className="admin-section">
-            <h3>Service Requests</h3>
-            <div className="service-list">
-              {serviceRequests.map(sr => (
-                <div key={sr.id} className={`service-item ${sr.status}`}>
-                  <div className="service-info">
-                    <span className="service-name">{sr.requested_name}</span>
-                    <span className={`service-status-badge ${sr.status}`}>{sr.status}</span>
+            <h3>User Search</h3>
+            <div className="user-search-bar">
+              <input
+                type="text"
+                value={userQuery}
+                onChange={e => setUserQuery(e.target.value)}
+                placeholder="Search by name or email..."
+                className="user-search-input"
+                onKeyDown={e => e.key === 'Enter' && handleSearchUsers()}
+              />
+              <button onClick={handleSearchUsers} disabled={searching} className="user-search-btn">
+                {searching ? '...' : 'Search'}
+              </button>
+            </div>
+            <div className="search-results">
+              {searchResults.map(user => (
+                <div key={user.id} className="user-result-item">
+                  <div className="user-result-info">
+                    <span className="user-result-name">{user.full_name}</span>
+                    <span className="user-result-email">{user.email}</span>
+                    <span className="user-result-stats">{user.gig_count} gigs • {user.credits} credits</span>
                   </div>
-                  <div className="service-actions">
-                    {editingService === sr.id ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editName}
-                          onChange={e => setEditName(e.target.value)}
-                          className="service-edit-input"
-                        />
-                        <button onClick={() => handleEditService(sr.id)} className="btn-approve">Save</button>
-                        <button onClick={() => setEditingService(null)} className="btn-reject">Cancel</button>
-                      </>
-                    ) : (
-                      <>
-                        {sr.status === 'pending' && (
-                          <>
-                            <button onClick={() => handleApproveService(sr.id)} className="btn-approve">Approve</button>
-                            <button onClick={() => { setEditingService(sr.id); setEditName(sr.requested_name); }} className="btn-edit">Edit</button>
-                            <button onClick={() => handleRejectService(sr.id)} className="btn-reject">Reject</button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  <button
+                    className="btn-gift"
+                    onClick={() => setGiftUserId(giftUserId === user.id ? null : user.id)}
+                  >
+                    🎁 Gift
+                  </button>
+                  {giftUserId === user.id && (
+                    <div className="gift-credits-row">
+                      <input
+                        type="number"
+                        value={giftAmount}
+                        onChange={e => setGiftAmount(e.target.value)}
+                        placeholder="Credits"
+                        className="gift-input"
+                        min="1"
+                      />
+                      <button onClick={handleGiftCredits} className="btn-approve">Send</button>
+                    </div>
+                  )}
                 </div>
               ))}
-              {serviceRequests.length === 0 && <p className="empty-text">No service requests</p>}
+              {searchResults.length === 0 && userQuery && !searching && (
+                <p className="empty-text">No users found</p>
+              )}
             </div>
           </div>
         )}
 
-        {/* CREDIT PURCHASES */}
+        {/* SERVICES */}
+        {activeSection === 'services' && (
+          <>
+            {/* Service Catalog */}
+            <div className="admin-section">
+              <div className="admin-section-header">
+                <h3>Service Catalog</h3>
+                <button className="btn-approve" onClick={() => setAddingService(!addingService)}>
+                  {addingService ? 'Cancel' : '+ Add'}
+                </button>
+              </div>
+              {addingService && (
+                <div className="add-service-form">
+                  <input
+                    type="text"
+                    value={newServiceName}
+                    onChange={e => setNewServiceName(e.target.value)}
+                    placeholder="Service name"
+                    className="service-edit-input"
+                  />
+                  <input
+                    type="text"
+                    value={newServiceCategory}
+                    onChange={e => setNewServiceCategory(e.target.value)}
+                    placeholder="Category"
+                    className="service-edit-input"
+                  />
+                  <button onClick={handleAddService} className="btn-approve">Save</button>
+                </div>
+              )}
+              <div className="service-list">
+                {services.map(s => (
+                  <div key={s.id} className={`service-item ${s.is_active ? '' : 'inactive'}`}>
+                    {editingServiceId === s.id ? (
+                      <div className="service-info" style={{ flex: 1 }}>
+                        <input
+                          type="text"
+                          value={editServiceName}
+                          onChange={e => setEditServiceName(e.target.value)}
+                          className="service-edit-input"
+                        />
+                        <input
+                          type="text"
+                          value={editServiceCategory}
+                          onChange={e => setEditServiceCategory(e.target.value)}
+                          className="service-edit-input"
+                        />
+                      </div>
+                    ) : (
+                      <div className="service-info">
+                        <span className="service-name">{s.name}</span>
+                        <span className="service-category-label">{s.category}</span>
+                        {!s.is_active && <span className="service-status-badge rejected">Inactive</span>}
+                      </div>
+                    )}
+                    <div className="service-actions">
+                      {editingServiceId === s.id ? (
+                        <>
+                          <button onClick={() => handleEditServiceCatalog(s.id)} className="btn-approve">Save</button>
+                          <button onClick={() => setEditingServiceId(null)} className="btn-reject">Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setEditingServiceId(s.id); setEditServiceName(s.name); setEditServiceCategory(s.category); }}
+                            className="btn-edit"
+                          >
+                            Edit
+                          </button>
+                          <button onClick={() => handleToggleService(s.id, s.is_active)} className="btn-edit">
+                            {s.is_active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button onClick={() => handleDeleteService(s.id)} className="btn-reject">Delete</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* User Service Requests */}
+            <div className="admin-section">
+              <h3>User Service Requests</h3>
+              <div className="service-list">
+                {serviceRequests.map(sr => (
+                  <div key={sr.id} className={`service-item ${sr.status}`}>
+                    <div className="service-info">
+                      <span className="service-name">{sr.requested_name}</span>
+                      <span className={`service-status-badge ${sr.status}`}>{sr.status}</span>
+                    </div>
+                    <div className="service-actions">
+                      {editingService === sr.id ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={e => setEditName(e.target.value)}
+                            className="service-edit-input"
+                          />
+                          <button onClick={() => handleEditRequest(sr.id)} className="btn-approve">Save</button>
+                          <button onClick={() => setEditingService(null)} className="btn-reject">Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          {sr.status === 'pending' && (
+                            <>
+                              <button onClick={() => handleApproveService(sr.id)} className="btn-approve">Approve</button>
+                              <button onClick={() => { setEditingService(sr.id); setEditName(sr.requested_name); }} className="btn-edit">Edit</button>
+                              <button onClick={() => handleRejectService(sr.id)} className="btn-reject">Reject</button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {serviceRequests.length === 0 && <p className="empty-text">No requests</p>}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* PURCHASES */}
         {activeSection === 'purchases' && (
           <div className="admin-section">
             <h3>Credit Purchases</h3>
@@ -309,7 +532,7 @@ try {
               {purchases.map(p => (
                 <div key={p.id} className="purchase-item">
                   <div className="purchase-info">
-                    <span className="purchase-amount">{formatNaira(p.amount_paid)}</span>
+                    <span className="purchase-amount">{p.paystack_reference?.startsWith('admin_gift') ? '🎁 Gift' : formatNaira(p.amount_paid)}</span>
                     <span className="purchase-credits">{p.credits_purchased} credits</span>
                   </div>
                   <span className={`purchase-status ${p.status}`}>{p.status}</span>
@@ -321,7 +544,7 @@ try {
           </div>
         )}
 
-        {/* TOP PROVIDERS */}
+        {/* PROVIDERS */}
         {activeSection === 'providers' && (
           <div className="admin-section">
             <h3>Top Providers</h3>
@@ -338,7 +561,7 @@ try {
           </div>
         )}
 
-        {/* REPORTED ISSUES */}
+        {/* ISSUES */}
         {activeSection === 'issues' && (
           <div className="admin-section">
             <h3>Reported Issues</h3>
