@@ -10,20 +10,20 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const cursorRef = useRef(null);
   const observerRef = useRef(null);
   const isMounted = useRef(true);
+  const fetchingRef = useRef(false);
   const initialLoadDone = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
-    loadChatList();
+    loadChatList(false);
     return () => { isMounted.current = false; };
   }, []);
 
-  // Only reload on visibility change AFTER initial load is done
   useEffect(() => {
     if (isVisible && initialLoadDone.current && isMounted.current) {
       cursorRef.current = null;
       setHasMore(true);
-      loadChatList();
+      loadChatList(false);
     }
   }, [isVisible]);
 
@@ -37,17 +37,20 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   useEffect(() => {
     const handleFocus = () => {
-      if (isMounted.current && currentUserId && isVisible) {
+      if (isMounted.current && currentUserId && isVisible && !fetchingRef.current) {
         cursorRef.current = null;
         setHasMore(true);
-        loadChatList();
+        loadChatList(false);
       }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [currentUserId, isVisible]);
 
-  const loadChatList = async () => {
+  const loadChatList = async (append) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted.current) return;
@@ -56,7 +59,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       const { data } = await supabase.rpc('get_chat_list', {
         p_user_id: user.id,
         p_limit: 30,
-        p_cursor: cursorRef.current,
+        p_cursor: append ? cursorRef.current : null,
       });
 
       if (isMounted.current && data) {
@@ -68,8 +71,12 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
           return true;
         });
         
-        if (cursorRef.current) {
-          setChats(prev => [...prev, ...validChats]);
+        if (append) {
+          setChats(prev => {
+            const existingIds = new Set(prev.map(c => c.channel_id));
+            const newOnes = validChats.filter(c => !existingIds.has(c.channel_id));
+            return [...prev, ...newOnes];
+          });
         } else {
           setChats(validChats);
         }
@@ -84,15 +91,18 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     } catch (err) {
       console.error('Chat list error:', err);
     } finally {
-      if (isMounted.current) setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+      fetchingRef.current = false;
     }
   };
 
-  const loadMore = useCallback(async () => {
+  const loadMore = useCallback(() => {
     if (loadingMore || !hasMore || !currentUserId) return;
     setLoadingMore(true);
-    await loadChatList();
-    if (isMounted.current) setLoadingMore(false);
+    loadChatList(true);
   }, [loadingMore, hasMore, currentUserId]);
 
   const lastChatRef = useCallback(
