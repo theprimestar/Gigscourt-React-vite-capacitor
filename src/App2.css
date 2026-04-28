@@ -1093,3 +1093,82 @@
 .bubble-other .read-receipt {
   color: #8e8e93;
 }
+
+/* Gig Banner */
+.gig-banner {
+  background: #fff8e1;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #ffe082;
+}
+
+.gig-banner-persistent {
+  background: #ffecb3;
+  border-bottom-color: #ffca28;
+}
+
+.gig-banner-text {
+  font-size: 13px;
+  color: #5d4037;
+  margin: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.gig-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.gig-banner-btn {
+  background: #ff8f00;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gig-banner-btn:active {
+  background: #e65100;
+}
+
+.gig-banner-dismiss {
+  background: none;
+  border: none;
+  color: #8d6e63;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* Header Gig Button */
+.chat-header-gig-btn {
+  background: #ff8f00;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-header-gig-btn:active {
+  background: #e65100;
+}
+
+.chat-header-gig-label {
+  font-size: 11px;
+  color: #ff8f00;
+  font-weight: 600;
+}
