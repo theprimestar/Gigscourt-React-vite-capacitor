@@ -129,7 +129,7 @@ function App() {
   useEffect(() => {
   if (screen === 'home') {
     checkUnreadBadge();
-    import('../gigSystem').then(({ checkExpiredGigs }) => {
+    import('./gigSystem').then(({ checkExpiredGigs }) => {
       supabase.auth.getUser().then(({ data }) => {
         if (data?.user) checkExpiredGigs(data.user.id);
       });
