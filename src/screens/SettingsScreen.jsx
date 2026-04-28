@@ -2,12 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCredits } from '../gigSystem';
 
+const CREDIT_PACKAGES = [
+  { credits: 3, amount: 150000, label: '3 Credits', price: '₦1,500' },
+  { credits: 5, amount: 225000, label: '5 Credits', price: '₦2,250' },
+  { credits: 8, amount: 340000, label: '8 Credits', price: '₦3,400' },
+  { credits: 10, amount: 400000, label: '10 Credits', price: '₦4,000' },
+];
+
 function SettingsScreen({ onBack, onLogout }) {
   const [showPhone, setShowPhone] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showPackages, setShowPackages] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -69,8 +78,37 @@ function SettingsScreen({ onBack, onLogout }) {
     }).eq('id', user.id);
   };
 
-  const handleBuyCredits = () => {
-    alert('Credit purchase will be available soon via Paystack.');
+  const handleBuyCredits = (pkg) => {
+    setShowPackages(false);
+    setPaying(true);
+
+    const { data: { user } } = supabase.auth.getUser().then(({ data }) => {
+      if (!data?.user) return;
+
+      const handler = window.PaystackPop.setup({
+        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        email: data.user.email,
+        amount: pkg.amount,
+        ref: `gigs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        metadata: {
+          user_id: data.user.id,
+          credits: pkg.credits,
+        },
+        onSuccess: () => {
+          // Reload credits after successful payment
+          setTimeout(async () => {
+            const balance = await getCredits(data.user.id);
+            setCredits(balance);
+          }, 2000);
+          setPaying(false);
+        },
+        onClose: () => {
+          setPaying(false);
+        },
+      });
+
+      handler.openIframe();
+    });
   };
 
   const handleDeleteAccount = () => {
@@ -147,7 +185,7 @@ function SettingsScreen({ onBack, onLogout }) {
         {/* Credits */}
         <div className="settings-section">
           <h3 className="settings-section-title">Credits</h3>
-          <div className="settings-item" onClick={handleBuyCredits} style={{ cursor: 'pointer' }}>
+          <div className="settings-item" onClick={() => setShowPackages(true)} style={{ cursor: 'pointer' }}>
             <div className="settings-item-info">
               <span className="settings-item-label">My Credits</span>
               <span className="settings-item-sub">{credits} credits remaining</span>
@@ -211,6 +249,39 @@ function SettingsScreen({ onBack, onLogout }) {
           Delete Account
         </button>
       </div>
+
+      {/* Credit Package Selection */}
+      {showPackages && (
+        <div className="bottom-sheet-overlay" onClick={() => setShowPackages(false)}>
+          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="bottom-sheet-handle"></div>
+            <div className="bottom-sheet-content">
+              <h2>Buy Credits</h2>
+              <p style={{ color: '#8e8e93', fontSize: 13, marginBottom: 16 }}>
+                Credits are used to receive reviews and boost your reputation.
+              </p>
+              <div className="credit-packages">
+                {CREDIT_PACKAGES.map((pkg) => (
+                  <button
+                    key={pkg.credits}
+                    className="credit-package-btn"
+                    onClick={() => handleBuyCredits(pkg)}
+                    disabled={paying}
+                  >
+                    <span className="package-label">{pkg.label}</span>
+                    <span className="package-price">{pkg.price}</span>
+                  </button>
+                ))}
+              </div>
+              {paying && (
+                <p style={{ textAlign: 'center', color: '#8e8e93', marginTop: 12 }}>
+                  Processing payment...
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
