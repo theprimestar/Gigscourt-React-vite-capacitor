@@ -94,11 +94,15 @@ function SearchScreen({ onStartChat, onViewProfile }) {
       .select('id, rating, review_count, gig_count')
       .in('id', ids);
 
-    const activeMap = {};
-    for (const id of ids) {
-      const { data } = await supabase.rpc('is_user_active', { p_user_id: id });
-      activeMap[id] = data || false;
-    }
+    const { data: activeData } = await supabase.rpc('get_active_status_batch', { p_user_ids: ids });
+const activeMap = {};
+if (activeData) {
+  activeData.forEach(a => { activeMap[a.user_id] = a.is_active; });
+}
+// Fallback for any missing IDs
+ids.forEach(id => {
+  if (!(id in activeMap)) activeMap[id] = false;
+});
 
     const statsMap = {};
     if (statsData) {
