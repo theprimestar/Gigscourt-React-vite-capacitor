@@ -321,11 +321,17 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               💬 Message
             </button>
             <button
-              className="profile-action-btn secondary"
-              onClick={() => setShowFullNumber(!showFullNumber)}
-            >
-              📞 {showFullNumber && profile.phone ? profile.phone : 'Contact Now'}
-            </button>
+  className="profile-action-btn secondary"
+  onClick={() => {
+    if (profile.show_phone === false) {
+      alert('This user has hidden their phone number.');
+      return;
+    }
+    setShowFullNumber(!showFullNumber);
+  }}
+>
+  📞 {showFullNumber && profile.phone ? profile.phone : profile.show_phone === false ? 'Phone hidden' : 'Contact Now'}
+</button>
           </>
         )}
       </div>
