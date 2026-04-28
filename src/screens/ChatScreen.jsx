@@ -264,25 +264,19 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   };
 
   const handleDismissBanner = async () => {
-  try {
-    const { error: updateError } = await supabase
-      .from('channels')
-      .update({
-        banner_dismissed_at: new Date().toISOString(),
-        banner_dismissed_by: currentUserId,
-      })
-      .eq('id', channelIdRef.current);
+  const userId = currentUserId || (await supabase.auth.getUser()).data.user?.id;
+  if (!userId) return;
 
-    if (updateError) {
-      console.error('Dismiss error:', updateError.message);
-      return;
-    }
-
-    setBannerDismissed(true);
-    bannerDismissedByRef.current = currentUserId;
-  } catch (err) {
-    console.error('Dismiss failed:', err.message);
-  }
+  setBannerDismissed(true);
+  bannerDismissedByRef.current = userId;
+    
+  await supabase
+    .from('channels')
+    .update({
+      banner_dismissed_at: new Date().toISOString(),
+      banner_dismissed_by: userId,
+    })
+    .eq('id', channelIdRef.current);
 };
 
   const checkBannerReappear = async () => {
