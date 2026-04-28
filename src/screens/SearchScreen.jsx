@@ -25,7 +25,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   const map = useRef(null);
   const markers = useRef([]);
   const viewerMarker = useRef(null);
-
+  const debounceRef = useRef(null);
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -280,10 +280,14 @@ ids.forEach(id => {
           step="100"
           value={radius}
           onChange={(e) => {
-            const val = Number(e.target.value);
-            setRadius(val);
-            if (activeService) handleSearch(activeService);
-          }}
+  const val = Number(e.target.value);
+  setRadius(val);
+  // Debounce: clear previous timeout, set new one
+  if (debounceRef.current) clearTimeout(debounceRef.current);
+  debounceRef.current = setTimeout(() => {
+    if (activeService) handleSearch(activeService);
+  }, 400);
+}}
           className="radius-slider"
         />
         <div className="radius-limits">
