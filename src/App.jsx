@@ -11,6 +11,7 @@ import ChatScreen from './screens/ChatScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import AdminScreen from './screens/AdminScreen';
 import './App.css';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -26,6 +28,7 @@ function App() {
       if (session?.user) {
         determineScreen(session.user);
         registerOneSignal(session.user.id);
+        setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
       } else {
         setScreen('auth');
       }
@@ -37,6 +40,7 @@ function App() {
       if (session?.user) {
         determineScreen(session.user);
         registerOneSignal(session.user.id);
+        setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
       } else {
         setScreen('auth');
       }
@@ -217,6 +221,12 @@ function App() {
           />
         </div>
 
+        {isAdmin && (
+          <div style={{ display: activeTab === 'admin' && !currentDeepScreen ? 'block' : 'none' }}>
+            <AdminScreen isVisible={activeTab === 'admin' && !currentDeepScreen} />
+          </div>
+        )}
+
         {currentDeepScreen?.screen === 'chat' && (
           <ChatScreen
             chatId={currentDeepScreen.chatId || null}
@@ -288,6 +298,15 @@ function App() {
             <span className="nav-icon">👤</span>
             <span className="nav-label">Profile</span>
           </button>
+          {isAdmin && (
+            <button
+              className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
+              onClick={() => setActiveTab('admin')}
+            >
+              <span className="nav-icon">🛡️</span>
+              <span className="nav-label">Admin</span>
+            </button>
+          )}
         </nav>
       )}
     </div>
