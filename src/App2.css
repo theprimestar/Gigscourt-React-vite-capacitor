@@ -1145,9 +1145,16 @@
   background: none;
   border: none;
   color: #8d6e63;
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4px 8px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  position: relative;
 }
 
 /* Header Gig Button */
