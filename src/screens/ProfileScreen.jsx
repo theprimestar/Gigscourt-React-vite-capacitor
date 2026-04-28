@@ -48,15 +48,18 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('*, created_at')
+        .select('*')
         .eq('id', targetId)
         .single();
 
       if (isMounted.current && profileData) {
-        setProfile(profileData);
+        // Normalize show_phone: null/undefined defaults to true (visible)
+        setProfile({
+          ...profileData,
+          show_phone: profileData.show_phone !== false,
+        });
         setWorkPhotos(profileData.work_photos || []);
 
-        // Get gigs this month
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { count: monthCount } = await supabase
           .from('gigs')
@@ -73,7 +76,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
           gigsThisMonth: monthCount || 0,
         });
 
-        // Check active status
         const { data: activeData } = await supabase.rpc('is_user_active', { p_user_id: targetId });
         if (isMounted.current) setIsActive(activeData || false);
       }
@@ -321,17 +323,21 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               💬 Message
             </button>
             <button
-  className="profile-action-btn secondary"
-  onClick={() => {
-    if (profile.show_phone === false) {
-      alert('This user has hidden their phone number.');
-      return;
-    }
-    setShowFullNumber(!showFullNumber);
-  }}
->
-  📞 {showFullNumber && profile.phone ? profile.phone : profile.show_phone === false ? 'Phone hidden' : 'Contact Now'}
-</button>
+              className="profile-action-btn secondary"
+              onClick={() => {
+                if (profile.show_phone === false) {
+                  alert('This user has hidden their phone number.');
+                  return;
+                }
+                setShowFullNumber(!showFullNumber);
+              }}
+            >
+              📞 {showFullNumber && profile.phone 
+                ? profile.phone 
+                : profile.show_phone === false 
+                  ? 'Phone hidden' 
+                  : 'Contact Now'}
+            </button>
           </>
         )}
       </div>
@@ -362,7 +368,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         style={{ display: 'none' }}
       />
 
-      {/* Reviews Bottom Sheet */}
       {showReviews && (
         <div className="bottom-sheet-overlay" onClick={() => setShowReviews(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
@@ -401,7 +406,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         </div>
       )}
 
-      {/* Gig History Bottom Sheet */}
       {showGigHistory && (
         <div className="bottom-sheet-overlay" onClick={() => setShowGigHistory(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
@@ -451,7 +455,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         </div>
       )}
 
-      {/* Recent Chats Bottom Sheet */}
       {showRecentChats && (
         <div className="bottom-sheet-overlay" onClick={() => setShowRecentChats(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
