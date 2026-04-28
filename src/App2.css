@@ -1179,3 +1179,140 @@
   color: #ff8f00;
   font-weight: 600;
 }
+
+/* Active Dot */
+.active-dot-inline {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #34c759;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Joined Date */
+.profile-joined {
+  padding: 0 16px 8px;
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+/* Reviews */
+.review-item {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  text-align: left;
+}
+
+.review-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.review-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e5e5ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.review-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.review-name {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.review-stars {
+  font-size: 12px;
+}
+
+.review-text {
+  font-size: 14px;
+  color: #3a3a3c;
+  margin: 4px 0;
+}
+
+.review-date {
+  font-size: 11px;
+  color: #8e8e93;
+}
+
+/* Gig History */
+.gig-history-tabs {
+  display: flex;
+  margin: 12px 0;
+  background: #e5e5ea;
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.gig-history-tab {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #8e8e93;
+}
+
+.gig-history-tab.active {
+  background: white;
+  color: #007aff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.gig-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+
+.gig-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+.gig-status-badge.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.gig-status-badge.cancelled {
+  background: #fce4ec;
+  color: #c62828;
+}
+
+.gig-status-badge.pending_review {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.gig-history-rating {
+  font-size: 12px;
+}
+
+.gig-history-date {
+  font-size: 11px;
+  color: #8e8e93;
+}
