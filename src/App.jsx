@@ -50,61 +50,61 @@ function App() {
   }, []);
 
   const registerOneSignal = async (userId) => {
-  try {
-    initOneSignal((notification) => {
-      checkUnreadBadge();
-      const data = notification?.data || {};
+    try {
+      initOneSignal((notification) => {
+        checkUnreadBadge();
+        const data = notification?.data || {};
 
-      if (data.channel_id) {
-        const otherId = data.channel_id.split(':').find(id => id !== userId);
-        navigateTo('chat', {
-          userId: otherId,
-          userName: '',
-          chatId: data.channel_id,
-        });
-        setActiveTab('chats');
-      } else if (data.screen === 'settings') {
-        setActiveTab('profile');
-        setTimeout(() => navigateTo('settings'), 100);
-      } else if (data.screen === 'home') {
-        setActiveTab('home');
-      } else if (data.screen === 'profile') {
-        setActiveTab('profile');
+        if (data.channel_id) {
+          const otherId = data.channel_id.split(':').find(id => id !== userId);
+          navigateTo('chat', {
+            userId: otherId,
+            userName: '',
+            chatId: data.channel_id,
+          });
+          setActiveTab('chats');
+        } else if (data.screen === 'settings') {
+          setActiveTab('profile');
+          setTimeout(() => navigateTo('settings'), 100);
+        } else if (data.screen === 'home') {
+          setActiveTab('home');
+        } else if (data.screen === 'profile') {
+          setActiveTab('profile');
+        } else {
+          setActiveTab('chats');
+        }
+      });
+
+      const playerId = await getOneSignalUserId();
+      if (!playerId) return;
+
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (existingProfile) {
+        await supabase
+          .from('profiles')
+          .update({
+            onesignal_player_id: playerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId);
       } else {
-        setActiveTab('chats');
+        await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            onesignal_player_id: playerId,
+            updated_at: new Date().toISOString(),
+          });
       }
-    });
-
-    const playerId = await getOneSignalUserId();
-    if (!playerId) return;
-
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (existingProfile) {
-      await supabase
-        .from('profiles')
-        .update({
-          onesignal_player_id: playerId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', userId);
-    } else {
-      await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          onesignal_player_id: playerId,
-          updated_at: new Date().toISOString(),
-        });
+    } catch (err) {
+      console.warn('OneSignal registration:', err.message);
     }
-  } catch (err) {
-    console.warn('OneSignal registration:', err.message);
-  }
-};
+  };
 
   const determineScreen = async (user) => {
     if (!user.email_confirmed_at) {
