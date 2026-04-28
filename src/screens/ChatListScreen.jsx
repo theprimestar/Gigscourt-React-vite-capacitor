@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { checkExpiredGigs } from '../gigSystem';
 
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
   const [chats, setChats] = useState([]);
@@ -55,7 +56,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted.current) return;
       setCurrentUserId(user.id);
-
+      checkExpiredGigs(user.id);
+      
       const { data } = await supabase.rpc('get_chat_list', {
         p_user_id: user.id,
         p_limit: 30,
