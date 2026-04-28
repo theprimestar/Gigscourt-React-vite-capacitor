@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const cursorRef = useRef(null);
+  const observerRef = useRef(null);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -15,6 +19,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   useEffect(() => {
     if (isVisible && currentUserId && isMounted.current) {
+      cursorRef.current = null;
+      setHasMore(true);
       loadChatList();
     }
   }, [isVisible, currentUserId]);
@@ -29,7 +35,11 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   useEffect(() => {
     const handleFocus = () => {
-      if (isMounted.current && currentUserId && isVisible) loadChatList();
+      if (isMounted.current && currentUserId && isVisible) {
+        cursorRef.current = null;
+        setHasMore(true);
+        loadChatList();
+      }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
@@ -44,11 +54,10 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       const { data } = await supabase.rpc('get_chat_list', {
         p_user_id: user.id,
         p_limit: 30,
+        p_cursor: cursorRef.current,
       });
 
       if (isMounted.current && data) {
-        // Deduplicate by channel_id (our new schema guarantees uniqueness,
-        // but this is a safety guard that costs almost nothing)
         const seen = new Set();
         const validChats = data.filter(c => {
           if (!c.other_user_id) return false;
@@ -56,7 +65,17 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
           seen.add(c.channel_id);
           return true;
         });
-        setChats(validChats);
+        
+        if (cursorRef.current) {
+          setChats(prev => [...prev, ...validChats]);
+        } else {
+          setChats(validChats);
+        }
+        
+        if (data.length > 0) {
+          cursorRef.current = data[data.length - 1].last_message_at;
+        }
+        setHasMore(data.length === 30);
       }
     } catch (err) {
       console.error('Chat list error:', err);
@@ -64,6 +83,29 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       if (isMounted.current) setLoading(false);
     }
   };
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !currentUserId) return;
+    setLoadingMore(true);
+    await loadChatList();
+    if (isMounted.current) setLoadingMore(false);
+  }, [loadingMore, hasMore, currentUserId]);
+
+  const lastChatRef = useCallback(
+    (node) => {
+      if (loading || loadingMore) return;
+      if (observerRef.current) observerRef.current.disconnect();
+
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          loadMore();
+        }
+      });
+
+      if (node) observerRef.current.observe(node);
+    },
+    [loading, loadingMore, hasMore, loadMore]
+  );
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -98,43 +140,51 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         </div>
       ) : (
         <div className="chat-list-items">
-          {chats.map((chat) => (
-            <div
-              key={chat.channel_id}
-              className="chat-list-item"
-              onClick={() => {
-                if (onStartChat) {
-                  // Now includes chatId so ChatScreen uses the real channel UUID
-                  onStartChat({
-                    id: chat.other_user_id,
-                    full_name: chat.other_user_name,
-                    chatId: chat.channel_id,
-                  });
-                }
-                if (onDeepScreen) onDeepScreen('chat');
-              }}
-            >
-              <div className="chat-list-avatar" style={{ position: 'relative' }}>
-                {chat.other_user_pic ? (
-                  <img src={chat.other_user_pic} alt="" />
-                ) : (
-                  <div className="chat-list-avatar-placeholder">👤</div>
-                )}
-                {chat.has_unread && (
-                  <span className="unread-dot"></span>
-                )}
-              </div>
-              <div className="chat-list-info">
-                <div className="chat-list-top">
-                  <h3 style={{ fontWeight: chat.has_unread ? 600 : 400 }}>{chat.other_user_name}</h3>
-                  <span className="chat-list-time">{formatTime(chat.last_message_at)}</span>
+          {chats.map((chat, index) => {
+            const isLast = index === chats.length - 1;
+            return (
+              <div
+                key={chat.channel_id}
+                ref={isLast ? lastChatRef : null}
+                className="chat-list-item"
+                onClick={() => {
+                  if (onStartChat) {
+                    onStartChat({
+                      id: chat.other_user_id,
+                      full_name: chat.other_user_name,
+                      chatId: chat.channel_id,
+                    });
+                  }
+                  if (onDeepScreen) onDeepScreen('chat');
+                }}
+              >
+                <div className="chat-list-avatar" style={{ position: 'relative' }}>
+                  {chat.other_user_pic ? (
+                    <img src={chat.other_user_pic} alt="" />
+                  ) : (
+                    <div className="chat-list-avatar-placeholder">👤</div>
+                  )}
+                  {chat.has_unread && (
+                    <span className="unread-dot"></span>
+                  )}
                 </div>
-                <p className="chat-list-preview" style={{ fontWeight: chat.has_unread ? 500 : 400 }}>
-                  {chat.last_message || ''}
-                </p>
+                <div className="chat-list-info">
+                  <div className="chat-list-top">
+                    <h3 style={{ fontWeight: chat.has_unread ? 600 : 400 }}>{chat.other_user_name}</h3>
+                    <span className="chat-list-time">{formatTime(chat.last_message_at)}</span>
+                  </div>
+                  <p className="chat-list-preview" style={{ fontWeight: chat.has_unread ? 500 : 400 }}>
+                    {chat.last_message || ''}
+                  </p>
+                </div>
               </div>
+            );
+          })}
+          {loadingMore && (
+            <div className="home-loading-more">
+              <div className="spinner"></div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
