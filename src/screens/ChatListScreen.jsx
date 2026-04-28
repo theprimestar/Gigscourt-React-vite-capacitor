@@ -10,6 +10,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const cursorRef = useRef(null);
   const observerRef = useRef(null);
   const isMounted = useRef(true);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -17,13 +18,14 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     return () => { isMounted.current = false; };
   }, []);
 
+  // Only reload on visibility change AFTER initial load is done
   useEffect(() => {
-    if (isVisible && currentUserId && isMounted.current) {
+    if (isVisible && initialLoadDone.current && isMounted.current) {
       cursorRef.current = null;
       setHasMore(true);
       loadChatList();
     }
-  }, [isVisible, currentUserId]);
+  }, [isVisible]);
 
   useEffect(() => {
     if (chatTarget && currentUserId && onStartChat) {
@@ -77,6 +79,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         }
         setHasMore(data.length === 30);
       }
+      
+      initialLoadDone.current = true;
     } catch (err) {
       console.error('Chat list error:', err);
     } finally {
