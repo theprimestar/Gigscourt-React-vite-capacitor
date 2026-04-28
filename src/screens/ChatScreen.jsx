@@ -5,7 +5,8 @@ import { imagekitPublicKey } from '../lib/imagekit';
 import { 
   getGigForChannel, 
   registerGig, 
-  cancelGig, 
+  cancelGig,
+  submitReview,
   checkExpiredGigs, 
   shouldSendReminder, 
   updateReminderSent 
@@ -23,6 +24,10 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const [gig, setGig] = useState(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -78,7 +83,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       const currentGig = await getGigForChannel(channelKey);
       if (isMounted.current) setGig(currentGig);
 
-      // Load channel dismiss state
       const { data: channelData } = await supabase
         .from('channels')
         .select('banner_dismissed_at, banner_dismissed_by')
@@ -86,7 +90,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         .single();
 
       if (isMounted.current && channelData) {
-        // Only mark as dismissed if the current user was the one who dismissed
         if (channelData.banner_dismissed_at && channelData.banner_dismissed_by === user.id) {
           setBannerDismissed(true);
           bannerDismissedByRef.current = user.id;
@@ -228,10 +231,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }, 100);
   };
 
-  // ──────────────────────────────────────
-  //  GIG OPERATIONS
-  // ──────────────────────────────────────
-
   const handleRegisterGig = async () => {
     if (!currentUserId || !otherUserId) return;
     try {
@@ -250,6 +249,25 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }
   };
 
+  const handleSubmitReview = async () => {
+    if (!gig || !currentUserId || reviewRating === 0) return;
+    setSubmittingReview(true);
+    try {
+      await submitReview(gig.id, currentUserId, reviewRating, reviewText);
+      if (isMounted.current) {
+        setGig(null);
+        setShowReviewForm(false);
+        setReviewRating(0);
+        setReviewText('');
+        setBannerDismissed(false);
+      }
+    } catch (err) {
+      if (isMounted.current) setError(err.message);
+    } finally {
+      if (isMounted.current) setSubmittingReview(false);
+    }
+  };
+
   const handleCancelGig = async () => {
     if (!gig || !currentUserId) return;
     try {
@@ -264,26 +282,25 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   };
 
   const handleDismissBanner = async () => {
-  const userId = currentUserId || (await supabase.auth.getUser()).data.user?.id;
-  if (!userId) return;
+    const userId = currentUserId || (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) return;
 
-  setBannerDismissed(true);
-  bannerDismissedByRef.current = userId;
-    
-  await supabase
-    .from('channels')
-    .update({
-      banner_dismissed_at: new Date().toISOString(),
-      banner_dismissed_by: userId,
-    })
-    .eq('id', channelIdRef.current);
-};
+    setBannerDismissed(true);
+    bannerDismissedByRef.current = userId;
+      
+    await supabase
+      .from('channels')
+      .update({
+        banner_dismissed_at: new Date().toISOString(),
+        banner_dismissed_by: userId,
+      })
+      .eq('id', channelIdRef.current);
+  };
 
   const checkBannerReappear = async () => {
     if (!bannerDismissed || !bannerDismissedByRef.current) return;
     if (!currentUserId || bannerDismissedByRef.current !== currentUserId) return;
 
-    // Get the dismiss time
     const { data: channelData } = await supabase
       .from('channels')
       .select('banner_dismissed_at')
@@ -292,7 +309,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
 
     if (!channelData?.banner_dismissed_at) return;
 
-    // Count messages after dismiss
     const { count } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
@@ -300,7 +316,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       .gt('created_at', channelData.banner_dismissed_at);
 
     if (count >= 8) {
-      // Clear dismiss
       await supabase
         .from('channels')
         .update({
@@ -335,57 +350,31 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     }
   };
 
-  // ──────────────────────────────────────
-  //  BANNER LOGIC
-  // ──────────────────────────────────────
-
   const shouldShowBanner = () => {
     if (gig && gig.status === 'pending_review') return true;
     if (!gig && !bannerDismissed) return true;
-    if (gig && (gig.status === 'completed' || gig.status === 'cancelled')) return true;
     return false;
   };
 
-  const getBannerContent = () => {
+  const getBannerText = () => {
     const otherName = otherUser?.full_name || otherUserName || 'this person';
 
     if (!gig) {
-      return {
-        text: `Did you complete a gig with ${otherName}? Register it now to boost your reputation.`,
-        button: { text: 'Register Gig', action: handleRegisterGig, dismissible: true },
-      };
+      return `Did you complete a gig with ${otherName}? Tap Register Gig above to boost your reputation.`;
     }
 
-    switch (gig.status) {
-      case 'pending_review':
-        if (currentUserId === gig.provider_id) {
-          return {
-            text: `Waiting for ${otherName} to submit their review.`,
-            button: { text: 'Cancel Gig', action: handleCancelGig, dismissible: false },
-          };
-        }
-        return {
-          text: `Please submit your rating and review for ${otherName}.`,
-          button: null,
-        };
-      case 'completed':
-        return {
-          text: `Gig completed! Register another gig with ${otherName}?`,
-          button: { text: 'Register Gig', action: handleRegisterGig, dismissible: true },
-        };
-      case 'cancelled':
-        return {
-          text: `Gig cancelled. Register a new gig with ${otherName}?`,
-          button: { text: 'Register Gig', action: handleRegisterGig, dismissible: true },
-        };
-      default:
-        return null;
+    if (gig.status === 'pending_review') {
+      if (currentUserId === gig.provider_id) {
+        return `Waiting for ${otherName} to submit their review.`;
+      }
+      return `Please submit your rating and review for ${otherName}. Tap Pending Gig above.`;
     }
+
+    if (!bannerDismissed) {
+      return `Did you complete a gig with ${otherName}? Tap Register Gig above to boost your reputation.`;
+    }
+    return null;
   };
-
-  // ──────────────────────────────────────
-  //  MESSAGE SENDING
-  // ──────────────────────────────────────
 
   const sendTextMessage = async (text, tempId) => {
     const channelKey = channelIdRef.current;
@@ -423,7 +412,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         }).catch(() => {});
       }
 
-      // Check if banner should reappear after this message
       await checkBannerReappear();
     } catch (err) {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -598,10 +586,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ──────────────────────────────────────
-  //  RENDER
-  // ──────────────────────────────────────
-
   if (loading) {
     return (
       <div className="chat-screen">
@@ -609,8 +593,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       </div>
     );
   }
-
-  const bannerContent = getBannerContent();
 
   return (
     <div className="chat-screen">
@@ -639,7 +621,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           currentUserId === gig.provider_id ? (
             <button onClick={handleCancelGig} className="chat-header-gig-btn">Cancel Gig</button>
           ) : (
-            <span className="chat-header-gig-label">Pending Gig</span>
+            <button onClick={() => setShowReviewForm(true)} className="chat-header-gig-btn">Pending Gig</button>
           )
         ) : (
           <button onClick={handleRegisterGig} className="chat-header-gig-btn">Register Gig</button>
@@ -653,18 +635,54 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         </div>
       )}
 
-      {shouldShowBanner() && bannerContent && (
-        <div className={`gig-banner ${bannerContent.button?.dismissible === false ? 'gig-banner-persistent' : ''}`}>
-          <p className="gig-banner-text">{bannerContent.text}</p>
-          <div className="gig-banner-actions">
-            {bannerContent.button && (
-              <button onClick={bannerContent.button.action} className="gig-banner-btn">
-                {bannerContent.button.text}
+      {shouldShowBanner() && getBannerText() && (
+        <div className={`gig-banner ${gig && gig.status === 'pending_review' ? 'gig-banner-persistent' : ''}`}>
+          <div className="gig-banner-scroll">
+            <p className="gig-banner-text">{getBannerText()}</p>
+          </div>
+          {(!gig || gig.status !== 'pending_review') && (
+            <button onClick={handleDismissBanner} className="gig-banner-dismiss">✕</button>
+          )}
+        </div>
+      )}
+
+      {/* Review Form Bottom Sheet */}
+      {showReviewForm && (
+        <div className="bottom-sheet-overlay" onClick={() => setShowReviewForm(false)}>
+          <div className="bottom-sheet review-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="bottom-sheet-handle"></div>
+            <div className="bottom-sheet-content">
+              <h2>Rate your experience</h2>
+              <p style={{ color: '#8e8e93', fontSize: 13, marginBottom: 16 }}>
+                How was your gig with {otherUser?.full_name || otherUserName || 'the provider'}?
+              </p>
+              <div className="star-selector">
+                {[1, 2, 3, 4, 5].map(star => (
+                  <button
+                    key={star}
+                    className={`star-btn ${star <= reviewRating ? 'star-active' : ''}`}
+                    onClick={() => setReviewRating(star)}
+                  >
+                    {star <= reviewRating ? '⭐' : '☆'}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={reviewText}
+                onChange={e => setReviewText(e.target.value)}
+                placeholder="Write your review (optional)..."
+                className="review-textarea"
+                rows={3}
+              />
+              <button
+                onClick={handleSubmitReview}
+                disabled={reviewRating === 0 || submittingReview}
+                className="onboarding-btn"
+                style={{ marginTop: 12 }}
+              >
+                {submittingReview ? 'Submitting...' : 'Submit Review'}
               </button>
-            )}
-            {bannerContent.button?.dismissible !== false && (
-              <button onClick={handleDismissBanner} className="gig-banner-dismiss">✕</button>
-            )}
+            </div>
           </div>
         </div>
       )}
