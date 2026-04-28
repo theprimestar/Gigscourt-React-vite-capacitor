@@ -127,10 +127,15 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (screen === 'home') {
-      checkUnreadBadge();
-    }
-  }, [screen, activeTab, checkUnreadBadge]);
+  if (screen === 'home') {
+    checkUnreadBadge();
+    import('../gigSystem').then(({ checkExpiredGigs }) => {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) checkExpiredGigs(data.user.id);
+      });
+    });
+  }
+}, [screen, activeTab, checkUnreadBadge]);
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
