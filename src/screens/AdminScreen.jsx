@@ -47,39 +47,23 @@ function AdminScreen({ isVisible }) {
   };
 
   const loadStats = async () => {
-    try {
-      const { count: totalUsers } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-      
-      const today = new Date().toISOString().split('T')[0];
-      const { count: activeToday } = await supabase
-        .from('messages')
-        .select('sender_id', { count: 'exact', head: true })
-        .gte('created_at', today)
-        .then(({ count }) => ({ count: new Set(count).size }));
-
-      const { count: totalGigs } = await supabase.from('gigs').select('*', { count: 'exact', head: true });
-      const { count: completedGigs } = await supabase.from('gigs').select('*', { count: 'exact', head: true }).eq('status', 'completed');
-      const { count: pendingGigs } = await supabase.from('gigs').select('*', { count: 'exact', head: true }).eq('status', 'pending_review');
-      const { count: cancelledGigs } = await supabase.from('gigs').select('*', { count: 'exact', head: true }).eq('status', 'cancelled');
-
-      const { data: revenue } = await supabase.from('credit_purchases').select('amount_paid').eq('status', 'completed');
-      const totalRevenue = revenue ? revenue.reduce((sum, r) => sum + r.amount_paid, 0) : 0;
-
-      if (isMounted.current) {
-        setStats({
-          totalUsers: totalUsers || 0,
-          activeToday: activeToday || 0,
-          totalGigs: totalGigs || 0,
-          completedGigs: completedGigs || 0,
-          pendingGigs: pendingGigs || 0,
-          cancelledGigs: cancelledGigs || 0,
-          totalRevenue,
-        });
-      }
-    } catch (err) {
-      console.error('Stats error:', err);
+  try {
+    const { data } = await supabase.rpc('get_admin_stats');
+    if (isMounted.current && data) {
+      setStats({
+        totalUsers: data.total_users || 0,
+        activeToday: data.active_today || 0,
+        totalGigs: data.total_gigs || 0,
+        completedGigs: data.completed_gigs || 0,
+        pendingGigs: data.pending_gigs || 0,
+        cancelledGigs: data.cancelled_gigs || 0,
+        totalRevenue: data.total_revenue || 0,
+      });
     }
-  };
+  } catch (err) {
+    console.error('Stats error:', err);
+  }
+};
 
   const loadSignups = async () => {
     const { data } = await supabase.rpc('get_user_signups_by_period', { p_period: signupPeriod });
