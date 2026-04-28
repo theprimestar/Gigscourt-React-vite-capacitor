@@ -42,7 +42,6 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       }
     );
 
-    // Watch position for significant changes (100 meters)
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         if (!isMounted.current) return;
@@ -51,13 +50,11 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         const prevLat = lastFetchRef.current.lat;
         const prevLng = lastFetchRef.current.lng;
 
-        // Calculate distance moved in meters (approximate)
         if (prevLat && prevLng) {
           const latDiff = (newLat - prevLat) * 111320;
           const lngDiff = (newLng - prevLng) * 111320 * Math.cos((newLat * Math.PI) / 180);
           const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
 
-          // Only refetch if moved more than 100 meters
           if (distance > 100) {
             setViewerLat(newLat);
             setViewerLng(newLng);
@@ -77,11 +74,43 @@ function HomeScreen({ onStartChat, onViewProfile }) {
     };
   }, []);
 
-  // Fetch profiles when location changes
   useEffect(() => {
     if (viewerLat === null || viewerLng === null) return;
     fetchProfiles();
   }, [viewerLat, viewerLng]);
+
+  const enrichCards = async (profiles) => {
+    if (!profiles || profiles.length === 0) return profiles;
+    
+    const ids = profiles.map(p => p.id);
+    
+    const { data: statsData } = await supabase
+      .from('profiles')
+      .select('id, rating, review_count, gig_count')
+      .in('id', ids);
+
+    const activeMap = {};
+    for (const id of ids) {
+      const { data } = await supabase.rpc('is_user_active', { p_user_id: id });
+      activeMap[id] = data || false;
+    }
+
+    const statsMap = {};
+    if (statsData) {
+      statsData.forEach(s => {
+        statsMap[s.id] = {
+          rating: s.review_count > 0 ? (s.rating / s.review_count).toFixed(1) : 'New',
+          gigCount: s.gig_count || 0,
+        };
+      });
+    }
+
+    return profiles.map(p => ({
+      ...p,
+      ...(statsMap[p.id] || { rating: 'New', gigCount: 0 }),
+      isActive: activeMap[p.id] || false,
+    }));
+  };
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -98,12 +127,15 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         console.error('Failed to fetch profiles:', error);
         if (isMounted.current) setCards([]);
       } else if (isMounted.current) {
-        setCards(data || []);
-        if (data && data.length > 0) {
-          const last = data[data.length - 1];
-          cursorRef.current = { distance: last.distance_meters, id: last.id };
+        const enriched = await enrichCards(data || []);
+        if (isMounted.current) {
+          setCards(enriched);
+          if (data && data.length > 0) {
+            const last = data[data.length - 1];
+            cursorRef.current = { distance: last.distance_meters, id: last.id };
+          }
+          setHasMore(data && data.length === 20);
         }
-        setHasMore(data && data.length === 20);
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -130,11 +162,14 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       } else if (isMounted.current) {
         const newCards = data || [];
         if (newCards.length > 0) {
-          setCards((prev) => [...prev, ...newCards]);
-          const last = newCards[newCards.length - 1];
-          cursorRef.current = { distance: last.distance_meters, id: last.id };
+          const enriched = await enrichCards(newCards);
+          if (isMounted.current) {
+            setCards((prev) => [...prev, ...enriched]);
+            const last = newCards[newCards.length - 1];
+            cursorRef.current = { distance: last.distance_meters, id: last.id };
+          }
         }
-        setHasMore(newCards.length === 20);
+        if (isMounted.current) setHasMore(newCards.length === 20);
       }
     } catch (err) {
       console.error('Fetch more error:', err);
@@ -209,16 +244,21 @@ function HomeScreen({ onStartChat, onViewProfile }) {
                   )}
                 </div>
                 <div className="card-info">
-                  <h3>{user.full_name}</h3>
+                  <h3>{user.full_name} {user.isActive && <span className="active-dot-card"></span>}</h3>
                   <p className="card-services">
                     {user.services && user.services.length > 0
                       ? user.services.slice(0, 3).map((s) => s.replace(/-/g, ' ')).join(', ')
                       : 'No services listed'}
                   </p>
                   <p className="card-distance">{formatDistance(user.distance_meters)}</p>
+                  <p className="card-gigs">{user.gigCount || 0} gigs</p>
                 </div>
                 <div className="card-rating">
-                  <span className="rating-badge">New</span>
+                  {user.rating !== 'New' ? (
+                    <span className="rating-badge rating-badge-active">⭐ {user.rating}</span>
+                  ) : (
+                    <span className="rating-badge">New</span>
+                  )}
                 </div>
               </div>
             );
@@ -243,8 +283,11 @@ function HomeScreen({ onStartChat, onViewProfile }) {
                   <div className="sheet-avatar-placeholder">👤</div>
                 )}
               </div>
-              <h2>{selectedUser.full_name}</h2>
+              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card"></span>}</h2>
               <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
+              <p className="sheet-rating">
+                {selectedUser.rating !== 'New' ? `⭐ ${selectedUser.rating} • ${selectedUser.gigCount || 0} gigs` : 'New • 0 gigs'}
+              </p>
               <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
               <p className="sheet-services">
                 {selectedUser.services && selectedUser.services.length > 0
