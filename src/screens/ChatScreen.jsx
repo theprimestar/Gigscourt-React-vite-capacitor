@@ -23,7 +23,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const [gig, setGig] = useState(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [messageCountSinceDismiss, setMessageCountSinceDismiss] = useState(0);
 
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -35,6 +34,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const isMounted = useRef(true);
   const photoQueue = useRef([]);
   const processingPhotos = useRef(false);
+  const bannerDismissedByRef = useRef(null);
 
   useEffect(() => {
     isMounted.current = true;
@@ -50,8 +50,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     setError(null);
     setLoading(true);
     seenIds.current = new Set();
-    setBannerDismissed(false);
-    setMessageCountSinceDismiss(0);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -75,12 +73,28 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         p_channel_id: channelKey,
       });
 
-      // Check for expired gigs
       await checkExpiredGigs(user.id);
 
-      // Load current gig state
       const currentGig = await getGigForChannel(channelKey);
       if (isMounted.current) setGig(currentGig);
+
+      // Load channel dismiss state
+      const { data: channelData } = await supabase
+        .from('channels')
+        .select('banner_dismissed_at, banner_dismissed_by')
+        .eq('id', channelKey)
+        .single();
+
+      if (isMounted.current && channelData) {
+        // Only mark as dismissed if the current user was the one who dismissed
+        if (channelData.banner_dismissed_at && channelData.banner_dismissed_by === user.id) {
+          setBannerDismissed(true);
+          bannerDismissedByRef.current = user.id;
+        } else {
+          setBannerDismissed(false);
+          bannerDismissedByRef.current = null;
+        }
+      }
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -195,7 +209,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         });
       }
 
-      // Check gig reminders during poll
       if (gig && isMounted.current) {
         checkGigReminder(gig);
       }
@@ -244,28 +257,72 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       if (isMounted.current) {
         setGig(null);
         setBannerDismissed(false);
-        setMessageCountSinceDismiss(0);
       }
     } catch (err) {
       if (isMounted.current) setError(err.message);
     }
   };
 
-  const handleDismissBanner = () => {
+  const handleDismissBanner = async () => {
     setBannerDismissed(true);
-    setMessageCountSinceDismiss(0);
+    bannerDismissedByRef.current = currentUserId;
+    
+    // Save dismiss to database
+    await supabase
+      .from('channels')
+      .update({
+        banner_dismissed_at: new Date().toISOString(),
+        banner_dismissed_by: currentUserId,
+      })
+      .eq('id', channelIdRef.current);
+  };
+
+  const checkBannerReappear = async () => {
+    if (!bannerDismissed || !bannerDismissedByRef.current) return;
+    if (!currentUserId || bannerDismissedByRef.current !== currentUserId) return;
+
+    // Get the dismiss time
+    const { data: channelData } = await supabase
+      .from('channels')
+      .select('banner_dismissed_at')
+      .eq('id', channelIdRef.current)
+      .single();
+
+    if (!channelData?.banner_dismissed_at) return;
+
+    // Count messages after dismiss
+    const { count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('channel_id', channelIdRef.current)
+      .gt('created_at', channelData.banner_dismissed_at);
+
+    if (count >= 8) {
+      // Clear dismiss
+      await supabase
+        .from('channels')
+        .update({
+          banner_dismissed_at: null,
+          banner_dismissed_by: null,
+        })
+        .eq('id', channelIdRef.current);
+
+      if (isMounted.current) {
+        setBannerDismissed(false);
+        bannerDismissedByRef.current = null;
+      }
+    }
   };
 
   const checkGigReminder = async (currentGig) => {
     if (!currentGig || currentGig.status !== 'pending_review') return;
     if (currentUserId === currentGig.client_id && shouldSendReminder(currentGig)) {
-      // Send reminder push to this client
       if (otherUser?.onesignal_player_id) {
         fetch(PUSH_NOTIFICATION_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            include_player_ids: [otherUser.onesignal_player_id], // Actually send to self since user is client
+            include_player_ids: [otherUser.onesignal_player_id],
             headings: { en: 'Reminder' },
             contents: { en: `Please rate your experience with ${otherUserName || 'the provider'}` },
             data: { channel_id: channelIdRef.current },
@@ -281,14 +338,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   // ──────────────────────────────────────
 
   const shouldShowBanner = () => {
-    // Always show during pending review
     if (gig && gig.status === 'pending_review') return true;
-    // Show if no gig and not dismissed
     if (!gig && !bannerDismissed) return true;
-    // Show if completed or cancelled
     if (gig && (gig.status === 'completed' || gig.status === 'cancelled')) return true;
-    // Show if 8 messages sent since dismiss
-    if (!gig && bannerDismissed && messageCountSinceDismiss >= 8) return true;
     return false;
   };
 
@@ -368,6 +420,9 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
           }),
         }).catch(() => {});
       }
+
+      // Check if banner should reappear after this message
+      await checkBannerReappear();
     } catch (err) {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
@@ -446,6 +501,8 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         }),
       }).catch(() => {});
     }
+
+    await checkBannerReappear();
   };
 
   const handleSend = async (e) => {
@@ -469,16 +526,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     };
     setMessages(prev => [...prev, tempMsg]);
     scrollToBottom();
-
-    // Track for banner reappear
-    if (bannerDismissed && !gig) {
-      const newCount = messageCountSinceDismiss + 1;
-      setMessageCountSinceDismiss(newCount);
-      if (newCount >= 8) {
-        setBannerDismissed(false);
-        setMessageCountSinceDismiss(0);
-      }
-    }
 
     sendTextMessage(text, tempId);
   };
@@ -586,7 +633,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
             <h3>{otherUser?.full_name || 'User'}</h3>
           </div>
         </div>
-        {/* Header gig button */}
         {gig && gig.status === 'pending_review' ? (
           currentUserId === gig.provider_id ? (
             <button onClick={handleCancelGig} className="chat-header-gig-btn">Cancel Gig</button>
@@ -605,7 +651,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         </div>
       )}
 
-      {/* Gig Banner */}
       {shouldShowBanner() && bannerContent && (
         <div className={`gig-banner ${bannerContent.button?.dismissible === false ? 'gig-banner-persistent' : ''}`}>
           <p className="gig-banner-text">{bannerContent.text}</p>
