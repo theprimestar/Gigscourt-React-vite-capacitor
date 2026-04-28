@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCredits } from '../gigSystem';
-import './AdminScreen.css';
+import '../AdminScreen.css';
 
 function AdminScreen({ isVisible }) {
   const [stats, setStats] = useState({
