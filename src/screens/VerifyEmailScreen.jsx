@@ -90,8 +90,10 @@ function VerifyEmailScreen({ email, onVerified }) {
       if (error) throw error;
 
       if (data?.user) {
-        onVerified();
-      }
+  // Refresh session so email_confirmed_at is updated
+  await supabase.auth.refreshSession();
+  onVerified();
+}
     } catch (err) {
       setError(getErrorMessage(err));
       setCode(['', '', '', '', '', '', '', '']);
