@@ -91,19 +91,19 @@ function VerifyEmailScreen({ email, onVerified }) {
       if (error) throw error;
 
       if (data?.user) {
-  navigatingRef.current = true;
-  await supabase.auth.refreshSession();
-  onVerified();
-}
+        navigatingRef.current = true;
+        await supabase.auth.refreshSession();
+        onVerified();
+      }
     } catch (err) {
       setError(getErrorMessage(err));
       setCode(['', '', '', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
-  if (!navigatingRef.current) {
-    setLoading(false);
-  }
-}
+      if (!navigatingRef.current) {
+        setLoading(false);
+      }
+    }
   };
 
   const handleResend = async () => {
