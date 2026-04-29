@@ -1,13 +1,16 @@
 /* Onboarding */
 .onboarding-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  min-height: 100vh;
+  max-width: 100%;
   background: #ffffff;
-  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
   display: flex;
   flex-direction: column;
+  z-index: 100;
 }
 
 @media (prefers-color-scheme: dark) {
