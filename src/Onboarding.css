@@ -596,3 +596,24 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+.upload-progress-bar-small {
+  width: 80px;
+  height: 3px;
+  background: #e5e5ea;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.upload-progress-fill-small {
+  width: 60%;
+  height: 100%;
+  background: #1a3a8a;
+  border-radius: 2px;
+  animation: progressSlide 1.2s ease-in-out infinite;
+}
+
+@keyframes progressSlide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
