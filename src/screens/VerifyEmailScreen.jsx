@@ -2,18 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import '../Auth.css';
 
-function VerifyEmailScreen({ onVerified }) {
+function VerifyEmailScreen({ email, onVerified }) {
   const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
-  const [userEmail, setUserEmail] = useState('');
+  const [userEmail, setUserEmail] = useState(email || '');
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    loadEmail();
     inputRefs.current[0]?.focus();
   }, []);
 
@@ -22,18 +21,6 @@ function VerifyEmailScreen({ onVerified }) {
     const timer = setTimeout(() => setResendCountdown((c) => c - 1), 1000);
     return () => clearTimeout(timer);
   }, [resendCountdown]);
-
-  const loadEmail = async () => {
-  try {
-    const result = await supabase.auth.getUser();
-    console.log('Full user object:', JSON.stringify(result));
-    if (result?.data?.user?.email) {
-      setUserEmail(result.data.user.email);
-    }
-  } catch (err) {
-    console.log('Error getting user:', err.message);
-  }
-};
 
   const getErrorMessage = (err) => {
     const msg = err.message || '';
@@ -92,9 +79,7 @@ function VerifyEmailScreen({ onVerified }) {
     if (loading) return;
     setLoading(true);
     setError('');
-    
-    console.log('Verifying with email:', userEmail, 'token:', fullCode);
-    
+
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         email: userEmail,
