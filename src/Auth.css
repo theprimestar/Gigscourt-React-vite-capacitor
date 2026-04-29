@@ -1,13 +1,24 @@
 /* Auth Screen */
 .auth-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  max-width: 400px;
-  margin: 0 auto;
+  max-width: 100%;
   padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: #ffffff;
+  z-index: 100;
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth-screen {
+    background: #000000;
+  }
 }
 
 .auth-header {
@@ -224,14 +235,25 @@
 
 /* Verify Email Screen */
 .verify-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  max-width: 400px;
-  margin: 0 auto;
+  max-width: 100%;
   padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background: #ffffff;
+  z-index: 100;
+}
+
+@media (prefers-color-scheme: dark) {
+  .verify-screen {
+    background: #000000;
+  }
 }
 
 .verify-card {
