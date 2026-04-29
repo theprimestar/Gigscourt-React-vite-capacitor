@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import './Auth.css';
+import '../Auth.css';
 
 function AuthScreen({ onVerifyEmail }) {
   const [email, setEmail] = useState('');
