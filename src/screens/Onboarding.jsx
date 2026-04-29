@@ -306,11 +306,8 @@ function StepPhotoBio({ onNext, onBack }) {
           </div>
         </div>
         {uploading ? (
-          <div className="add-photo-btn" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div className="upload-progress-bar-small"><div className="upload-progress-fill-small"></div></div>
-            Uploading...
-          </div>
-        ) : profilePic ? (
+  <div className="upload-progress-bar-small" style={{ margin: '0 auto' }}><div className="upload-progress-fill-small"></div></div>
+) : profilePic ? (
           <button className="add-photo-btn" style={{ color: '#ff3b30' }} onClick={() => setProfilePic(null)}>Remove Photo</button>
         ) : (
           <button className="add-photo-btn" onClick={() => fileInputRef.current?.click()}>Add Photo +</button>
