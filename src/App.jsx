@@ -13,6 +13,7 @@ import EditProfileScreen from './screens/EditProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import AdminScreen from './screens/AdminScreen';
 import './App.css';
+import './SplashScreen.css';
 
 function App() {
   const [screen, setScreen] = useState('loading');
@@ -162,15 +163,18 @@ function App() {
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
   if (screen === 'loading') {
-    return (
-      <div className="app">
-        <div className="home-loading">
-          <div className="spinner"></div>
-          <p>Loading...</p>
+  return (
+    <div className="splash-screen">
+      <div className="splash-content">
+        <div className="splash-logo">
+          <div className="splash-circle splash-circle-left"></div>
+          <div className="splash-circle splash-circle-right"></div>
         </div>
+        <span className="splash-text">GigsCourt</span>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   if (screen === 'auth') {
     return (
