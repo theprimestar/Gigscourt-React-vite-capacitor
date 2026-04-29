@@ -87,7 +87,9 @@ function VerifyEmailScreen({ onVerified }) {
     if (loading) return;
     setLoading(true);
     setError('');
-
+    
+    console.log('Verifying with email:', userEmail, 'token:', fullCode);
+    
     try {
       const { data, error } = await supabase.auth.verifyOtp({
         email: userEmail,
