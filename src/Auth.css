@@ -295,17 +295,18 @@
 .otp-inputs {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 20px;
+  flex-wrap: nowrap;
 }
 
 .otp-input {
-  width: 46px;
-  height: 54px;
+  width: 36px;
+  height: 44px;
   border: 2px solid #e5e5ea;
-  border-radius: 12px;
+  border-radius: 10px;
   text-align: center;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: #1d1d1f;
   background: #f5f5f7;
