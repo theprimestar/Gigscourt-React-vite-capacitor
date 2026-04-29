@@ -8,6 +8,7 @@ function AuthScreen({ onVerifyEmail }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const navigatingRef = React.useRef(false);
 
   const getErrorMessage = (err) => {
     const msg = err.message || '';
@@ -60,9 +61,10 @@ function AuthScreen({ onVerifyEmail }) {
         if (error) throw error;
 
         if (data.user) {
-          if (!data.user.email_confirmed_at) {
-            onVerifyEmail(email.trim());
-          }
+  if (!data.user.email_confirmed_at) {
+    navigatingRef.current = true;
+    onVerifyEmail(email.trim());
+  }
           // Verified users auto-navigate via onAuthStateChange in App.jsx
         }
       } else {
@@ -80,14 +82,17 @@ function AuthScreen({ onVerifyEmail }) {
   }
 
   if (data.user) {
-    onVerifyEmail(email.trim());
-  }
+  navigatingRef.current = true;
+  onVerifyEmail(email.trim());
+}
 }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
-    }
+  if (!navigatingRef.current) {
+    setLoading(false);
+  }
+}
   };
 
   return (
