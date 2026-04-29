@@ -23,8 +23,9 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState('');
   const splashTimerRef = useRef(null);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
 
-  // Initialize app
   useEffect(() => {
     initApp();
     return () => {
@@ -41,7 +42,6 @@ function App() {
       navigateFromSession(session.user);
     }
 
-    // Show splash for at least 1.5 seconds
     splashTimerRef.current = setTimeout(() => {
       if (!session?.user) {
         setScreen('auth');
@@ -75,24 +75,22 @@ function App() {
     }, 1500);
   };
 
-  // Auth state listener
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         registerOneSignal(session.user.id);
         setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
-        // Only auto-navigate if user is on auth or splash screen
-        if (screen === 'auth' || screen === 'splash') {
+        if (screenRef.current === 'auth' || screenRef.current === 'splash') {
           navigateFromSession(session.user);
         }
-      } else {
+      } else if (screenRef.current === 'app') {
         setScreen('auth');
         setNavStack([]);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [screen]);
+  }, []);
 
   const registerOneSignal = async (userId) => {
     try {
@@ -187,7 +185,6 @@ function App() {
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'app' && navStack.length === 0;
 
-  // RENDER: Splash
   if (screen === 'splash') {
     return (
       <div className="splash-screen">
@@ -202,7 +199,6 @@ function App() {
     );
   }
 
-  // RENDER: Auth
   if (screen === 'auth') {
     return (
       <div className="app">
@@ -214,7 +210,6 @@ function App() {
     );
   }
 
-  // RENDER: Verify
   if (screen === 'verify') {
     return (
       <div className="app">
@@ -222,7 +217,7 @@ function App() {
           email={verifyEmail}
           onVerified={async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user?.email_confirmed_at) {
+            if (user) {
               navigateFromSession(user);
             }
           }} 
@@ -231,7 +226,6 @@ function App() {
     );
   }
 
-  // RENDER: Onboarding
   if (screen === 'onboarding') {
     return (
       <div className="app">
@@ -240,7 +234,6 @@ function App() {
     );
   }
 
-  // RENDER: Main App
   return (
     <div className="app-shell">
       <div className="app-content">
