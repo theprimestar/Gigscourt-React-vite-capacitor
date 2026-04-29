@@ -11,6 +11,7 @@ function VerifyEmailScreen({ email, onVerified }) {
   const [resendMessage, setResendMessage] = useState('');
   const [userEmail, setUserEmail] = useState(email || '');
   const inputRefs = useRef([]);
+  const navigatingRef = useRef(false);
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
@@ -90,7 +91,7 @@ function VerifyEmailScreen({ email, onVerified }) {
       if (error) throw error;
 
       if (data?.user) {
-  // Refresh session so email_confirmed_at is updated
+  navigatingRef.current = true;
   await supabase.auth.refreshSession();
   onVerified();
 }
@@ -99,8 +100,10 @@ function VerifyEmailScreen({ email, onVerified }) {
       setCode(['', '', '', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
-      setLoading(false);
-    }
+  if (!navigatingRef.current) {
+    setLoading(false);
+  }
+}
   };
 
   const handleResend = async () => {
