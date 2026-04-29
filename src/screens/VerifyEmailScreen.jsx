@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import '../Auth.css';
 
 function VerifyEmailScreen({ onVerified }) {
-  const [checking, setChecking] = useState(true);
+  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
-  const intervalRef = useRef(null);
-  const attemptsRef = useRef(0);
-  const maxAttempts = 120; // 10 minutes
+  const [userEmail, setUserEmail] = useState('');
+  const inputRefs = useRef([]);
 
   useEffect(() => {
-    checkVerification();
-    intervalRef.current = setInterval(checkVerification, 5000);
-    return () => clearInterval(intervalRef.current);
+    loadEmail();
+    inputRefs.current[0]?.focus();
   }, []);
 
   useEffect(() => {
@@ -22,29 +23,92 @@ function VerifyEmailScreen({ onVerified }) {
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  const checkVerification = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+  const loadEmail = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      setUserEmail(user.email);
+    }
+  };
 
-      if (user?.email_confirmed_at) {
-        setChecking(false);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        onVerified();
-        return;
+  const getErrorMessage = (err) => {
+    const msg = err.message || '';
+    if (msg.includes('expired') || msg.includes('Token has expired')) {
+      return 'This code has expired. Request a new one.';
+    }
+    if (msg.includes('Invalid') || msg.includes('invalid')) {
+      return 'Incorrect code. Please check your email and try again.';
+    }
+    if (msg.includes('network') || msg.includes('fetch')) {
+      return 'No internet connection. Check your signal and try again.';
+    }
+    if (msg.includes('rate limit')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    return 'Verification failed. Please try again.';
+  };
+
+  const handleCodeChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+    setError('');
+
+    // Auto-advance to next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (value && index === 5) {
+      const fullCode = newCode.join('');
+      if (fullCode.length === 6) {
+        verifyCode(fullCode);
       }
+    }
+  };
 
-      attemptsRef.current++;
-      if (attemptsRef.current >= maxAttempts) {
-        setChecking(false);
-        if (intervalRef.current) clearInterval(intervalRef.current);
+  const handleKeyDown = (index, e) => {
+    // Move back on backspace when field is empty
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const newCode = pasted.split('');
+      setCode(newCode);
+      verifyCode(newCode.join(''));
+    }
+  };
+
+  const verifyCode = async (fullCode) => {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: userEmail,
+        token: fullCode,
+        type: 'signup',
+      });
+
+      if (error) throw error;
+
+      if (data?.user) {
+        onVerified();
       }
     } catch (err) {
-      console.error('Error checking verification:', err);
-      attemptsRef.current++;
-      if (attemptsRef.current >= maxAttempts) {
-        setChecking(false);
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      }
+      setError(getErrorMessage(err));
+      setCode(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -53,21 +117,18 @@ function VerifyEmailScreen({ onVerified }) {
 
     setResendLoading(true);
     setResendMessage('');
+    setError('');
 
     try {
       const { error } = await supabase.auth.resend({
         type: 'signup',
-        email: '', // Supabase uses the email from the current session
+        email: userEmail,
       });
 
       if (error) throw error;
 
-      setResendMessage('Email resent! Check your inbox.');
+      setResendMessage('A new code has been sent to your email.');
       setResendCountdown(60);
-      attemptsRef.current = 0; // Reset attempts so polling continues
-      setChecking(true);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(checkVerification, 5000);
     } catch (err) {
       setResendMessage(err.message || 'Failed to resend. Try again.');
     } finally {
@@ -78,40 +139,57 @@ function VerifyEmailScreen({ onVerified }) {
   return (
     <div className="verify-screen">
       <div className="verify-card">
-        <div className="verify-icon">📧</div>
-        <h2>Check Your Email</h2>
-        <p>We sent a verification link to your email address.</p>
-        <p className="verify-sub">Open the link, then come back here — you'll be logged in automatically.</p>
+        <div className="verify-icon">✉</div>
+        <h2>Verify Your Email</h2>
+        <p>We sent a 6-digit code to</p>
+        <p className="verify-email">{userEmail || 'your email'}</p>
+        <p className="verify-sub">Enter the code below to continue.</p>
 
-        {checking ? (
+        <div className="otp-inputs" onPaste={handlePaste}>
+          {code.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => (inputRefs.current[index] = el)}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleCodeChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              className={`otp-input ${error ? 'otp-input-error' : ''}`}
+              autoComplete="one-time-code"
+            />
+          ))}
+        </div>
+
+        {loading && (
           <div className="verify-loading">
-            <div className="spinner"></div>
-            <p>Waiting for verification...</p>
+            <div className="verify-progress"></div>
           </div>
-        ) : (
-          <div className="verify-timeout">
-            <p>Verification is taking longer than expected.</p>
+        )}
+
+        {error && (
+          <div className="auth-error-card" style={{ marginBottom: 0 }}>
+            <span className="auth-error-icon">!</span>
+            <p className="auth-error-text">{error}</p>
           </div>
         )}
 
         <div className="resend-section">
+          <p className="resend-text">Didn't receive the code?</p>
           <button
             onClick={handleResend}
             disabled={resendCountdown > 0 || resendLoading}
             className="resend-button"
           >
-            {resendLoading ? 'Sending...' : resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Email'}
+            {resendLoading ? 'Sending...' : resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Code'}
           </button>
           {resendMessage && (
-            <p className={`resend-message ${resendMessage.includes('resent') ? 'success' : ''}`}>
+            <p className={`resend-message ${resendMessage.includes('sent') ? 'success' : ''}`}>
               {resendMessage}
             </p>
           )}
         </div>
-
-        <button onClick={() => window.location.reload()} className="retry-button" style={{ marginTop: 12 }}>
-          Check Again
-        </button>
       </div>
     </div>
   );
