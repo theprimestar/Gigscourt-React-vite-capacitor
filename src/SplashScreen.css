@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  animation: splashFadeOut 0.4s ease 2.5s forwards;
+  animation: splashFadeOut 0.5s ease 2.5s forwards;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,26 +20,28 @@
 
 .splash-content {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: min(14px, 3vw);
-  animation: splashFadeIn 0.6s ease forwards, splashPulse 1.5s ease-in-out 0.6s infinite;
+  gap: min(24px, 5vw);
+  animation: splashFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards, 
+             splashPulse 2s ease-in-out 0.8s infinite;
 }
 
 .splash-logo {
   position: relative;
-  width: min(52px, 11vw);
-  height: min(46px, 10vw);
+  width: min(80px, 18vw);
+  height: min(80px, 18vw);
   flex-shrink: 0;
 }
 
 .splash-circle-left {
   position: absolute;
-  left: 0;
+  left: min(8px, 2vw);
   top: 50%;
   transform: translateY(-50%);
-  width: min(30px, 6.5vw);
-  height: min(46px, 10vw);
+  width: min(36px, 8vw);
+  height: min(64px, 15vw);
   border-radius: 50%;
   background: #1a3a8a;
   z-index: 2;
@@ -47,32 +49,44 @@
 
 .splash-circle-right {
   position: absolute;
-  left: min(8px, 1.5vw);
+  right: min(8px, 2vw);
   top: 50%;
   transform: translateY(-50%);
-  width: min(46px, 10vw);
-  height: min(30px, 6.5vw);
+  width: min(64px, 15vw);
+  height: min(36px, 8vw);
   border-radius: 50%;
   background: #1a3a8a;
   z-index: 1;
 }
 
 .splash-text {
-  font-size: min(46px, 10vw);
+  font-size: min(32px, 7vw);
   font-weight: 700;
-  color: #1a3a8a;
-  letter-spacing: -0.5px;
+  color: #1d1d1f;
+  letter-spacing: -0.3px;
   line-height: 1;
 }
 
+@media (prefers-color-scheme: dark) {
+  .splash-text {
+    color: #ffffff;
+  }
+}
+
 @keyframes splashFadeIn {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
+  from { 
+    opacity: 0; 
+    transform: scale(0.9) translateY(8px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
 }
 
 @keyframes splashPulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
+  50% { transform: scale(1.03); }
 }
 
 @keyframes splashFadeOut {
