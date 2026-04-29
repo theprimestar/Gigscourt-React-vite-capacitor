@@ -66,17 +66,23 @@ function AuthScreen({ onVerifyEmail }) {
           // Verified users auto-navigate via onAuthStateChange in App.jsx
         }
       } else {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+  });
 
-        if (error) throw error;
+  if (error) throw error;
 
-        if (data.user) {
-          onVerifyEmail();
-        }
-      }
+  if (data.user && data.user.identities && data.user.identities.length === 0) {
+    setError('An account with this email already exists. Please log in instead.');
+    setLoading(false);
+    return;
+  }
+
+  if (data.user) {
+    onVerifyEmail();
+  }
+}
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
