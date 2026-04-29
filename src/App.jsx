@@ -26,6 +26,8 @@ function App() {
   const [nextScreen, setNextScreen] = useState(null);
   const [verifyEmail, setVerifyEmail] = useState('');
   const startTimeRef = useRef(Date.now());
+  const screenRef = useRef(screen);
+screenRef.current = screen;
 
   useEffect(() => {
     let resolved = false;
@@ -54,7 +56,7 @@ function App() {
       if (session?.user) {
   // Only auto-navigate if we're on auth or loading screen
   // Verify screen handles its own navigation via onVerified
-  if (screen === 'auth' || screen === 'loading') {
+  if (screenRef.current === 'auth' || screenRef.current === 'loading') {
     determineScreen(session.user);
   }
   registerOneSignal(session.user.id);
