@@ -61,7 +61,7 @@ function AuthScreen({ onVerifyEmail }) {
 
         if (data.user) {
           if (!data.user.email_confirmed_at) {
-            onVerifyEmail();
+            onVerifyEmail(email.trim());
           }
           // Verified users auto-navigate via onAuthStateChange in App.jsx
         }
@@ -80,7 +80,7 @@ function AuthScreen({ onVerifyEmail }) {
   }
 
   if (data.user) {
-    onVerifyEmail();
+    onVerifyEmail(email.trim());
   }
 }
     } catch (err) {
