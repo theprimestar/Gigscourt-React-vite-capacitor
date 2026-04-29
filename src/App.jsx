@@ -16,58 +16,83 @@ import './App.css';
 import './SplashScreen.css';
 
 function App() {
-  const [screen, setScreen] = useState('loading');
+  const [screen, setScreen] = useState('splash');
   const [activeTab, setActiveTab] = useState('home');
   const [navStack, setNavStack] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [sessionChecked, setSessionChecked] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
-  const [nextScreen, setNextScreen] = useState(null);
   const [verifyEmail, setVerifyEmail] = useState('');
-  const startTimeRef = useRef(Date.now());
-  const screenRef = useRef(screen);
-screenRef.current = screen;
+  const splashTimerRef = useRef(null);
 
+  // Initialize app
   useEffect(() => {
-    let resolved = false;
+    initApp();
+    return () => {
+      if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+    };
+  }, []);
 
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+  const initApp = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
 
+    if (session?.user) {
+      registerOneSignal(session.user.id);
+      setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
+      navigateFromSession(session.user);
+    }
+
+    // Show splash for at least 1.5 seconds
+    splashTimerRef.current = setTimeout(() => {
+      if (!session?.user) {
+        setScreen('auth');
+      }
+    }, 1500);
+  };
+
+  const navigateFromSession = async (user) => {
+    if (!user.email_confirmed_at) {
+      finishSplash('verify');
+      return;
+    }
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('onboarding_completed')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (data?.onboarding_completed) {
+      finishSplash('app');
+    } else {
+      finishSplash('onboarding');
+    }
+  };
+
+  const finishSplash = (targetScreen) => {
+    if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+    splashTimerRef.current = setTimeout(() => {
+      setScreen(targetScreen);
+    }, 1500);
+  };
+
+  // Auth state listener
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        await determineScreen(session.user);
         registerOneSignal(session.user.id);
         setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
-      }
-      if (!resolved) {
-        resolved = true;
-        setSessionChecked(true);
-      }
-    };
-
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!resolved) {
-        resolved = true;
-        setSessionChecked(true);
-      }
-      if (session?.user) {
-  // Only auto-navigate if we're on auth or loading screen
-  // Verify screen handles its own navigation via onVerified
-  if (screenRef.current === 'auth' || screenRef.current === 'loading') {
-    determineScreen(session.user);
-  }
-  registerOneSignal(session.user.id);
-  setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
+        // Only auto-navigate if user is on auth or splash screen
+        if (screen === 'auth' || screen === 'splash') {
+          navigateFromSession(session.user);
+        }
       } else {
         setScreen('auth');
+        setNavStack([]);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [screen]);
 
   const registerOneSignal = async (userId) => {
     try {
@@ -126,27 +151,8 @@ screenRef.current = screen;
     }
   };
 
-  const determineScreen = async (user) => {
-    if (!user.email_confirmed_at) {
-      setNextScreen('verify');
-      return;
-    }
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('onboarding_completed')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (data?.onboarding_completed) {
-      setNextScreen('home');
-    } else {
-      setNextScreen('onboarding');
-    }
-  };
-
   const handleOnboardingComplete = () => {
-    setScreen('home');
+    setScreen('app');
   };
 
   const navigateTo = (screenType, data) => {
@@ -168,39 +174,21 @@ screenRef.current = screen;
   }, []);
 
   useEffect(() => {
-    if (sessionChecked) {
-      const elapsed = Date.now() - startTimeRef.current;
-      const remaining = Math.max(0, 1500 - elapsed);
-      
-      setTimeout(() => {
-        setShowSplash(false);
-        setScreen(nextScreen || 'auth');
-      }, remaining);
-    }
-  }, [sessionChecked, nextScreen]);
-
-  useEffect(() => {
-  if (!showSplash && nextScreen) {
-    setScreen(nextScreen);
-    setNextScreen(null);
-  }
-}, [nextScreen, showSplash]);
-
-  useEffect(() => {
-  if (screen === 'home') {
-    checkUnreadBadge();
-    import('./gigSystem').then(({ checkExpiredGigs }) => {
-      supabase.auth.getUser().then(({ data }) => {
-        if (data?.user) checkExpiredGigs(data.user.id);
+    if (screen === 'app') {
+      checkUnreadBadge();
+      import('./gigSystem').then(({ checkExpiredGigs }) => {
+        supabase.auth.getUser().then(({ data }) => {
+          if (data?.user) checkExpiredGigs(data.user.id);
+        });
       });
-    });
-  }
-}, [screen, activeTab, checkUnreadBadge]);
+    }
+  }, [screen, activeTab, checkUnreadBadge]);
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
-  const showBottomNav = screen === 'home' && navStack.length === 0;
+  const showBottomNav = screen === 'app' && navStack.length === 0;
 
-  if (showSplash) {
+  // RENDER: Splash
+  if (screen === 'splash') {
     return (
       <div className="splash-screen">
         <div className="splash-content">
@@ -214,6 +202,7 @@ screenRef.current = screen;
     );
   }
 
+  // RENDER: Auth
   if (screen === 'auth') {
     return (
       <div className="app">
@@ -225,25 +214,24 @@ screenRef.current = screen;
     );
   }
 
+  // RENDER: Verify
   if (screen === 'verify') {
     return (
       <div className="app">
         <VerifyEmailScreen 
           email={verifyEmail}
-          onVerified={() => {
-            const checkUser = async () => {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user?.email_confirmed_at) {
-                determineScreen(user);
-              }
-            };
-            checkUser();
+          onVerified={async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email_confirmed_at) {
+              navigateFromSession(user);
+            }
           }} 
         />
       </div>
     );
   }
 
+  // RENDER: Onboarding
   if (screen === 'onboarding') {
     return (
       <div className="app">
@@ -252,6 +240,7 @@ screenRef.current = screen;
     );
   }
 
+  // RENDER: Main App
   return (
     <div className="app-shell">
       <div className="app-content">
