@@ -24,6 +24,7 @@ function App() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [nextScreen, setNextScreen] = useState(null);
+  const [verifyEmail, setVerifyEmail] = useState('');
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
@@ -203,7 +204,10 @@ function App() {
   if (screen === 'auth') {
     return (
       <div className="app">
-        <AuthScreen onVerifyEmail={() => setScreen('verify')} />
+        <AuthScreen onVerifyEmail={(email) => {
+          setVerifyEmail(email);
+          setScreen('verify');
+        }} />
       </div>
     );
   }
@@ -211,15 +215,18 @@ function App() {
   if (screen === 'verify') {
     return (
       <div className="app">
-        <VerifyEmailScreen onVerified={() => {
-          const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user?.email_confirmed_at) {
-              determineScreen(user);
-            }
-          };
-          checkUser();
-        }} />
+        <VerifyEmailScreen 
+          email={verifyEmail}
+          onVerified={() => {
+            const checkUser = async () => {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user?.email_confirmed_at) {
+                determineScreen(user);
+              }
+            };
+            checkUser();
+          }} 
+        />
       </div>
     );
   }
