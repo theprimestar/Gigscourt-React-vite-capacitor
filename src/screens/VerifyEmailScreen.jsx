@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import '../Auth.css';
 
 function VerifyEmailScreen({ onVerified }) {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
@@ -55,22 +55,19 @@ function VerifyEmailScreen({ onVerified }) {
     setCode(newCode);
     setError('');
 
-    // Auto-advance to next input
-    if (value && index < 5) {
+    if (value && index < 7) {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // Auto-submit when all 6 digits entered
-    if (value && index === 5) {
+    if (value && index === 7) {
       const fullCode = newCode.join('');
-      if (fullCode.length === 6) {
+      if (fullCode.length === 8) {
         verifyCode(fullCode);
       }
     }
   };
 
   const handleKeyDown = (index, e) => {
-    // Move back on backspace when field is empty
     if (e.key === 'Backspace' && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -78,8 +75,8 @@ function VerifyEmailScreen({ onVerified }) {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8);
+    if (pasted.length === 8) {
       const newCode = pasted.split('');
       setCode(newCode);
       verifyCode(newCode.join(''));
@@ -105,7 +102,7 @@ function VerifyEmailScreen({ onVerified }) {
       }
     } catch (err) {
       setError(getErrorMessage(err));
-      setCode(['', '', '', '', '', '']);
+      setCode(['', '', '', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
@@ -141,7 +138,7 @@ function VerifyEmailScreen({ onVerified }) {
       <div className="verify-card">
         <div className="verify-icon">✉</div>
         <h2>Verify Your Email</h2>
-        <p>We sent a 6-digit code to</p>
+        <p>We sent an 8-digit code to</p>
         <p className="verify-email">{userEmail || 'your email'}</p>
         <p className="verify-sub">Enter the code below to continue.</p>
 
