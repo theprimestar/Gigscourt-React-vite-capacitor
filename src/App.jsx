@@ -174,6 +174,13 @@ function App() {
   }, [sessionChecked, nextScreen]);
 
   useEffect(() => {
+  if (!showSplash && nextScreen) {
+    setScreen(nextScreen);
+    setNextScreen(null);
+  }
+}, [nextScreen, showSplash]);
+
+  useEffect(() => {
   if (screen === 'home') {
     checkUnreadBadge();
     import('./gigSystem').then(({ checkExpiredGigs }) => {
