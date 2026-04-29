@@ -52,9 +52,13 @@ function App() {
         setSessionChecked(true);
       }
       if (session?.user) {
-        determineScreen(session.user);
-        registerOneSignal(session.user.id);
-        setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
+  // Only auto-navigate if we're on auth or loading screen
+  // Verify screen handles its own navigation via onVerified
+  if (screen === 'auth' || screen === 'loading') {
+    determineScreen(session.user);
+  }
+  registerOneSignal(session.user.id);
+  setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
       } else {
         setScreen('auth');
       }
