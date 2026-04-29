@@ -24,11 +24,16 @@ function VerifyEmailScreen({ onVerified }) {
   }, [resendCountdown]);
 
   const loadEmail = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email) {
-      setUserEmail(user.email);
+  try {
+    const result = await supabase.auth.getUser();
+    console.log('Full user object:', JSON.stringify(result));
+    if (result?.data?.user?.email) {
+      setUserEmail(result.data.user.email);
     }
-  };
+  } catch (err) {
+    console.log('Error getting user:', err.message);
+  }
+};
 
   const getErrorMessage = (err) => {
     const msg = err.message || '';
