@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import { initOneSignal, getOneSignalUserId } from './lib/onesignal';
 import AuthScreen from './screens/AuthScreen';
@@ -21,23 +21,35 @@ function App() {
   const [navStack, setNavStack] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [nextScreen, setNextScreen] = useState(null);
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
+    let resolved = false;
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        determineScreen(session.user);
+        await determineScreen(session.user);
         registerOneSignal(session.user.id);
         setIsAdmin(session.user?.email === 'theprimestarventures@gmail.com');
-      } else {
-        setScreen('auth');
+      }
+      if (!resolved) {
+        resolved = true;
+        setSessionChecked(true);
       }
     };
 
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!resolved) {
+        resolved = true;
+        setSessionChecked(true);
+      }
       if (session?.user) {
         determineScreen(session.user);
         registerOneSignal(session.user.id);
@@ -109,7 +121,7 @@ function App() {
 
   const determineScreen = async (user) => {
     if (!user.email_confirmed_at) {
-      setScreen('verify');
+      setNextScreen('verify');
       return;
     }
 
@@ -120,9 +132,9 @@ function App() {
       .maybeSingle();
 
     if (data?.onboarding_completed) {
-      setScreen('home');
+      setNextScreen('home');
     } else {
-      setScreen('onboarding');
+      setNextScreen('onboarding');
     }
   };
 
@@ -149,6 +161,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (sessionChecked) {
+      const elapsed = Date.now() - startTimeRef.current;
+      const remaining = Math.max(0, 1500 - elapsed);
+      
+      setTimeout(() => {
+        setShowSplash(false);
+        setScreen(nextScreen || 'auth');
+      }, remaining);
+    }
+  }, [sessionChecked, nextScreen]);
+
+  useEffect(() => {
   if (screen === 'home') {
     checkUnreadBadge();
     import('./gigSystem').then(({ checkExpiredGigs }) => {
@@ -162,19 +186,19 @@ function App() {
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'home' && navStack.length === 0;
 
-  if (screen === 'loading') {
-  return (
-    <div className="splash-screen">
-      <div className="splash-content">
-        <div className="splash-logo">
-          <div className="splash-circle splash-circle-left"></div>
-          <div className="splash-circle splash-circle-right"></div>
+  if (showSplash) {
+    return (
+      <div className="splash-screen">
+        <div className="splash-content">
+          <div className="splash-logo">
+            <div className="splash-circle splash-circle-left"></div>
+            <div className="splash-circle splash-circle-right"></div>
+          </div>
+          <span className="splash-text">GigsCourt</span>
         </div>
-        <span className="splash-text">GigsCourt</span>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (screen === 'auth') {
     return (
