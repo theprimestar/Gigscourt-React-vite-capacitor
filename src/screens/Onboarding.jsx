@@ -13,6 +13,12 @@ const IconPhoto = () => (
   </svg>
 );
 
+const IconAvatar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+  </svg>
+);
+
 const IconMapPin = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
@@ -155,6 +161,7 @@ function StepLocation({ onNext, onBack }) {
   const [lat, setLat] = useState(null);
   const [lng, setLng] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [geoError, setGeoError] = useState(false);
   const [error, setError] = useState('');
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -163,8 +170,11 @@ function StepLocation({ onNext, onBack }) {
   useEffect(() => { getCurrentLocation(); return () => { if (map.current) map.current.remove(); }; }, []);
 
   const getCurrentLocation = () => {
-    if (!navigator.geolocation) { setLat(9.0765); setLng(7.3986); setLoading(false); return; }
-    navigator.geolocation.getCurrentPosition(pos => { setLat(pos.coords.latitude); setLng(pos.coords.longitude); reverseGeocode(pos.coords.latitude, pos.coords.longitude); setLoading(false); }, () => { setLat(9.0765); setLng(7.3986); setLoading(false); });
+    if (!navigator.geolocation) { setGeoError(true); setLoading(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => { setLat(pos.coords.latitude); setLng(pos.coords.longitude); reverseGeocode(pos.coords.latitude, pos.coords.longitude); setLoading(false); },
+      () => { setGeoError(true); setLoading(false); }
+    );
   };
 
   const reverseGeocode = async (latitude, longitude) => {
@@ -177,19 +187,35 @@ function StepLocation({ onNext, onBack }) {
 
   useEffect(() => {
     if (lat === null || lng === null || !mapContainer.current || map.current) return;
-    map.current = L.map(mapContainer.current, { center: [lat, lng], zoom: 16, zoomControl: false, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
-    const markerIcon = L.divIcon({ html: '<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="#1a3a8a" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>', className: '', iconSize: [32, 32], iconAnchor: [16, 32] });
-    marker.current = L.marker([lat, lng], { icon: markerIcon }).addTo(map.current);
-    map.current.on('move', () => { const c = map.current.getCenter(); marker.current.setLatLng([c.lat, c.lng]); });
-    map.current.on('moveend', () => { const c = map.current.getCenter(); setLat(c.lat); setLng(c.lng); reverseGeocode(c.lat, c.lng); });
+    setTimeout(() => {
+      if (!mapContainer.current) return;
+      map.current = L.map(mapContainer.current, { center: [lat, lng], zoom: 16, zoomControl: false, attributionControl: false });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
+      const markerIcon = L.divIcon({ html: '<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="#1a3a8a" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>', className: '', iconSize: [32, 32], iconAnchor: [16, 32] });
+      marker.current = L.marker([lat, lng], { icon: markerIcon }).addTo(map.current);
+      map.current.on('move', () => { const c = map.current.getCenter(); marker.current.setLatLng([c.lat, c.lng]); });
+      map.current.on('moveend', () => { const c = map.current.getCenter(); setLat(c.lat); setLng(c.lng); reverseGeocode(c.lat, c.lng); });
+      map.current.invalidateSize();
+    }, 100);
   }, [lat, lng]);
 
   const handleNext = () => {
+    if (geoError) { setError('Please enable location access to continue'); return; }
     if (!address.trim()) { setError('Please enter your workspace address'); return; }
     if (!lat || !lng) { setError('Please set your workspace location'); return; }
     onNext({ workspaceLat: lat, workspaceLng: lng, workspaceAddress: address.trim() });
   };
+
+  if (geoError) {
+    return (
+      <div className="onboarding-step" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+        <h2>Location Required</h2>
+        <p className="step-sub">GigsCourt needs your location to show nearby services. Please enable location access in your device settings.</p>
+        <button onClick={() => { setGeoError(false); setLoading(true); getCurrentLocation(); }} className="onboarding-btn" style={{ width: 'auto', paddingLeft: 24, paddingRight: 24 }}>Try Again</button>
+        <button onClick={onBack} className="onboarding-btn secondary" style={{ width: 'auto', paddingLeft: 24, paddingRight: 24, marginTop: 8 }}>Back</button>
+      </div>
+    );
+  }
 
   return (
     <div className="onboarding-step" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -270,7 +296,7 @@ function StepPhotoBio({ onNext, onBack }) {
       <div className="profile-pic-section">
         <div className="avatar-wrapper">
           <div className={`avatar-circle ${profilePic ? 'has-photo' : ''}`}>
-            {profilePic ? <img src={profilePic} alt="" /> : <IconPhoto />}
+            {profilePic ? <img src={profilePic} alt="" /> : <IconAvatar />}
             {profilePic && (
               <button className="remove-pic-btn" onClick={() => setProfilePic(null)}>✕</button>
             )}
@@ -279,7 +305,14 @@ function StepPhotoBio({ onNext, onBack }) {
             )}
           </div>
         </div>
-        {!profilePic && (
+        {uploading ? (
+          <div className="add-photo-btn" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className="upload-progress-bar-small"><div className="upload-progress-fill-small"></div></div>
+            Uploading...
+          </div>
+        ) : profilePic ? (
+          <button className="add-photo-btn" style={{ color: '#ff3b30' }} onClick={() => setProfilePic(null)}>Remove Photo</button>
+        ) : (
           <button className="add-photo-btn" onClick={() => fileInputRef.current?.click()}>Add Photo +</button>
         )}
         <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
@@ -303,6 +336,13 @@ function StepPhotoBio({ onNext, onBack }) {
 
 // Step 4: Walkthrough
 function StepWalkthrough({ onFinish }) {
+  const [saving, setSaving] = useState(false);
+
+  const handleFinish = () => {
+    setSaving(true);
+    onFinish();
+  };
+
   return (
     <div className="onboarding-step walkthrough">
       <div className="walkthrough-header">
@@ -345,7 +385,14 @@ function StepWalkthrough({ onFinish }) {
         </div>
       </div>
 
-      <button onClick={onFinish} className="onboarding-btn finish-btn">Get Started</button>
+      <button onClick={handleFinish} disabled={saving} className="onboarding-btn finish-btn">
+        {saving ? (
+          <span className="auth-button-loading">
+            Creating your account
+            <span className="loading-dots"></span>
+          </span>
+        ) : 'Get Started'}
+      </button>
       <div className="walkthrough-footer">
         <p>You can update your profile anytime from Settings</p>
       </div>
