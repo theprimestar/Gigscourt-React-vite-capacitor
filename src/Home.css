@@ -270,14 +270,23 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.2);
   transition: all 0.2s;
 }
 
 .discover-dot.active {
-  background: white;
+  background: #1a3a8a;
   width: 14px;
   border-radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .discover-dot {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  .discover-dot.active {
+    background: white;
+  }
 }
 
 /* Provider Grid */
