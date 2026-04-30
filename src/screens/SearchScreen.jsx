@@ -68,6 +68,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   const debounceRef = useRef(null);
   const listScrollRef = useRef(null);
   const prevScrollY = useRef(0);
+  const resizeObserverRef = useRef(null);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -110,15 +111,29 @@ function SearchScreen({ onStartChat, onViewProfile }) {
     }
   }, [viewerLat, viewerLng]);
 
+  // Map resize observer — fires when container gets real dimensions
   useEffect(() => {
-    if (view === 'map' && map.current) {
-      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
-    }
-  }, [view]);
+    if (!mapContainer.current || !map.current) return;
+    if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
+    
+    resizeObserverRef.current = new ResizeObserver(() => {
+      if (map.current && view === 'map') {
+        map.current.invalidateSize();
+      }
+    });
+    resizeObserverRef.current.observe(mapContainer.current);
+    
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [view, map.current]);
 
+  // Also invalidate when view changes to map
   useEffect(() => {
     if (view === 'map' && map.current) {
-      setTimeout(() => { map.current.invalidateSize(); }, 100);
+      setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 100);
     }
   }, [view]);
 
@@ -331,8 +346,8 @@ function SearchScreen({ onStartChat, onViewProfile }) {
           </div>
         )}
         {loading && (
-          <div className="providers-grid">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton-grid-card" />)}
+          <div className="search-list-scroll-inner">
+            {[1,2,3,4].map(i => <div key={i} className="skeleton-list-card" />)}
           </div>
         )}
         {hasSearched && !loading && providers.length === 0 && (
