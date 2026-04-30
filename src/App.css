@@ -516,7 +516,7 @@ input, textarea {
   height: 76px;
   border-radius: 50%;
   overflow: visible;
-  margin: -48px auto 12px;
+  margin: 0 auto 12px;
   position: relative;
 }
 
@@ -596,6 +596,13 @@ input, textarea {
   font-size: 16px;
   letter-spacing: 2px;
   margin-bottom: 2px;
+  color: #1d1d1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sheet-stars {
+    color: #ffffff;
+  }
 }
 
 .sheet-rating-count {
@@ -654,6 +661,7 @@ input, textarea {
 @media (prefers-color-scheme: dark) {
   .sheet-distance-badge {
     background: #2c2c2e;
+    color: #ffffff;
   }
 }
 
@@ -672,6 +680,12 @@ input, textarea {
   height: 12px;
   stroke: #8e8e93;
   flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sheet-address svg {
+    stroke: #aeaeb2;
+  }
 }
 
 .sheet-services-chips {
@@ -736,6 +750,13 @@ input, textarea {
 
 .sheet-view-profile-btn:active {
   background: rgba(26, 58, 138, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sheet-view-profile-btn {
+    color: #ffffff;
+    border-color: #ffffff;
+  }
 }
 
 #portal-root {
