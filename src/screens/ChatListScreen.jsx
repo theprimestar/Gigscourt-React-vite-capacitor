@@ -288,7 +288,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
               </div>
             );
           })}
-          {loadingMore && <div className="chat-list-loading-more"><div className="spinner"></div></div>}
+          {loadingMore && <div className="chat-list-loading-more"><span className="loading-dots">Loading</span></div>}
         </div>
       )}
     </div>
