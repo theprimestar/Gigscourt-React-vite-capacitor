@@ -60,12 +60,14 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   const [hasSearched, setHasSearched] = useState(false);
   const [services, setServices] = useState([]);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showChipsSlider, setShowChipsSlider] = useState(true);
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markers = useRef([]);
   const viewerMarker = useRef(null);
   const debounceRef = useRef(null);
   const listScrollRef = useRef(null);
+  const prevScrollY = useRef(0);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -111,6 +113,12 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   useEffect(() => {
     if (view === 'map' && map.current) {
       setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 200);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (view === 'map' && map.current) {
+      setTimeout(() => { map.current.invalidateSize(); }, 100);
     }
   }, [view]);
 
@@ -208,8 +216,20 @@ function SearchScreen({ onStartChat, onViewProfile }) {
 
   const handleListScroll = () => {
     if (listScrollRef.current) {
-      setShowScrollTop(listScrollRef.current.scrollTop > 500);
+      const scrollTop = listScrollRef.current.scrollTop;
+      setShowScrollTop(scrollTop > 500);
+      if (scrollTop > prevScrollY.current && scrollTop > 60) {
+        setShowChipsSlider(false);
+      } else if (scrollTop < 20) {
+        setShowChipsSlider(true);
+      }
+      prevScrollY.current = scrollTop;
     }
+  };
+
+  const handleInputFocus = () => {
+    setShowSuggestions(true);
+    setShowChipsSlider(true);
   };
 
   const filteredSuggestions = services.filter(s =>
@@ -227,14 +247,13 @@ function SearchScreen({ onStartChat, onViewProfile }) {
 
   return (
     <div className="search-screen">
-      {/* Floating search bar */}
       <div className="search-floating-bar">
         <div className="search-input-wrapper search-input-transparent">
           <span className="search-icon"><IconSearch /></span>
           <input
             type="text" value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
-            onFocus={() => setShowSuggestions(true)}
+            onFocus={handleInputFocus}
             placeholder="Search services..."
             className="search-input-field"
           />
@@ -254,29 +273,31 @@ function SearchScreen({ onStartChat, onViewProfile }) {
           </div>
         )}
 
-        <div className="chips-scroll">
-          {POPULAR_SERVICES.map(slug => (
-            <button key={slug} className={`chip-btn ${activeService === slug ? 'active' : ''}`} onClick={() => handleChipTap(slug)}>
-              {slug.replace(/-/g, ' ')}
-            </button>
-          ))}
-        </div>
-
-        <div className="radius-bar">
-          <div className="radius-label">
-            <span>Radius</span>
-            <span className="radius-value">{formatDistance(radius)}</span>
+        <div className={`chips-slider-container ${showChipsSlider ? 'visible' : ''}`}>
+          <div className="chips-scroll">
+            {POPULAR_SERVICES.map(slug => (
+              <button key={slug} className={`chip-btn ${activeService === slug ? 'active' : ''}`} onClick={() => handleChipTap(slug)}>
+                {slug.replace(/-/g, ' ')}
+              </button>
+            ))}
           </div>
-          <input type="range" min="1000" max="20000" step="100" value={radius}
-            onChange={e => {
-              const val = Number(e.target.value);
-              setRadius(val);
-              if (debounceRef.current) clearTimeout(debounceRef.current);
-              debounceRef.current = setTimeout(() => { if (activeService) handleSearch(activeService); }, 400);
-            }}
-            className="radius-slider"
-          />
-          <div className="radius-limits"><span>1km</span><span>20km</span></div>
+
+          <div className="radius-bar">
+            <div className="radius-label">
+              <span>Radius</span>
+              <span className="radius-value">{formatDistance(radius)}</span>
+            </div>
+            <input type="range" min="1000" max="20000" step="100" value={radius}
+              onChange={e => {
+                const val = Number(e.target.value);
+                setRadius(val);
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                debounceRef.current = setTimeout(() => { if (activeService) handleSearch(activeService); }, 400);
+              }}
+              className="radius-slider"
+            />
+            <div className="radius-limits"><span>1km</span><span>20km</span></div>
+          </div>
         </div>
 
         <div className="view-toggle">
@@ -285,7 +306,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         </div>
       </div>
 
-      {/* Map View */}
       <div className={`search-map-full ${view === 'map' ? 'view-visible' : 'view-hidden'}`}>
         <div ref={mapContainer} className="search-map-full-inner" />
         {!hasSearched && !loading && (
@@ -302,7 +322,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         )}
       </div>
 
-      {/* List View */}
       <div className={`search-list-scroll ${view === 'list' ? 'view-visible' : 'view-hidden'}`} ref={listScrollRef} onScroll={handleListScroll}>
         {!hasSearched && !loading && (
           <div className="search-list-empty-state">
@@ -349,7 +368,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         )}
       </div>
 
-      {/* Bottom Sheet */}
       {selectedUser && ReactDOM.createPortal(
         <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
           <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
