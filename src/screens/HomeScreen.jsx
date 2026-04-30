@@ -399,7 +399,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       </div>
     </div>
   </div>,
-  document.body
+  document.getElementById('portal-root')
 )}
 
       {/* Scroll to Top */}
