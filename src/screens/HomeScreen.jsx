@@ -129,22 +129,24 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const fetchTopProviders = async () => {
-    try {
-      const { data } = await supabase.rpc('get_top_nearby_providers', {
-        viewer_lat: viewerLat, viewer_lng: viewerLng,
-        p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
-      });
-      if (isMounted.current && data) {
-        const enriched = await enrichCards(data);
-        setTopProviders(enriched);
-        if (data.length > 0) {
-          const last = data[data.length - 1];
-          topCursorRef.current = { distance: last.distance_meters, id: last.id };
-        }
-        setHasMoreTop(data && data.length === 10);
+  try {
+    const { data } = await supabase.rpc('get_top_nearby_providers', {
+      viewer_lat: viewerLat, viewer_lng: viewerLng,
+      p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
+    });
+    console.log('Top providers raw data:', data);
+    if (isMounted.current && data) {
+      const enriched = await enrichCards(data);
+      console.log('Top providers enriched:', enriched);
+      setTopProviders(enriched);
+      if (data.length > 0) {
+        const last = data[data.length - 1];
+        topCursorRef.current = { distance: last.distance_meters, id: last.id };
       }
-    } catch (err) { console.error('Top providers error:', err); }
-  };
+      setHasMoreTop(data && data.length === 10);
+    }
+  } catch (err) { console.error('Top providers error:', err); }
+};
 
   const fetchMoreTopProviders = async () => {
     if (loadingMoreTop || !hasMoreTop) return;
@@ -346,7 +348,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           )}
 
           <div className="home-section">
-            {topProviders.length > 0 && <div className="section-title">All Providers</div>}
+  <div className="section-title">All Providers</div>
             <div className="providers-grid">
               {cards.map((user, i) => {
                 const isLast = i === cards.length - 1;
