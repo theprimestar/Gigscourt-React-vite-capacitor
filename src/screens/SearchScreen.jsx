@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import L from 'leaflet';
 import 'leaflet-rotate';
 import '../Home.css';
+import '../Search.css';
 
 const POPULAR_SERVICES = [
   'barbing', 'tailoring', 'makeup', 'hairdressing',
