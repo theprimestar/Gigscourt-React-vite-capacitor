@@ -233,13 +233,13 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   }, [loading, loadingMore, hasMore]);
 
   const lastDiscoverCardRef = useCallback(node => {
-    if (loading || loadingMoreTop) return;
-    if (discoverObserverRef.current) discoverObserverRef.current.disconnect();
-    discoverObserverRef.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMoreTop) fetchMoreTopProviders();
-    });
-    if (node) gridObserverRef.current.observe(node);
-  }, [loading, loadingMoreTop, hasMoreTop]);
+  if (loading || loadingMoreTop) return;
+  if (discoverObserverRef.current) discoverObserverRef.current.disconnect();
+  discoverObserverRef.current = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && hasMoreTop) fetchMoreTopProviders();
+  });
+  if (node) discoverObserverRef.current.observe(node);
+}, [loading, loadingMoreTop, hasMoreTop]);
 
   const handleScroll = () => {
     if (scrollContainerRef.current) {
