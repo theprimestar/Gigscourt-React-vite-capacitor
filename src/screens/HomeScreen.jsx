@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import '../Home.css';
 
@@ -364,41 +365,42 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       )}
 
       {/* Bottom Sheet */}
-      {selectedUser && (
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bottom-sheet-handle" />
-            <div className="bottom-sheet-content">
-              <div className="sheet-avatar">
-                {selectedUser.profile_pic_url ? (
-                  <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
-                ) : (
-                  <div className="sheet-avatar-placeholder"><IconAvatar /></div>
-                )}
-              </div>
-              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
-              <div className="sheet-rating-row">
-                <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
-                <span>•</span>
-                <span>{selectedUser.gigCount || 0} gigs</span>
-              </div>
-              <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
-              <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
-              {selectedUser.services?.length > 0 && (
-                <div className="sheet-services-chips">
-                  {selectedUser.services.map(s => (
-                    <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
-                  ))}
-                </div>
-              )}
-              <div className="sheet-buttons">
-                <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
-                <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
-              </div>
-            </div>
-          </div>
+      {selectedUser && ReactDOM.createPortal(
+  <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
+    <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+      <div className="bottom-sheet-handle" />
+      <div className="bottom-sheet-content">
+        <div className="sheet-avatar">
+          {selectedUser.profile_pic_url ? (
+            <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
+          ) : (
+            <div className="sheet-avatar-placeholder"><IconAvatar /></div>
+          )}
         </div>
-      )}
+        <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
+        <div className="sheet-rating-row">
+          <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
+          <span>•</span>
+          <span>{selectedUser.gigCount || 0} gigs</span>
+        </div>
+        <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
+        <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
+        {selectedUser.services?.length > 0 && (
+          <div className="sheet-services-chips">
+            {selectedUser.services.map(s => (
+              <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
+            ))}
+          </div>
+        )}
+        <div className="sheet-buttons">
+          <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+          <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>,
+  document.body
+)}
 
       {/* Scroll to Top */}
       {showScrollTop && (
