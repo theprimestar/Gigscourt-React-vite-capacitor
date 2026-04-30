@@ -264,7 +264,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     const formData = new FormData(); formData.append('file', file); formData.append('fileName', 'chat-photo.jpg'); formData.append('folder', '/chat-photos'); formData.append('useUniqueFileName', 'true'); formData.append('publicKey', imagekitPublicKey); formData.append('token', auth.token); formData.append('signature', auth.signature); formData.append('expire', auth.expire);
     const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData }); const result = await uploadRes.json();
     if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
-    const optimizedUrl = result.url + '?tr=f-webp,fo-lossless';
+    const optimizedUrl = result.url + '?tr=f-webp,fo-auto,q-80';
     const channelKey = channelIdRef.current;
     const { data: savedMessage } = await supabase.rpc('send_message', { p_channel_key: channelKey, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_image_url: optimizedUrl });
     if (!savedMessage) throw new Error('Failed to save photo');
