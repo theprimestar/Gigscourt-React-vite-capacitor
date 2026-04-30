@@ -1,21 +1,48 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import '../Home.css';
+
+// SVG Icons
+const IconBell = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+
+const IconArrowUp = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>
+);
+
+const IconAvatar = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+  </svg>
+);
 
 function HomeScreen({ onStartChat, onViewProfile }) {
+  const [topProviders, setTopProviders] = useState([]);
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [hasMoreTop, setHasMoreTop] = useState(true);
+  const [loadingMoreTop, setLoadingMoreTop] = useState(false);
   const [viewerLat, setViewerLat] = useState(null);
   const [viewerLng, setViewerLng] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [scrolled, setScrolled] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const cursorRef = useRef({ distance: null, id: null });
-  const observerRef = useRef(null);
+  const topCursorRef = useRef({ distance: null, id: null });
+  const gridObserverRef = useRef(null);
+  const discoverObserverRef = useRef(null);
   const watchIdRef = useRef(null);
   const lastFetchRef = useRef({ lat: null, lng: null });
   const isMounted = useRef(true);
+  const scrollContainerRef = useRef(null);
 
-  // Initial location
   useEffect(() => {
     isMounted.current = true;
 
@@ -28,11 +55,9 @@ function HomeScreen({ onStartChat, onViewProfile }) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (!isMounted.current) return;
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setViewerLat(lat);
-        setViewerLng(lng);
-        lastFetchRef.current = { lat, lng };
+        setViewerLat(pos.coords.latitude);
+        setViewerLng(pos.coords.longitude);
+        lastFetchRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       },
       () => {
         if (isMounted.current) {
@@ -62,43 +87,30 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           }
         }
       },
-      (err) => console.warn('Watch position error:', err.message),
+      () => {},
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
     );
 
     return () => {
       isMounted.current = false;
-      if (watchIdRef.current) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (viewerLat === null || viewerLng === null) return;
+    fetchTopProviders();
     fetchProfiles();
   }, [viewerLat, viewerLng]);
 
   const enrichCards = async (profiles) => {
     if (!profiles || profiles.length === 0) return profiles;
-    
     const ids = profiles.map(p => p.id);
-    
-    const { data: statsData } = await supabase
-      .from('profiles')
-      .select('id, rating, review_count, gig_count')
-      .in('id', ids);
-
+    const { data: statsData } = await supabase.from('profiles').select('id, rating, review_count, gig_count').in('id', ids);
     const { data: activeData } = await supabase.rpc('get_active_status_batch', { p_user_ids: ids });
-const activeMap = {};
-if (activeData) {
-  activeData.forEach(a => { activeMap[a.user_id] = a.is_active; });
-}
-// Fallback for any missing IDs
-ids.forEach(id => {
-  if (!(id in activeMap)) activeMap[id] = false;
-});
-
+    const activeMap = {};
+    if (activeData) activeData.forEach(a => { activeMap[a.user_id] = a.is_active; });
+    ids.forEach(id => { if (!(id in activeMap)) activeMap[id] = false; });
     const statsMap = {};
     if (statsData) {
       statsData.forEach(s => {
@@ -108,7 +120,6 @@ ids.forEach(id => {
         };
       });
     }
-
     return profiles.map(p => ({
       ...p,
       ...(statsMap[p.id] || { rating: 'New', gigCount: 0 }),
@@ -116,87 +127,119 @@ ids.forEach(id => {
     }));
   };
 
+  const fetchTopProviders = async () => {
+    try {
+      const { data } = await supabase.rpc('get_top_nearby_providers', {
+        viewer_lat: viewerLat, viewer_lng: viewerLng,
+        p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
+      });
+      if (isMounted.current && data) {
+        const enriched = await enrichCards(data);
+        setTopProviders(enriched);
+        if (data.length > 0) {
+          const last = data[data.length - 1];
+          topCursorRef.current = { distance: last.distance_meters, id: last.id };
+        }
+        setHasMoreTop(data && data.length === 10);
+      }
+    } catch (err) { console.error('Top providers error:', err); }
+  };
+
+  const fetchMoreTopProviders = async () => {
+    if (loadingMoreTop || !hasMoreTop) return;
+    setLoadingMoreTop(true);
+    try {
+      const { data } = await supabase.rpc('get_top_nearby_providers', {
+        viewer_lat: viewerLat, viewer_lng: viewerLng,
+        p_limit: 10,
+        p_cursor_distance: topCursorRef.current.distance,
+        p_cursor_id: topCursorRef.current.id,
+      });
+      if (isMounted.current && data) {
+        const enriched = await enrichCards(data);
+        setTopProviders(prev => [...prev, ...enriched]);
+        if (data.length > 0) {
+          const last = data[data.length - 1];
+          topCursorRef.current = { distance: last.distance_meters, id: last.id };
+        }
+        setHasMoreTop(data.length === 10);
+      }
+    } catch (err) { console.error('Fetch more top error:', err); }
+    finally { if (isMounted.current) setLoadingMoreTop(false); }
+  };
+
   const fetchProfiles = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('get_nearby_profiles', {
-        viewer_lat: viewerLat,
-        viewer_lng: viewerLng,
-        p_limit: 20,
-        p_cursor_distance: null,
-        p_cursor_id: null,
+      const { data } = await supabase.rpc('get_nearby_profiles', {
+        viewer_lat: viewerLat, viewer_lng: viewerLng,
+        p_limit: 20, p_cursor_distance: null, p_cursor_id: null,
       });
-
-      if (error) {
-        console.error('Failed to fetch profiles:', error);
-        if (isMounted.current) setCards([]);
-      } else if (isMounted.current) {
+      if (isMounted.current) {
         const enriched = await enrichCards(data || []);
-        if (isMounted.current) {
-          setCards(enriched);
-          if (data && data.length > 0) {
-            const last = data[data.length - 1];
-            cursorRef.current = { distance: last.distance_meters, id: last.id };
-          }
-          setHasMore(data && data.length === 20);
+        setCards(enriched);
+        if (data && data.length > 0) {
+          const last = data[data.length - 1];
+          cursorRef.current = { distance: last.distance_meters, id: last.id };
         }
+        setHasMore(data && data.length === 20);
       }
-    } catch (err) {
-      console.error('Fetch error:', err);
-    } finally {
-      if (isMounted.current) setLoading(false);
-    }
+    } catch (err) { console.error('Fetch error:', err); }
+    finally { if (isMounted.current) setLoading(false); }
   };
 
   const fetchMoreProfiles = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-
     try {
-      const { data, error } = await supabase.rpc('get_nearby_profiles', {
-        viewer_lat: viewerLat,
-        viewer_lng: viewerLng,
+      const { data } = await supabase.rpc('get_nearby_profiles', {
+        viewer_lat: viewerLat, viewer_lng: viewerLng,
         p_limit: 20,
         p_cursor_distance: cursorRef.current.distance,
         p_cursor_id: cursorRef.current.id,
       });
-
-      if (error) {
-        console.error('Failed to fetch more profiles:', error);
-      } else if (isMounted.current) {
-        const newCards = data || [];
-        if (newCards.length > 0) {
-          const enriched = await enrichCards(newCards);
-          if (isMounted.current) {
-            setCards((prev) => [...prev, ...enriched]);
-            const last = newCards[newCards.length - 1];
-            cursorRef.current = { distance: last.distance_meters, id: last.id };
-          }
+      if (isMounted.current) {
+        const enriched = await enrichCards(data || []);
+        setCards(prev => [...prev, ...enriched]);
+        if (data && data.length > 0) {
+          const last = data[data.length - 1];
+          cursorRef.current = { distance: last.distance_meters, id: last.id };
         }
-        if (isMounted.current) setHasMore(newCards.length === 20);
+        setHasMore(data && data.length === 20);
       }
-    } catch (err) {
-      console.error('Fetch more error:', err);
-    } finally {
-      if (isMounted.current) setLoadingMore(false);
+    } catch (err) { console.error('Fetch more error:', err); }
+    finally { if (isMounted.current) setLoadingMore(false); }
+  };
+
+  const lastGridCardRef = useCallback(node => {
+    if (loading || loadingMore) return;
+    if (gridObserverRef.current) gridObserverRef.current.disconnect();
+    gridObserverRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) fetchMoreProfiles();
+    });
+    if (node) gridObserverRef.current.observe(node);
+  }, [loading, loadingMore, hasMore]);
+
+  const lastDiscoverCardRef = useCallback(node => {
+    if (loading || loadingMoreTop) return;
+    if (discoverObserverRef.current) discoverObserverRef.current.disconnect();
+    discoverObserverRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMoreTop) fetchMoreTopProviders();
+    });
+    if (node) gridObserverRef.current.observe(node);
+  }, [loading, loadingMoreTop, hasMoreTop]);
+
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const scrollTop = scrollContainerRef.current.scrollTop;
+      setScrolled(scrollTop > 20);
+      setShowScrollTop(scrollTop > 500);
     }
   };
 
-  const lastCardRef = useCallback(
-    (node) => {
-      if (loading || loadingMore) return;
-      if (observerRef.current) observerRef.current.disconnect();
-
-      observerRef.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          fetchMoreProfiles();
-        }
-      });
-
-      if (node) observerRef.current.observe(node);
-    },
-    [loading, loadingMore, hasMore]
-  );
+  const scrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const formatDistance = (meters) => {
     if (meters < 1000) return `${Math.round(meters)}m away`;
@@ -204,117 +247,162 @@ ids.forEach(id => {
   };
 
   const handleCardTap = (user) => setSelectedUser(user);
-  const handleCloseSheet = () => setSelectedUser(null);
 
-  if (loading) {
-    return (
-      <div className="home-screen">
-        <div className="home-loading">
-          <div className="spinner"></div>
-          <p>Finding providers near you...</p>
+  const renderProviderCard = (user, isDiscover = false) => (
+    <div
+      key={user.id}
+      className={isDiscover ? 'discover-card' : 'provider-card'}
+      onClick={() => handleCardTap(user)}
+    >
+      {user.profile_pic_url ? (
+        <img src={user.profile_pic_url} alt={user.full_name} />
+      ) : (
+        <div className="card-avatar-placeholder"><IconAvatar /></div>
+      )}
+      <div className={isDiscover ? 'discover-card-overlay' : 'provider-card-overlay'}>
+        <div className={isDiscover ? 'discover-card-name' : 'provider-card-name'}>
+          {user.isActive && <span className="active-dot-card" />}
+          {user.full_name}
         </div>
+        {isDiscover ? (
+          <div className="discover-card-meta">
+            <span>{user.rating !== 'New' ? `★ ${user.rating}` : 'New'}</span>
+            <span>{user.gigCount || 0} gigs</span>
+            <span>{formatDistance(user.distance_meters)}</span>
+          </div>
+        ) : (
+          <>
+            <div className="provider-card-distance">{formatDistance(user.distance_meters)}</div>
+            <div className="provider-card-services">
+              {user.services?.slice(0, 2).map(s => s.replace(/-/g, ' ')).join(', ') || 'No services'}
+            </div>
+            <div className="provider-card-rating">
+              {user.rating !== 'New' ? `★ ${user.rating}` : 'New'}
+            </div>
+          </>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="home-screen">
-      <header className="home-header">
-        <h1>GigsCourt</h1>
-        <p>Discover local services</p>
+    <div className="home-screen" ref={scrollContainerRef} onScroll={handleScroll}>
+      {/* Header */}
+      <header className={`home-header ${scrolled ? 'scrolled' : ''}`}>
+        <div className="header-top-row">
+          <div className="header-brand">
+            <div className="header-logo">
+              <div className="header-logo-circle header-logo-circle-left" />
+              <div className="header-logo-circle header-logo-circle-right" />
+            </div>
+            <span className="header-title">GigsCourt</span>
+          </div>
+          <button className="header-notif-btn"><IconBell /></button>
+        </div>
       </header>
 
-      {cards.length === 0 ? (
+      {loading ? (
+        <>
+          <div className="home-section">
+            <div className="section-title">Top Providers Near You</div>
+            <div className="discover-scroll">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton-discover-card" />)}
+            </div>
+          </div>
+          <div className="home-section">
+            <div className="section-title">All Providers</div>
+            <div className="providers-grid">
+              {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton-grid-card" />)}
+            </div>
+          </div>
+        </>
+      ) : cards.length === 0 && topProviders.length === 0 ? (
         <div className="home-empty">
-          <p>No providers found nearby.</p>
-          <p className="home-empty-sub">Check back soon as more people join!</p>
+          <div className="home-empty-logo">
+            <div className="empty-circle empty-circle-left" />
+            <div className="empty-circle empty-circle-right" />
+          </div>
+          <h3>No providers nearby yet</h3>
+          <p>You can be the first to offer your service in this area</p>
         </div>
       ) : (
-        <div className="home-cards">
-          {cards.map((user, index) => {
-            const isLast = index === cards.length - 1;
-            return (
-              <div
-                key={user.id}
-                ref={isLast ? lastCardRef : null}
-                className="user-card"
-                onClick={() => handleCardTap(user)}
-              >
-                <div className="card-avatar">
-                  {user.profile_pic_url ? (
-                    <img src={user.profile_pic_url} alt={user.full_name} />
-                  ) : (
-                    <div className="card-avatar-placeholder">👤</div>
-                  )}
-                </div>
-                <div className="card-info">
-                  <h3>{user.full_name} {user.isActive && <span className="active-dot-card"></span>}</h3>
-                  <p className="card-services">
-                    {user.services && user.services.length > 0
-                      ? user.services.slice(0, 3).map((s) => s.replace(/-/g, ' ')).join(', ')
-                      : 'No services listed'}
-                  </p>
-                  <p className="card-distance">{formatDistance(user.distance_meters)}</p>
-                  <p className="card-gigs">{user.gigCount || 0} gigs</p>
-                </div>
-                <div className="card-rating">
-                  {user.rating !== 'New' ? (
-                    <span className="rating-badge rating-badge-active">⭐ {user.rating}</span>
-                  ) : (
-                    <span className="rating-badge">New</span>
-                  )}
-                </div>
+        <>
+          {topProviders.length > 0 && (
+            <div className="home-section">
+              <div className="section-title">Top Providers Near You</div>
+              <div className="discover-scroll">
+                {topProviders.map((user, i) => {
+                  const isLast = i === topProviders.length - 1;
+                  return (
+                    <div key={user.id} ref={isLast ? lastDiscoverCardRef : null}>
+                      {renderProviderCard(user, true)}
+                    </div>
+                  );
+                })}
+                {loadingMoreTop && <div className="skeleton-discover-card" />}
               </div>
-            );
-          })}
-          {loadingMore && (
-            <div className="home-loading-more">
-              <div className="spinner"></div>
             </div>
           )}
-        </div>
+
+          <div className="home-section">
+            {topProviders.length > 0 && <div className="section-title">All Providers</div>}
+            <div className="providers-grid">
+              {cards.map((user, i) => {
+                const isLast = i === cards.length - 1;
+                return (
+                  <div key={user.id} ref={isLast ? lastGridCardRef : null}>
+                    {renderProviderCard(user)}
+                  </div>
+                );
+              })}
+            </div>
+            {loadingMore && (
+              <div className="home-loading-more"><div className="load-more-spinner" /></div>
+            )}
+          </div>
+        </>
       )}
 
+      {/* Bottom Sheet */}
       {selectedUser && (
-        <div className="bottom-sheet-overlay" onClick={handleCloseSheet}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle"></div>
+        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
+          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+            <div className="bottom-sheet-handle" />
             <div className="bottom-sheet-content">
               <div className="sheet-avatar">
                 {selectedUser.profile_pic_url ? (
                   <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
                 ) : (
-                  <div className="sheet-avatar-placeholder">👤</div>
+                  <div className="sheet-avatar-placeholder"><IconAvatar /></div>
                 )}
               </div>
-              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card"></span>}</h2>
+              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
+              <div className="sheet-rating-row">
+                <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
+                <span>•</span>
+                <span>{selectedUser.gigCount || 0} gigs</span>
+              </div>
               <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
-              <p className="sheet-rating">
-                {selectedUser.rating !== 'New' ? `⭐ ${selectedUser.rating} • ${selectedUser.gigCount || 0} gigs` : 'New • 0 gigs'}
-              </p>
               <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
-              <p className="sheet-services">
-                {selectedUser.services && selectedUser.services.length > 0
-                  ? selectedUser.services.map((s) => s.replace(/-/g, ' ')).join(' • ')
-                  : 'No services listed'}
-              </p>
+              {selectedUser.services?.length > 0 && (
+                <div className="sheet-services-chips">
+                  {selectedUser.services.map(s => (
+                    <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
+                  ))}
+                </div>
+              )}
               <div className="sheet-buttons">
-                <button className="sheet-message-btn" onClick={() => {
-                  onStartChat && onStartChat(selectedUser);
-                  setSelectedUser(null);
-                }}>
-                  💬 Message
-                </button>
-                <button className="sheet-view-profile-btn" onClick={() => {
-                  onViewProfile && onViewProfile(selectedUser);
-                  setSelectedUser(null);
-                }}>
-                  View Full Profile
-                </button>
+                <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+                <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Scroll to Top */}
+      {showScrollTop && (
+        <button className="scroll-to-top" onClick={scrollToTop}><IconArrowUp /></button>
       )}
     </div>
   );
