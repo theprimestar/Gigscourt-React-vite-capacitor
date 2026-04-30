@@ -130,6 +130,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
 
   const fetchTopProviders = async () => {
   try {
+    console.log('Calling with lat:', viewerLat, 'lng:', viewerLng);
     const { data } = await supabase.rpc('get_top_nearby_providers', {
       viewer_lat: viewerLat, viewer_lng: viewerLng,
       p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
