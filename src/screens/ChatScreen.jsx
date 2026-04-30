@@ -18,6 +18,10 @@ const IconPlay = () => (<svg viewBox="0 0 24 24" width="14" height="14" fill="cu
 const IconPause = () => (<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>);
 
 const MSG_CACHE_PREFIX = 'gigscourt_msgs_';
+const PROFILE_CACHE_PREFIX = 'gigscourt_profile_';
+
+function getCached(key) { try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : null; } catch { return null; } }
+function setCached(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
 function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const [messages, setMessages] = useState([]);
@@ -60,22 +64,23 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const recordingTimerRef = useRef(null);
   const actionBarRef = useRef(null);
   const audioRef = useRef(null);
-  const audioProgressRef = useRef(null);
+  const freshLoaded = useRef(false);
 
-  const cacheKey = MSG_CACHE_PREFIX + (chatId || '');
+  const msgCacheKey = MSG_CACHE_PREFIX + (chatId || otherUserId);
+  const profileCacheKey = PROFILE_CACHE_PREFIX + otherUserId;
 
   useEffect(() => {
     isMounted.current = true;
     if (isVisible) {
-      const cached = getCachedMessages();
-      if (cached.length) { setMessages(cached); setLoading(false); }
+      const cachedMsgs = getCached(msgCacheKey);
+      if (cachedMsgs) { setMessages(cachedMsgs); setLoading(false); }
+      const cachedProfile = getCached(profileCacheKey);
+      if (cachedProfile && otherUserId) setOtherUser(cachedProfile);
+      freshLoaded.current = false;
       init();
     }
     return () => { isMounted.current = false; stopPolling(); unsubscribeChannel(); stopRecording(); stopAudio(); };
   }, [chatId, otherUserId, isVisible]);
-
-  const getCachedMessages = () => { try { return JSON.parse(localStorage.getItem(cacheKey)) || []; } catch { return []; } };
-  const setCachedMessages = (msgs) => { try { localStorage.setItem(cacheKey, JSON.stringify(msgs)); } catch {} };
 
   useEffect(() => { if (actionMsg) { const close = (e) => { if (!actionBarRef.current?.contains(e.target)) setActionMsg(null); }; document.addEventListener('mousedown', close); document.addEventListener('touchstart', close); return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); }; } }, [actionMsg]);
 
@@ -99,7 +104,15 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
         else { setBannerDismissed(false); bannerDismissedByRef.current = null; }
       }
       const { data: profile } = await supabase.from('profiles').select('full_name, profile_pic_url, id, onesignal_player_id').eq('id', otherUserId).single();
-      if (isMounted.current) setOtherUser(profile || { full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+      if (isMounted.current && profile) {
+        const cachedProfile = getCached(profileCacheKey);
+        if (!cachedProfile || cachedProfile.full_name !== profile.full_name || cachedProfile.profile_pic_url !== profile.profile_pic_url) {
+          setCached(profileCacheKey, profile);
+        }
+        setOtherUser(profile);
+      } else if (isMounted.current) {
+        setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
+      }
       await loadMessages(channelKey, user.id);
       if (isMounted.current) setLoading(false);
       subscribeToChannel(channelKey);
@@ -110,14 +123,22 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   const loadMessages = async (channelId, userId) => {
     const { data: history } = await supabase.rpc('get_messages', { p_channel_id: channelId, p_user_id: userId, p_cursor: null, p_cursor_id: null, p_limit: 50 });
     if (isMounted.current && history) {
-      const sorted = [...history].reverse().map(m => ({
-        ...m,
-        status: m.sender_id === userId ? (m.is_read ? 'read' : 'sent') : undefined,
-      }));
+      const sorted = [...history].reverse().map(m => ({ ...m, status: m.sender_id === userId ? (m.is_read ? 'read' : 'sent') : undefined }));
       sorted.forEach(m => seenIds.current.add(m.id));
-      setMessages(sorted);
-      setCachedMessages(sorted);
-      setTimeout(() => { if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight; }, 100);
+      if (!freshLoaded.current) {
+        setMessages(sorted);
+        setCached(msgCacheKey, sorted);
+        freshLoaded.current = true;
+        setTimeout(() => { if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight; }, 100);
+      } else {
+        setMessages(prev => {
+          const merged = new Map(prev.map(p => [p.id, p]));
+          sorted.forEach(s => merged.set(s.id, s));
+          const result = [...merged.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          setCached(msgCacheKey, result);
+          return result;
+        });
+      }
     }
   };
 
@@ -129,7 +150,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       const msg = payload?.payload;
       if (!msg?.id || seenIds.current.has(msg.id)) return;
       seenIds.current.add(msg.id);
-      setMessages(prev => { const updated = [...prev, { ...msg, status: 'sent' }]; setCachedMessages(updated); return updated; });
+      setMessages(prev => { const updated = [...prev, { ...msg, status: 'sent' }]; setCached(msgCacheKey, updated); return updated; });
       scrollToBottom();
     });
     channelRef.current.subscribe();
@@ -143,17 +164,11 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       const { data } = await supabase.rpc('get_messages', { p_channel_id: channelId, p_user_id: userId, p_cursor: null, p_cursor_id: null, p_limit: 50 });
       if (!data || !isMounted.current) return;
       setMessages(prev => {
-        const updated = prev.map(msg => { const d = data.find(m => m.id === msg.id); if (d && d.is_read && msg.status !== 'read') return { ...msg, is_read: true, status: 'read' }; return msg; });
-        const newMessages = data.filter(m => !seenIds.current.has(m.id));
-        if (newMessages.length > 0) {
-          newMessages.forEach(m => seenIds.current.add(m.id));
-          const existing = new Set(prev.map(p => p.id));
-          const unique = newMessages.filter(m => !existing.has(m.id)).map(m => ({ ...m, status: 'sent' }));
-          const result = [...updated, ...unique].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-          setCachedMessages(result);
-          return result;
-        }
-        return updated;
+        const merged = new Map(prev.map(p => [p.id, p]));
+        data.forEach(m => { if (!seenIds.current.has(m.id)) { seenIds.current.add(m.id); merged.set(m.id, { ...m, status: 'sent' }); } else { const existing = merged.get(m.id); if (existing && m.is_read && existing.status !== 'read') merged.set(m.id, { ...existing, is_read: true, status: 'read' }); } });
+        const result = [...merged.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        setCached(msgCacheKey, result);
+        return result;
       });
       if (gig && isMounted.current) checkGigReminder(gig);
     }, 5000);
@@ -173,7 +188,6 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     audio.onended = () => { if (isMounted.current) { setPlayingAudio(null); setAudioCurrentTime(0); } };
     audio.play();
   };
-
   const formatDuration = (secs) => { if (!secs) return '0:00'; const m = Math.floor(secs / 60); const s = Math.floor(secs % 60); return `${m}:${s < 10 ? '0' : ''}${s}`; };
 
   const handleReply = (msg) => { setReplyingTo(msg); setActionMsg(null); setEditingMsg(null); };
@@ -182,16 +196,16 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     setActionMsg(null);
     if (isMine) {
       await supabase.from('messages').update({ deleted_by_sender: true }).eq('id', msgId);
-      setMessages(prev => { const updated = prev.map(m => m.id === msgId ? { ...m, deleted_by_sender: true } : m); setCachedMessages(updated); return updated; });
+      setMessages(prev => { const updated = prev.map(m => m.id === msgId ? { ...m, deleted_by_sender: true } : m); setCached(msgCacheKey, updated); return updated; });
     } else {
-      setMessages(prev => { const updated = prev.filter(m => m.id !== msgId); setCachedMessages(updated); return updated; });
+      setMessages(prev => { const updated = prev.filter(m => m.id !== msgId); setCached(msgCacheKey, updated); return updated; });
     }
   };
   const handleEditMsg = (msg) => { setEditingMsg(msg); setEditText(msg.text); setActionMsg(null); setReplyingTo(null); };
   const submitEdit = async () => {
     if (!editText.trim() || !editingMsg) return;
     await supabase.from('messages').update({ text: editText.trim(), edited_at: new Date().toISOString() }).eq('id', editingMsg.id);
-    setMessages(prev => { const updated = prev.map(m => m.id === editingMsg.id ? { ...m, text: editText.trim(), edited_at: new Date().toISOString() } : m); setCachedMessages(updated); return updated; });
+    setMessages(prev => { const updated = prev.map(m => m.id === editingMsg.id ? { ...m, text: editText.trim(), edited_at: new Date().toISOString() } : m); setCached(msgCacheKey, updated); return updated; });
     setEditingMsg(null); setEditText('');
   };
   const handleLongPress = (e, msg) => { e.preventDefault(); setActionMsg(msg); setReplyingTo(null); setEditingMsg(null); };
@@ -231,7 +245,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
       const { data: savedMessage } = await supabase.rpc('send_message', { p_channel_key: channelKey, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: text });
       if (!savedMessage) throw new Error('Failed to send');
       if (replyToId) await supabase.from('messages').update({ reply_to_id: replyToId }).eq('id', savedMessage.id);
-      setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, reply_to_id: replyToId, status: 'sent' } : m); setCachedMessages(updated); return updated; });
+      setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, reply_to_id: replyToId, status: 'sent' } : m); setCached(msgCacheKey, updated); return updated; });
       seenIds.current.add(savedMessage.id);
       if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
       if (otherUser?.onesignal_player_id) fetch(PUSH_NOTIFICATION_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_player_ids: [otherUser.onesignal_player_id], headings: { en: currentUserName || 'New message' }, contents: { en: text }, data: { channel_id: channelKey } }) }).catch(() => {});
@@ -240,8 +254,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
   };
 
   const processPhotoQueue = useCallback(async () => {
-    if (processingPhotos.current || photoQueue.current.length === 0) return;
-    processingPhotos.current = true;
+    if (processingPhotos.current || photoQueue.current.length === 0) return; processingPhotos.current = true;
     while (photoQueue.current.length > 0) { const item = photoQueue.current[0]; try { await uploadPhoto(item.file, item.tempId); } catch (err) { setMessages(prev => prev.map(m => m.id === item.tempId ? { ...m, status: 'failed' } : m)); } photoQueue.current.shift(); }
     processingPhotos.current = false;
   }, [otherUserId, otherUser, currentUserId, currentUserName]);
@@ -255,43 +268,26 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
     const channelKey = channelIdRef.current;
     const { data: savedMessage } = await supabase.rpc('send_message', { p_channel_key: channelKey, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_image_url: optimizedUrl });
     if (!savedMessage) throw new Error('Failed to save photo');
-    setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m); setCachedMessages(updated); return updated; });
+    setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m); setCached(msgCacheKey, updated); return updated; });
     seenIds.current.add(savedMessage.id);
     if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
     if (otherUser?.onesignal_player_id) fetch(PUSH_NOTIFICATION_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ include_player_ids: [otherUser.onesignal_player_id], headings: { en: currentUserName || 'New photo' }, contents: { en: 'Photo' }, data: { channel_id: channelKey } }) }).catch(() => {});
     await checkBannerReappear();
   };
 
-  const startRecording = async () => {
-    try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); const chunks = []; recorder.ondataavailable = (e) => chunks.push(e.data); recorder.onstop = async () => { const blob = new Blob(chunks, { type: 'audio/webm' }); await uploadAudio(blob); stream.getTracks().forEach(t => t.stop()); }; mediaRecorderRef.current = recorder; recorder.start(); setIsRecording(true); setRecordingTime(0); recordingTimerRef.current = setInterval(() => { setRecordingTime(prev => { if (prev >= 59) { stopRecording(); return 60; } return prev + 1; }); }, 1000); } catch (err) { setError('Microphone access denied'); }
-  };
+  const startRecording = async () => { try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' }); const chunks = []; recorder.ondataavailable = (e) => chunks.push(e.data); recorder.onstop = async () => { const blob = new Blob(chunks, { type: 'audio/webm' }); await uploadAudio(blob); stream.getTracks().forEach(t => t.stop()); }; mediaRecorderRef.current = recorder; recorder.start(); setIsRecording(true); setRecordingTime(0); recordingTimerRef.current = setInterval(() => { setRecordingTime(prev => { if (prev >= 59) { stopRecording(); return 60; } return prev + 1; }); }, 1000); } catch (err) { setError('Microphone access denied'); } };
   const stopRecording = () => { if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') mediaRecorderRef.current.stop(); setIsRecording(false); if (recordingTimerRef.current) clearInterval(recordingTimerRef.current); };
   const uploadAudio = async (blob) => {
     const tempId = 'temp-audio-' + Date.now();
     const tempMsg = { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' };
     setMessages(prev => [...prev, tempMsg]); scrollToBottom();
-    try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL); const auth = await authRes.json();
-      const formData = new FormData(); formData.append('file', blob, 'voice-message.webm'); formData.append('fileName', 'voice-message.webm'); formData.append('folder', '/chat-audio'); formData.append('useUniqueFileName', 'true'); formData.append('publicKey', imagekitPublicKey); formData.append('token', auth.token); formData.append('signature', auth.signature); formData.append('expire', auth.expire);
-      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData }); const result = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
-      const channelKey = channelIdRef.current;
-      const { data: savedMessage } = await supabase.rpc('send_message', { p_channel_key: channelKey, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_audio_url: result.url });
-      if (!savedMessage) throw new Error('Failed to save audio');
-      setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m); setCachedMessages(updated); return updated; });
-      seenIds.current.add(savedMessage.id);
-      if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
-    } catch (err) { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)); }
+    try { const authRes = await fetch(IMAGEKIT_AUTH_URL); const auth = await authRes.json(); const formData = new FormData(); formData.append('file', blob, 'voice-message.webm'); formData.append('fileName', 'voice-message.webm'); formData.append('folder', '/chat-audio'); formData.append('useUniqueFileName', 'true'); formData.append('publicKey', imagekitPublicKey); formData.append('token', auth.token); formData.append('signature', auth.signature); formData.append('expire', auth.expire); const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: formData }); const result = await uploadRes.json(); if (!uploadRes.ok) throw new Error(result.message || 'Upload failed'); const channelKey = channelIdRef.current; const { data: savedMessage } = await supabase.rpc('send_message', { p_channel_key: channelKey, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_audio_url: result.url }); if (!savedMessage) throw new Error('Failed to save audio'); setMessages(prev => { const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m); setCached(msgCacheKey, updated); return updated; }); seenIds.current.add(savedMessage.id); if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {}); } catch (err) { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)); }
   };
 
   const handleSend = async (e) => { e.preventDefault(); if (!newMessage.trim() || !currentUserId) return; const text = newMessage.trim(); const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9); setNewMessage(''); const replyToId = replyingTo?.id || null; setReplyingTo(null); const tempMsg = { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text, image_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending', reply_to_id: replyToId }; setMessages(prev => [...prev, tempMsg]); scrollToBottom(); sendTextMessage(text, tempId, replyToId); };
   const retryMessage = (tempId, text) => { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sending' } : m)); sendTextMessage(text, tempId); };
   const handlePhotoUpload = (e) => { const file = e.target.files?.[0]; if (!file || !currentUserId) return; const tempId = 'temp-photo-' + Date.now(); const tempMsg = { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }; setMessages(prev => [...prev, tempMsg]); scrollToBottom(); photoQueue.current.push({ file, tempId }); processPhotoQueue(); if (fileInputRef.current) fileInputRef.current.value = ''; };
-
-  const getStatusText = (msg) => {
-    if (msg.sender_id !== currentUserId) return null;
-    switch (msg.status) { case 'sending': return <span className="message-status sending">...</span>; case 'sent': return <span className="message-status sent">Sent</span>; case 'read': return <span className="message-status read">Read</span>; case 'failed': return <button className="message-retry-btn" onClick={() => { if (msg.image_url || msg.audio_url) setError('Please reselect to retry'); else retryMessage(msg.id, msg.text); }}>Retry</button>; case 'uploading': return <span className="message-status sending">Uploading...</span>; default: return null; }
-  };
+  const getStatusText = (msg) => { if (msg.sender_id !== currentUserId) return null; switch (msg.status) { case 'sending': return <span className="message-status sending">...</span>; case 'sent': return <span className="message-status sent">Sent</span>; case 'read': return <span className="message-status read">Read</span>; case 'failed': return <button className="message-retry-btn" onClick={() => { if (msg.image_url || msg.audio_url) setError('Please reselect to retry'); else retryMessage(msg.id, msg.text); }}>Retry</button>; case 'uploading': return <span className="message-status sending">Uploading...</span>; default: return null; } };
   const formatTime = (timestamp) => { if (!timestamp) return ''; return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
 
   return (
@@ -318,14 +314,7 @@ function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile,
             <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-other'} ${isDeleted ? 'bubble-deleted' : ''}`} onContextMenu={(e) => { e.preventDefault(); handleLongPress(e, msg); }} onTouchStart={(e) => { const timer = setTimeout(() => handleLongPress(e, msg), 500); e.target._longPress = timer; }} onTouchEnd={(e) => clearTimeout(e.target._longPress)} onTouchMove={() => {}}>
               {isDeleted ? <p className="message-text">This message was deleted</p> : (<>
                 {repliedMsg && <div className="quoted-message"><div className="quoted-name">{repliedMsg.sender_id === currentUserId ? 'You' : (otherUser?.full_name || 'User')}</div><div className="quoted-text">{repliedMsg.text || (repliedMsg.image_url ? 'Photo' : 'Voice message')}</div></div>}
-                {msg.audio_url ? (<div className="voice-message">
-                  <button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>{isPlayingThis ? <IconPause /> : <IconPlay />}</button>
-                  <div className="voice-waveform" style={{ flex: 1, position: 'relative', height: 24 }}>
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 1, opacity: isPlayingThis ? 0.3 : 1 }}>{[...Array(20)].map((_, i) => <div key={i} className="voice-wave-bar" style={{ height: `${Math.random() * 16 + 4}px` }} />)}</div>
-                    {isPlayingThis && <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${progress}%`, background: 'rgba(255,255,255,0.2)', borderRadius: 2, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 1 }}>{[...Array(20)].map((_, i) => <div key={i} className="voice-wave-bar" style={{ height: `${Math.random() * 16 + 4}px`, background: 'rgba(255,255,255,0.8)' }} />)}</div>}
-                  </div>
-                  <span className="voice-duration">{isPlayingThis ? formatDuration(audioDuration - audioCurrentTime) : ''}</span>
-                </div>) : msg.image_url ? <img src={msg.image_url} alt="" className="chat-photo" onClick={() => setFullScreenImage(msg.image_url)} /> : null}
+                {msg.audio_url ? (<div className="voice-message"><button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>{isPlayingThis ? <IconPause /> : <IconPlay />}</button><div className="voice-waveform" style={{ flex: 1, position: 'relative', height: 24 }}><div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', gap: 1, opacity: isPlayingThis ? 0.3 : 1 }}>{[...Array(20)].map((_, i) => <div key={i} className="voice-wave-bar" style={{ height: `${Math.random() * 16 + 4}px` }} />)}</div>{isPlayingThis && <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${progress}%`, background: 'rgba(255,255,255,0.2)', borderRadius: 2, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 1 }}>{[...Array(20)].map((_, i) => <div key={i} className="voice-wave-bar" style={{ height: `${Math.random() * 16 + 4}px`, background: 'rgba(255,255,255,0.8)' }} />)}</div>}</div><span className="voice-duration">{isPlayingThis ? formatDuration(audioDuration - audioCurrentTime) : ''}</span></div>) : msg.image_url ? <img src={msg.image_url} alt="" className="chat-photo" onClick={() => setFullScreenImage(msg.image_url)} /> : null}
                 {editingMsg?.id === msg.id ? (<div style={{ display: 'flex', gap: 4, alignItems: 'center' }}><input type="text" value={editText} onChange={e => setEditText(e.target.value)} style={{ flex: 1, padding: '6px 10px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.1)', color: 'inherit', fontSize: 14, outline: 'none' }} autoFocus /><button onClick={submitEdit} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 12, padding: '6px 10px', color: 'inherit', cursor: 'pointer', fontSize: 13 }}>Save</button><button onClick={() => setEditingMsg(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 13, opacity: 0.7 }}>✕</button></div>) : msg.text ? <p className="message-text">{msg.text}</p> : null}
               </>)}
               <span className="message-time">{formatTime(msg.created_at)}{msg.edited_at && !isDeleted ? ' (edited)' : ''}{isMine && getStatusText(msg)}</span>
