@@ -501,7 +501,20 @@
   opacity: 0;
 }
 
-/* Glass-morphism */
+/* Chips & Slider Collapse */
+.chips-slider-container {
+  max-height: 200px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.chips-slider-container:not(.visible) {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* Transparent Overlays - No Blur */
 .search-floating-bar {
   background: transparent !important;
   backdrop-filter: none !important;
@@ -509,30 +522,26 @@
 }
 
 .search-input-transparent {
-  background: rgba(255, 255, 255, 0.18) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 
 @media (prefers-color-scheme: dark) {
   .search-input-transparent {
-    background: rgba(0, 0, 0, 0.3) !important;
+    background: rgba(0, 0, 0, 0.85) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
   }
 }
 
 .chip-btn {
-  background: rgba(255, 255, 255, 0.25) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
   color: #1d1d1f !important;
 }
 
 @media (prefers-color-scheme: dark) {
   .chip-btn {
-    background: rgba(0, 0, 0, 0.35) !important;
+    background: rgba(0, 0, 0, 0.8) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
     color: #ffffff !important;
   }
@@ -545,19 +554,17 @@
 }
 
 .toggle-btn {
-  background: rgba(255, 255, 255, 0.25) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
 }
 
 @media (prefers-color-scheme: dark) {
   .toggle-btn {
-    background: rgba(0, 0, 0, 0.35) !important;
+    background: rgba(0, 0, 0, 0.8) !important;
   }
 }
 
 .toggle-btn.active {
-  background: rgba(255, 255, 255, 0.6) !important;
+  background: white !important;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -567,9 +574,7 @@
 }
 
 .radius-bar {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.85);
   border-radius: 12px;
   padding: 8px 12px !important;
   margin: 4px 0;
@@ -577,7 +582,7 @@
 
 @media (prefers-color-scheme: dark) {
   .radius-bar {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.8);
   }
 }
 
