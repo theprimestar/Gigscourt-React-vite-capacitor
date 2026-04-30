@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { checkExpiredGigs } from '../gigSystem';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import '../Chat.css';
 
 // ──────────────────────────────────────
@@ -13,19 +14,19 @@ const IconAvatar = () => (
 );
 
 const IconPin = () => (
-  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none">
     <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
   </svg>
 );
 
 const IconDelete = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
   </svg>
 );
 
 const IconUnpin = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="4" y1="4" x2="20" y2="20"/><path d="M12 2l3.09 6.26L22 9.27l-5 4.14 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
   </svg>
 );
@@ -34,6 +35,10 @@ const CACHE_KEY = 'gigscourt_chatlist_cache';
 
 function getCachedChats() { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; } catch { return []; } }
 function setCachedChats(chats) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(chats)); } catch {} }
+
+const haptic = (style = 'medium') => {
+  try { Haptics.impact({ style: style === 'light' ? ImpactStyle.Light : style === 'heavy' ? ImpactStyle.Heavy : ImpactStyle.Medium }); } catch {}
+};
 
 // ──────────────────────────────────────
 //  CHAT LIST SCREEN
@@ -44,7 +49,7 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [actionChatId, setActionChatId] = useState(null);
+  const [actionChat, setActionChat] = useState(null);
 
   const cursorRef = useRef(null);
   const observerRef = useRef(null);
@@ -52,7 +57,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const fetchingRef = useRef(false);
   const initialLoadDone = useRef(false);
   const longPressTimer = useRef(null);
-  const actionBarRef = useRef(null);
 
   // ──────────────────────────────────────
   //  EFFECTS
@@ -90,18 +94,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [currentUserId, isVisible]);
-
-  useEffect(() => {
-    if (actionChatId) {
-      const close = (e) => { if (!actionBarRef.current?.contains(e.target)) setActionChatId(null); };
-      document.addEventListener('mousedown', close);
-      document.addEventListener('touchstart', close);
-      return () => {
-        document.removeEventListener('mousedown', close);
-        document.removeEventListener('touchstart', close);
-      };
-    }
-  }, [actionChatId]);
 
   // ──────────────────────────────────────
   //  DATA FETCHING
@@ -182,12 +174,8 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const handleDeleteChat = async (channelId) => {
     if (!currentUserId) return;
     await supabase.from('channel_members').update({ deleted_at: new Date().toISOString() }).eq('channel_id', channelId).eq('user_id', currentUserId);
-    setChats(prev => {
-      const result = prev.filter(c => c.channel_id !== channelId);
-      setCachedChats(result);
-      return result;
-    });
-    setActionChatId(null);
+    setChats(prev => { const result = prev.filter(c => c.channel_id !== channelId); setCachedChats(result); return result; });
+    setActionChat(null);
   };
 
   const handlePinChat = async (channelId) => {
@@ -195,21 +183,18 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     const chat = chats.find(c => c.channel_id === channelId);
     const isPinned = !!chat?.isPinned;
     await supabase.from('channel_members').update({ pinned_at: isPinned ? null : new Date().toISOString() }).eq('channel_id', channelId).eq('user_id', currentUserId);
-    setChats(prev => {
-      const result = prev.map(c => c.channel_id === channelId ? { ...c, isPinned: !isPinned } : c);
-      setCachedChats(result);
-      return result;
-    });
-    setActionChatId(null);
+    setChats(prev => { const result = prev.map(c => c.channel_id === channelId ? { ...c, isPinned: !isPinned } : c); setCachedChats(result); return result; });
+    setActionChat(null);
   };
 
-  const handleLongPress = (e, chatId) => {
+  const handleLongPress = (e, chat) => {
     e.preventDefault();
-    setActionChatId(actionChatId === chatId ? null : chatId);
+    haptic('medium');
+    setActionChat(actionChat?.channel_id === chat.channel_id ? null : chat);
   };
 
   const handleTap = (chat) => {
-    setActionChatId(null);
+    setActionChat(null);
     if (onStartChat) onStartChat({ id: chat.other_user_id, full_name: chat.other_user_name, chatId: chat.channel_id });
     if (onDeepScreen) onDeepScreen('chat');
   };
@@ -236,6 +221,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     <div className="chat-list-screen">
       <header className="chat-list-header"><h1>Chats</h1></header>
 
+      {/* Background blur overlay */}
+      {actionChat && <div className="chat-list-blur-overlay" onClick={() => setActionChat(null)} />}
+
       {chats.length === 0 && !loading ? (
         <div className="chat-list-empty">
           <p>No conversations yet</p>
@@ -245,15 +233,15 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
         <div className="chat-list-items">
           {chats.map((chat, index) => {
             const isLast = index === chats.length - 1;
-            const showActions = actionChatId === chat.channel_id;
+            const isActive = actionChat?.channel_id === chat.channel_id;
 
             return (
-              <div key={chat.channel_id} className="chat-list-item-row">
+              <div key={chat.channel_id} className={`chat-list-item-row ${isActive ? 'active-row' : ''}`}>
                 <div
                   ref={isLast ? lastChatRef : null}
-                  className={`chat-list-item ${chat.isPinned ? 'pinned' : ''} ${showActions ? 'highlighted' : ''}`}
-                  onContextMenu={(e) => handleLongPress(e, chat.channel_id)}
-                  onTouchStart={(e) => { longPressTimer.current = setTimeout(() => handleLongPress(e, chat.channel_id), 500); }}
+                  className={`chat-list-item ${chat.isPinned ? 'pinned' : ''}`}
+                  onContextMenu={(e) => handleLongPress(e, chat)}
+                  onTouchStart={(e) => { longPressTimer.current = setTimeout(() => handleLongPress(e, chat), 500); }}
                   onTouchEnd={() => clearTimeout(longPressTimer.current)}
                   onTouchMove={() => clearTimeout(longPressTimer.current)}
                   onClick={() => handleTap(chat)}
@@ -278,15 +266,15 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
                     </div>
                     <div className="chat-list-bottom">
                       <p className="chat-list-preview">{chat.last_message || ''}</p>
-                      {chat.unread_count > 0 && (
+                      {chat.has_unread && chat.unread_count > 0 && (
                         <span className="unread-badge">{chat.unread_count > 99 ? '99+' : chat.unread_count}</span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {showActions && (
-                  <div className="chat-list-actions" ref={actionBarRef}>
+                {isActive && (
+                  <div className="chat-list-actions">
                     <button className="chat-list-action-btn" onClick={() => handlePinChat(chat.channel_id)}>
                       <span>{chat.isPinned ? 'Unpin' : 'Pin'}</span>
                       {chat.isPinned ? <IconUnpin /> : <IconPin />}
