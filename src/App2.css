@@ -315,28 +315,6 @@
   text-overflow: ellipsis;
 }
 
-/* Sheet Buttons */
-.sheet-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.sheet-message-btn {
-  flex: 1;
-  background: #34c759;
-  color: white;
-  border: none;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.sheet-view-profile-btn {
-  flex: 1;
-}
-
 /* Profile Screen */
 .profile-screen {
   width: 100%;
