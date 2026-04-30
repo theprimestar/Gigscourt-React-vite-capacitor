@@ -1104,3 +1104,102 @@
     background: #1c1c1e;
   }
 }
+
+/* Chat List Actions (long press) */
+.chat-list-item-row {
+  position: relative;
+}
+
+.chat-list-item.highlighted {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-item.highlighted {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.chat-list-actions {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 14px;
+  padding: 4px;
+  margin: 6px 0;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-actions {
+    background: rgba(44, 44, 46, 0.97);
+  }
+}
+
+.chat-list-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+  border-radius: 10px;
+  gap: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-action-btn {
+    color: #ffffff;
+  }
+}
+
+.chat-list-action-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.chat-list-action-btn.danger {
+  color: #ff3b30;
+}
+
+.chat-list-action-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Unread Badge */
+.unread-badge {
+  background: #007aff;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.chat-list-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Pending Gig Label */
+.pending-gig-label {
+  background: #ff8f00;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 8px;
+  margin-right: 6px;
+}
