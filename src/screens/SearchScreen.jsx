@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import L from 'leaflet';
 import 'leaflet-rotate';
-import '../App.css';
 import '../Search.css';
 
 const POPULAR_SERVICES = [
