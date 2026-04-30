@@ -288,13 +288,11 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const renderStars = (rating) => {
-    if (rating === 'New' || !rating) return null;
-    const num = parseFloat(rating);
-    const full = Math.floor(num);
-    const half = num - full >= 0.5;
-    const empty = 5 - full - (half ? 1 : 0);
-    return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
-  };
+  if (rating === 'New' || !rating) return null;
+  const num = parseFloat(rating);
+  const rounded = Math.round(num);
+  return '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
+};
 
   const handleCardTap = (user) => setSelectedUser(user);
 
