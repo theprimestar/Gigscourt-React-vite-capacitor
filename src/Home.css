@@ -440,6 +440,33 @@
 }
 
 /* Bottom Sheet */
+.bottom-sheet-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: auto;
+}
+
+.bottom-sheet {
+  background: white;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 .sheet-rating-row {
   display: flex;
   align-items: center;
