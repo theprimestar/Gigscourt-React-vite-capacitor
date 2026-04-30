@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import '../Home.css';
 
-// SVG Icons
 const IconBell = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -43,6 +42,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const lastFetchRef = useRef({ lat: null, lng: null });
   const isMounted = useRef(true);
   const scrollContainerRef = useRef(null);
+  const firstLoad = useRef(true);
+  const isLocationChange = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -82,6 +83,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
 
           if (distance > 100) {
+            isLocationChange.current = true;
             setViewerLat(newLat);
             setViewerLng(newLng);
             lastFetchRef.current = { lat: newLat, lng: newLng };
@@ -129,25 +131,22 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const fetchTopProviders = async () => {
-  try {
-    console.log('Calling with lat:', viewerLat, 'lng:', viewerLng);
-    const { data } = await supabase.rpc('get_top_nearby_providers', {
-      viewer_lat: viewerLat, viewer_lng: viewerLng,
-      p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
-    });
-    console.log('Top providers raw data:', data);
-    if (isMounted.current && data) {
-      const enriched = await enrichCards(data);
-      console.log('Top providers enriched:', enriched);
-      setTopProviders(enriched);
-      if (data.length > 0) {
-        const last = data[data.length - 1];
-        topCursorRef.current = { distance: last.distance_meters, id: last.id };
+    try {
+      const { data } = await supabase.rpc('get_top_nearby_providers', {
+        viewer_lat: viewerLat, viewer_lng: viewerLng,
+        p_limit: 10, p_cursor_distance: null, p_cursor_id: null,
+      });
+      if (isMounted.current && data) {
+        const enriched = await enrichCards(data);
+        setTopProviders(enriched);
+        if (data.length > 0) {
+          const last = data[data.length - 1];
+          topCursorRef.current = { distance: last.distance_meters, id: last.id };
+        }
+        setHasMoreTop(data && data.length === 10);
       }
-      setHasMoreTop(data && data.length === 10);
-    }
-  } catch (err) { console.error('Top providers error:', err); }
-};
+    } catch (err) { console.error('Top providers error:', err); }
+  };
 
   const fetchMoreTopProviders = async () => {
     if (loadingMoreTop || !hasMoreTop) return;
@@ -173,7 +172,9 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const fetchProfiles = async () => {
-    setLoading(true);
+    if (firstLoad.current) {
+      setLoading(true);
+    }
     try {
       const { data } = await supabase.rpc('get_nearby_profiles', {
         viewer_lat: viewerLat, viewer_lng: viewerLng,
@@ -187,9 +188,16 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           cursorRef.current = { distance: last.distance_meters, id: last.id };
         }
         setHasMore(data && data.length === 20);
+        if (firstLoad.current) {
+          firstLoad.current = false;
+        }
+        if (isLocationChange.current) {
+          scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+          isLocationChange.current = false;
+        }
       }
     } catch (err) { console.error('Fetch error:', err); }
-    finally { if (isMounted.current) setLoading(false); }
+    finally { if (isMounted.current && firstLoad.current === false) setLoading(false); }
   };
 
   const fetchMoreProfiles = async () => {
@@ -291,7 +299,6 @@ function HomeScreen({ onStartChat, onViewProfile }) {
 
   return (
     <div className="home-screen" ref={scrollContainerRef} onScroll={handleScroll}>
-      {/* Header */}
       <header className={`home-header ${scrolled ? 'scrolled' : ''}`}>
         <div className="header-top-row">
           <div className="header-brand">
@@ -305,7 +312,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         </div>
       </header>
 
-      {loading ? (
+      {loading && firstLoad.current ? (
         <>
           <div className="home-section">
             <div className="section-title">Top Providers Near You</div>
@@ -349,7 +356,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           )}
 
           <div className="home-section">
-  <div className="section-title">All Providers</div>
+            <div className="section-title">All Providers</div>
             <div className="providers-grid">
               {cards.map((user, i) => {
                 const isLast = i === cards.length - 1;
@@ -367,45 +374,43 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         </>
       )}
 
-      {/* Bottom Sheet */}
       {selectedUser && ReactDOM.createPortal(
-  <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
-    <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-      <div className="bottom-sheet-handle" />
-      <div className="bottom-sheet-content">
-        <div className="sheet-avatar">
-          {selectedUser.profile_pic_url ? (
-            <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
-          ) : (
-            <div className="sheet-avatar-placeholder"><IconAvatar /></div>
-          )}
-        </div>
-        <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
-        <div className="sheet-rating-row">
-          <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
-          <span>•</span>
-          <span>{selectedUser.gigCount || 0} gigs</span>
-        </div>
-        <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
-        <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
-        {selectedUser.services?.length > 0 && (
-          <div className="sheet-services-chips">
-            {selectedUser.services.map(s => (
-              <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
-            ))}
+        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
+          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
+            <div className="bottom-sheet-handle" />
+            <div className="bottom-sheet-content">
+              <div className="sheet-avatar">
+                {selectedUser.profile_pic_url ? (
+                  <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
+                ) : (
+                  <div className="sheet-avatar-placeholder"><IconAvatar /></div>
+                )}
+              </div>
+              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
+              <div className="sheet-rating-row">
+                <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
+                <span>•</span>
+                <span>{selectedUser.gigCount || 0} gigs</span>
+              </div>
+              <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
+              <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
+              {selectedUser.services?.length > 0 && (
+                <div className="sheet-services-chips">
+                  {selectedUser.services.map(s => (
+                    <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
+                  ))}
+                </div>
+              )}
+              <div className="sheet-buttons">
+                <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+                <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
+              </div>
+            </div>
           </div>
-        )}
-        <div className="sheet-buttons">
-          <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
-          <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
-        </div>
-      </div>
-    </div>
-  </div>,
-  document.getElementById('portal-root')
-)}
+        </div>,
+        document.getElementById('portal-root')
+      )}
 
-      {/* Scroll to Top */}
       {showScrollTop && (
         <button className="scroll-to-top" onClick={scrollToTop}><IconArrowUp /></button>
       )}
