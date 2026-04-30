@@ -27,9 +27,14 @@ const IconPinSwipe = () => (
   </svg>
 );
 
+const CACHE_KEY = 'gigscourt_chatlist_cache';
+
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
-  const [chats, setChats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [chats, setChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; }
+    catch { return []; }
+  });
+  const [loading, setLoading] = useState(!chats.length);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -110,10 +115,13 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
           setChats(prev => {
             const existingIds = new Set(prev.map(c => c.channel_id));
             const newOnes = sorted.filter(c => !existingIds.has(c.channel_id));
-            return [...prev, ...newOnes];
+            const result = [...prev, ...newOnes];
+            try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch {}
+            return result;
           });
         } else {
           setChats(sorted);
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(sorted)); } catch {}
         }
         if (data.length > 0) cursorRef.current = data[data.length - 1].last_message_at;
         setHasMore(data.length === 30);
@@ -141,7 +149,11 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const handleDeleteChat = async (channelId) => {
     if (!currentUserId) return;
     await supabase.from('channel_members').update({ deleted_at: new Date().toISOString() }).eq('channel_id', channelId).eq('user_id', currentUserId);
-    setChats(prev => prev.filter(c => c.channel_id !== channelId));
+    setChats(prev => {
+      const result = prev.filter(c => c.channel_id !== channelId);
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch {}
+      return result;
+    });
     setSwipedChatId(null);
   };
 
@@ -150,10 +162,18 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     const chat = chats.find(c => c.channel_id === channelId);
     if (chat?.isPinned) {
       await supabase.from('channel_members').update({ pinned_at: null }).eq('channel_id', channelId).eq('user_id', currentUserId);
-      setChats(prev => prev.map(c => c.channel_id === channelId ? { ...c, isPinned: false } : c));
+      setChats(prev => {
+        const result = prev.map(c => c.channel_id === channelId ? { ...c, isPinned: false } : c);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch {}
+        return result;
+      });
     } else {
       await supabase.from('channel_members').update({ pinned_at: new Date().toISOString() }).eq('channel_id', channelId).eq('user_id', currentUserId);
-      setChats(prev => prev.map(c => c.channel_id === channelId ? { ...c, isPinned: true } : c));
+      setChats(prev => {
+        const result = prev.map(c => c.channel_id === channelId ? { ...c, isPinned: true } : c);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(result)); } catch {}
+        return result;
+      });
     }
     setSwipedChatId(null);
   };
@@ -184,12 +204,10 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     return date.toLocaleDateString();
   };
 
-  if (loading) return (<div className="chat-list-screen"><div className="chat-list-loading"><div className="spinner"></div></div></div>);
-
   return (
     <div className="chat-list-screen">
       <header className="chat-list-header"><h1>Chats</h1></header>
-      {chats.length === 0 ? (
+      {chats.length === 0 && !loading ? (
         <div className="chat-list-empty"><p>No conversations yet</p><p className="chat-list-empty-sub">Find a provider and start chatting!</p></div>
       ) : (
         <div className="chat-list-items">
