@@ -3,8 +3,11 @@
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: #ffffff;
+  padding-bottom: 100px;
 }
 
 @media (prefers-color-scheme: dark) {
