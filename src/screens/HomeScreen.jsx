@@ -21,6 +21,12 @@ const IconAvatar = () => (
   </svg>
 );
 
+const IconMapPin = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+
 function HomeScreen({ onStartChat, onViewProfile }) {
   const [topProviders, setTopProviders] = useState([]);
   const [cards, setCards] = useState([]);
@@ -34,6 +40,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [discoverScrollPos, setDiscoverScrollPos] = useState(0);
   const cursorRef = useRef({ distance: null, id: null });
   const topCursorRef = useRef({ distance: null, id: null });
   const gridObserverRef = useRef(null);
@@ -42,6 +49,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const lastFetchRef = useRef({ lat: null, lng: null });
   const isMounted = useRef(true);
   const scrollContainerRef = useRef(null);
+  const discoverScrollRef = useRef(null);
   const firstLoad = useRef(true);
   const isLocationChange = useRef(false);
 
@@ -109,23 +117,34 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const enrichCards = async (profiles) => {
     if (!profiles || profiles.length === 0) return profiles;
     const ids = profiles.map(p => p.id);
-    const { data: statsData } = await supabase.from('profiles').select('id, rating, review_count, gig_count').in('id', ids);
-    const { data: activeData } = await supabase.rpc('get_active_status_batch', { p_user_ids: ids });
+    
+    const [statsData, activeData, monthCounts] = await Promise.all([
+      supabase.from('profiles').select('id, rating, review_count, gig_count').in('id', ids).then(r => r.data),
+      supabase.rpc('get_active_status_batch', { p_user_ids: ids }).then(r => r.data),
+      supabase.from('gigs').select('provider_id', { count: 'exact' }).in('provider_id', ids).eq('status', 'completed').gte('completed_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()).then(r => {
+        const counts = {};
+        if (r.data) r.data.forEach(g => { counts[g.provider_id] = (counts[g.provider_id] || 0) + 1; });
+        return counts;
+      })
+    ]);
+
     const activeMap = {};
     if (activeData) activeData.forEach(a => { activeMap[a.user_id] = a.is_active; });
     ids.forEach(id => { if (!(id in activeMap)) activeMap[id] = false; });
+    
     const statsMap = {};
     if (statsData) {
       statsData.forEach(s => {
         statsMap[s.id] = {
           rating: s.review_count > 0 ? (s.rating / s.review_count).toFixed(1) : 'New',
           gigCount: s.gig_count || 0,
+          gigsThisMonth: s.id in monthCounts ? monthCounts[s.id] : 0,
         };
       });
     }
     return profiles.map(p => ({
       ...p,
-      ...(statsMap[p.id] || { rating: 'New', gigCount: 0 }),
+      ...(statsMap[p.id] || { rating: 'New', gigCount: 0, gigsThisMonth: 0 }),
       isActive: activeMap[p.id] || false,
     }));
   };
@@ -172,9 +191,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const fetchProfiles = async () => {
-    if (firstLoad.current) {
-      setLoading(true);
-    }
+    if (firstLoad.current) setLoading(true);
     try {
       const { data } = await supabase.rpc('get_nearby_profiles', {
         viewer_lat: viewerLat, viewer_lng: viewerLng,
@@ -188,16 +205,14 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           cursorRef.current = { distance: last.distance_meters, id: last.id };
         }
         setHasMore(data && data.length === 20);
-        if (firstLoad.current) {
-          firstLoad.current = false;
-        }
+        if (firstLoad.current) firstLoad.current = false;
         if (isLocationChange.current) {
           scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
           isLocationChange.current = false;
         }
       }
     } catch (err) { console.error('Fetch error:', err); }
-    finally { if (isMounted.current && firstLoad.current === false) setLoading(false); }
+    finally { if (isMounted.current && !firstLoad.current) setLoading(false); }
   };
 
   const fetchMoreProfiles = async () => {
@@ -233,19 +248,27 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   }, [loading, loadingMore, hasMore]);
 
   const lastDiscoverCardRef = useCallback(node => {
-  if (loading || loadingMoreTop) return;
-  if (discoverObserverRef.current) discoverObserverRef.current.disconnect();
-  discoverObserverRef.current = new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && hasMoreTop) fetchMoreTopProviders();
-  });
-  if (node) discoverObserverRef.current.observe(node);
-}, [loading, loadingMoreTop, hasMoreTop]);
+    if (loading || loadingMoreTop) return;
+    if (discoverObserverRef.current) discoverObserverRef.current.disconnect();
+    discoverObserverRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMoreTop) fetchMoreTopProviders();
+    });
+    if (node) discoverObserverRef.current.observe(node);
+  }, [loading, loadingMoreTop, hasMoreTop]);
 
   const handleScroll = () => {
     if (scrollContainerRef.current) {
       const scrollTop = scrollContainerRef.current.scrollTop;
       setScrolled(scrollTop > 20);
       setShowScrollTop(scrollTop > 500);
+    }
+  };
+
+  const handleDiscoverScroll = () => {
+    if (discoverScrollRef.current) {
+      const scrollLeft = discoverScrollRef.current.scrollLeft;
+      const cardWidth = 264;
+      setDiscoverScrollPos(Math.round(scrollLeft / cardWidth));
     }
   };
 
@@ -256,6 +279,21 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const formatDistance = (meters) => {
     if (meters < 1000) return `${Math.round(meters)}m away`;
     return `${(meters / 1000).toFixed(1)}km away`;
+  };
+
+  const formatJoined = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
+
+  const renderStars = (rating) => {
+    if (rating === 'New' || !rating) return null;
+    const num = parseFloat(rating);
+    const full = Math.floor(num);
+    const half = num - full >= 0.5;
+    const empty = 5 - full - (half ? 1 : 0);
+    return '★'.repeat(full) + (half ? '½' : '') + '☆'.repeat(empty);
   };
 
   const handleCardTap = (user) => setSelectedUser(user);
@@ -279,7 +317,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         {isDiscover ? (
           <div className="discover-card-meta">
             <span>{user.rating !== 'New' ? `★ ${user.rating}` : 'New'}</span>
-            <span>{user.gigCount || 0} gigs</span>
+            <span>{user.gigsThisMonth || 0} gigs this month</span>
             <span>{formatDistance(user.distance_meters)}</span>
           </div>
         ) : (
@@ -289,7 +327,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
               {user.services?.slice(0, 2).map(s => s.replace(/-/g, ' ')).join(', ') || 'No services'}
             </div>
             <div className="provider-card-rating">
-              {user.rating !== 'New' ? `★ ${user.rating}` : 'New'}
+              {user.rating !== 'New' ? `★ ${user.rating} · ${user.gigsThisMonth || 0} gigs` : 'New'}
             </div>
           </>
         )}
@@ -316,12 +354,14 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         <>
           <div className="home-section">
             <div className="section-title">Top Providers Near You</div>
+            <div className="section-desc">Active and trusted providers close to you</div>
             <div className="discover-scroll">
               {[1, 2, 3].map(i => <div key={i} className="skeleton-discover-card" />)}
             </div>
           </div>
           <div className="home-section">
             <div className="section-title">All Providers</div>
+            <div className="section-desc">Discover all available providers in your area</div>
             <div className="providers-grid">
               {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton-grid-card" />)}
             </div>
@@ -341,7 +381,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
           {topProviders.length > 0 && (
             <div className="home-section">
               <div className="section-title">Top Providers Near You</div>
-              <div className="discover-scroll">
+              <div className="section-desc">Active and trusted providers close to you</div>
+              <div className="discover-scroll" ref={discoverScrollRef} onScroll={handleDiscoverScroll}>
                 {topProviders.map((user, i) => {
                   const isLast = i === topProviders.length - 1;
                   return (
@@ -352,11 +393,19 @@ function HomeScreen({ onStartChat, onViewProfile }) {
                 })}
                 {loadingMoreTop && <div className="skeleton-discover-card" />}
               </div>
+              {topProviders.length > 1 && (
+                <div className="discover-dots">
+                  {topProviders.map((_, i) => (
+                    <div key={i} className={`discover-dot ${i === discoverScrollPos ? 'active' : ''}`} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           <div className="home-section">
             <div className="section-title">All Providers</div>
+            <div className="section-desc">Discover all available providers in your area</div>
             <div className="providers-grid">
               {cards.map((user, i) => {
                 const isLast = i === cards.length - 1;
@@ -380,20 +429,53 @@ function HomeScreen({ onStartChat, onViewProfile }) {
             <div className="bottom-sheet-handle" />
             <div className="bottom-sheet-content">
               <div className="sheet-avatar">
+                <div className={`sheet-avatar-ring ${selectedUser.isActive ? 'active' : ''}`} />
                 {selectedUser.profile_pic_url ? (
                   <img src={selectedUser.profile_pic_url} alt={selectedUser.full_name} />
                 ) : (
                   <div className="sheet-avatar-placeholder"><IconAvatar /></div>
                 )}
               </div>
-              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
-              <div className="sheet-rating-row">
-                <span>{selectedUser.rating !== 'New' ? `★ ${selectedUser.rating}` : 'New'}</span>
-                <span>•</span>
-                <span>{selectedUser.gigCount || 0} gigs</span>
+              <h2>
+                {selectedUser.full_name}
+                {selectedUser.isActive && <span className="active-dot-card" />}
+              </h2>
+
+              {selectedUser.rating !== 'New' ? (
+                <>
+                  <div className="sheet-stars">{renderStars(selectedUser.rating)}</div>
+                  <div className="sheet-rating-count">
+                    {selectedUser.rating} · {selectedUser.review_count || 0} review{selectedUser.review_count !== 1 ? 's' : ''}
+                  </div>
+                </>
+              ) : (
+                <div className="sheet-no-rating">No ratings yet</div>
+              )}
+
+              <div className="sheet-stats-row">
+                <div className="sheet-stat">
+                  <div className="sheet-stat-value">{selectedUser.gigsThisMonth || 0}</div>
+                  <div className="sheet-stat-label">This Month</div>
+                </div>
+                <div className="sheet-stat">
+                  <div className="sheet-stat-value">{selectedUser.gigCount || 0}</div>
+                  <div className="sheet-stat-label">Total Gigs</div>
+                </div>
+                <div className="sheet-stat">
+                  <div className="sheet-stat-value">{formatJoined(selectedUser.created_at)}</div>
+                  <div className="sheet-stat-label">Joined</div>
+                </div>
               </div>
-              <p className="sheet-distance">{formatDistance(selectedUser.distance_meters)}</p>
-              <p className="sheet-address">{selectedUser.workspace_address || 'No address set'}</p>
+
+              <div className="sheet-distance-badge">{formatDistance(selectedUser.distance_meters)}</div>
+
+              {selectedUser.workspace_address && (
+                <div className="sheet-address">
+                  <IconMapPin />
+                  {selectedUser.workspace_address}
+                </div>
+              )}
+
               {selectedUser.services?.length > 0 && (
                 <div className="sheet-services-chips">
                   {selectedUser.services.map(s => (
@@ -401,6 +483,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
                   ))}
                 </div>
               )}
+
               <div className="sheet-buttons">
                 <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
                 <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
