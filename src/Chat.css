@@ -1108,28 +1108,42 @@
 /* Chat List Actions (long press) */
 .chat-list-item-row {
   position: relative;
+  z-index: 1;
 }
 
-.chat-list-item.highlighted {
-  background: rgba(0, 0, 0, 0.03);
+.chat-list-item-row.active-row {
+  z-index: 10;
 }
 
-@media (prefers-color-scheme: dark) {
-  .chat-list-item.highlighted {
-    background: rgba(255, 255, 255, 0.05);
-  }
+/* Background blur overlay */
+.chat-list-blur-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 5;
 }
 
+/* Actions dropdown — narrower, aligned right */
 .chat-list-actions {
   display: flex;
   flex-direction: column;
+  position: absolute;
+  right: 12px;
+  top: 100%;
+  margin-top: 4px;
+  width: 180px;
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: 14px;
   padding: 4px;
-  margin: 6px 0;
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 20;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1168,8 +1182,8 @@
 }
 
 .chat-list-action-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
