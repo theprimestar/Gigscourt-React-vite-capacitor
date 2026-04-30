@@ -605,3 +605,14 @@
     color: rgba(255, 255, 255, 0.5);
   }
 }
+
+/* List view skeleton — matches bleed card */
+.skeleton-list-card {
+  height: 120px;
+  border-radius: 14px;
+  margin-bottom: 4px;
+  background: linear-gradient(90deg, #e5e5ea 25%, #f5f5f7 50%, #e5e5ea 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  width: 100%;
+}
