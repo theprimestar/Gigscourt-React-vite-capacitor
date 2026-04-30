@@ -56,6 +56,16 @@
 .home-header.scrolled .header-brand {
   flex-direction: row;
   gap: 8px;
+  margin: 0 auto;
+}
+
+.home-header.scrolled .header-top-row {
+  justify-content: center;
+}
+
+.home-header.scrolled .header-notif-btn {
+  position: absolute;
+  right: 16px;
 }
 
 .header-logo {
@@ -159,29 +169,44 @@
 
 /* Section */
 .home-section {
-  padding: 0 16px;
-  margin-bottom: 8px;
+  padding: 0 4px;
+  margin-bottom: 24px;
 }
 
 .section-title {
   font-size: 13px;
   font-weight: 700;
   font-style: italic;
-  color: #8e8e93;
+  color: #1d1d1f;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  padding: 0 10px;
+  margin-bottom: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section-title {
+    color: #ffffff;
+  }
+}
+
+.section-desc {
+  font-size: 11px;
+  color: #8e8e93;
+  padding: 0 10px;
   margin-bottom: 10px;
+  line-height: 1.4;
 }
 
 /* Discover Strip */
 .discover-scroll {
   display: flex;
-  gap: 10px;
+  gap: 4px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  padding-bottom: 4px;
+  padding: 0 4px 12px;
 }
 
 .discover-scroll::-webkit-scrollbar {
@@ -189,9 +214,9 @@
 }
 
 .discover-card {
-  min-width: 200px;
-  height: 130px;
-  border-radius: 16px;
+  min-width: 260px;
+  height: 140px;
+  border-radius: 14px;
   overflow: hidden;
   position: relative;
   scroll-snap-align: start;
@@ -233,20 +258,43 @@
   gap: 6px;
 }
 
+/* Discover Dots */
+.discover-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 0 8px;
+}
+
+.discover-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transition: all 0.2s;
+}
+
+.discover-dot.active {
+  background: white;
+  width: 14px;
+  border-radius: 3px;
+}
+
 /* Provider Grid */
 .providers-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 4px;
+  padding: 0 4px;
 }
 
 .provider-card {
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
   aspect-ratio: 3 / 4;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .provider-card img {
@@ -361,9 +409,9 @@
 
 /* Skeleton Cards */
 .skeleton-discover-card {
-  min-width: 200px;
-  height: 130px;
-  border-radius: 16px;
+  min-width: 260px;
+  height: 140px;
+  border-radius: 14px;
   background: linear-gradient(90deg, #e5e5ea 25%, #f5f5f7 50%, #e5e5ea 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -371,7 +419,7 @@
 }
 
 .skeleton-grid-card {
-  border-radius: 16px;
+  border-radius: 12px;
   aspect-ratio: 3 / 4;
   background: linear-gradient(90deg, #e5e5ea 25%, #f5f5f7 50%, #e5e5ea 75%);
   background-size: 200% 100%;
