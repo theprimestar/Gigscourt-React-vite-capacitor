@@ -542,7 +542,7 @@ input, textarea {
 
 .app-content {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .bottom-nav {
