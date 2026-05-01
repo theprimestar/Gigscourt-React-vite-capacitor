@@ -12,6 +12,8 @@ import {
   updateReminderSent,
 } from '../gigSystem';
 import { Haptics } from '@capacitor/haptics';
+import '../Chat.css';
+
 
 // ──────────────────────────────────────
 //  BOLD SVG ICONS — strokeWidth 2.5
