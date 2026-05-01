@@ -78,7 +78,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [floatingDate, setFloatingDate] = useState('');
   const [initDone, setInitDone] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  
+
   const chatContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
@@ -259,13 +259,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const sendTextMessage = async (text, tempId) => {
     const channelKey = channelIdRef.current;
     try {
-      const { data: savedMessage, error: sendError } = await supabase.rpc('send_message', {
+      const result = await supabase.rpc('send_message', {
         p_channel_key: channelKey,
         p_sender_id: currentUserId,
         p_other_user_id: otherUserId,
         p_text: text,
       });
-      if (sendError || !savedMessage) throw new Error(sendError?.message || 'Failed to send');
+
+      const savedMessage = result.data || result;
+      if (result.error && !savedMessage) throw new Error(result.error.message || 'Failed to send');
+      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send');
 
       setMessages(prev => {
         const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
@@ -382,19 +385,21 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         method: 'POST',
         body: fd,
       });
-      const result = await upRes.json();
-      if (!upRes.ok) throw new Error(result.message || 'Upload failed');
+      const uploadResult = await upRes.json();
+      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
 
-      const url = result.url + '?tr=f-webp,fo-auto,q-80';
+      const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
 
-      const { data: savedMessage, error: sendError } = await supabase.rpc('send_message', {
+      const rpcResult = await supabase.rpc('send_message', {
         p_channel_key: channelIdRef.current,
         p_sender_id: currentUserId,
         p_other_user_id: otherUserId,
         p_text: '',
         p_image_url: url,
       });
-      if (sendError || !savedMessage) throw new Error('Failed to send photo');
+      const savedMessage = rpcResult.data || rpcResult;
+      if (rpcResult.error && !savedMessage) throw new Error(rpcResult.error.message || 'Failed to send photo');
+      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
 
       setMessages(prev => {
         const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
@@ -417,7 +422,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     }
   };
 
-  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -499,17 +503,19 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         method: 'POST',
         body: fd,
       });
-      const result = await upRes.json();
-      if (!upRes.ok) throw new Error(result.message || 'Upload failed');
+      const uploadResult = await upRes.json();
+      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
 
-      const { data: savedMessage, error: sendError } = await supabase.rpc('send_message', {
+      const rpcResult = await supabase.rpc('send_message', {
         p_channel_key: channelIdRef.current,
         p_sender_id: currentUserId,
         p_other_user_id: otherUserId,
         p_text: '',
-        p_audio_url: result.url,
+        p_audio_url: uploadResult.url,
       });
-      if (sendError || !savedMessage) throw new Error('Failed to send audio');
+      const savedMessage = rpcResult.data || rpcResult;
+      if (rpcResult.error && !savedMessage) throw new Error(rpcResult.error.message || 'Failed to send audio');
+      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
 
       setMessages(prev => {
         const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
@@ -573,7 +579,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     return `${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
-  // Gig
   const handleRegisterGig = async () => {
     if (!currentUserId || !otherUserId) return;
     setGigLoading(true);
@@ -667,7 +672,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const bannerText = getBannerText();
 
   const getGigButtonLabel = () => {
-    if (gigLoading) return '...';
+    if (gigLoading) return 'Register Gig';
     if (!gig) return 'Register Gig';
     if (gig.status === 'pending_review') {
       return currentUserId === gig.provider_id ? 'Cancel Gig' : 'Pending Gig';
@@ -681,7 +686,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     else if (gig.status === 'pending_review' && currentUserId === gig.client_id) setShowReviewForm(true);
   };
 
-  // Date helpers
   const formatDate = (ts) => {
     if (!ts) return '';
     const d = new Date(ts);
@@ -705,11 +709,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     let currentDate = '';
     const els = chatContainerRef.current.querySelectorAll('[data-date]');
     els.forEach(el => {
-      if (el.offsetTop > scrollTop && !currentDate) {
+      if (el.offsetTop > scrollTop && el.getBoundingClientRect().top < 200 && !currentDate) {
         currentDate = el.getAttribute('data-date');
       }
     });
-    setFloatingDate(currentDate);
+    setFloatingDate(currentDate || '');
   }, []);
 
   const formatTime = (ts) => {
@@ -717,12 +721,10 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Don't render messages until we know who the user is
   const readyToRender = initDone && currentUserId;
 
   return (
     <div className="chat-screen">
-      {/* Header */}
       <div className={`chat-header ${scrolled ? 'scrolled' : ''}`}>
         <button onClick={onBack} className="chat-back-btn" aria-label="Back">
           <IconBack />
@@ -752,7 +754,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </button>
       </div>
 
-      {/* Error toast */}
       {error && (
         <div className="chat-error-toast" onClick={() => setError(null)}>
           <span>{error}</span>
@@ -760,7 +761,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </div>
       )}
 
-      {/* Gig Banner */}
       {showBanner && bannerText && (
         <div className={`gig-banner ${!isBannerDismissible ? 'gig-banner-locked' : ''}`}>
           <div className="gig-banner-inner">
@@ -773,22 +773,20 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </div>
       )}
 
-      {/* Floating date */}
       {floatingDate && (
         <div className="floating-date">
           <span>{floatingDate}</span>
         </div>
       )}
 
-      {/* Messages */}
       <div
-  className="chat-messages"
-  ref={chatContainerRef}
-  onScroll={(e) => {
-    updateFloatingDate();
-    setScrolled(e.target.scrollTop > 20);
-  }}
->
+        className="chat-messages"
+        ref={chatContainerRef}
+        onScroll={(e) => {
+          updateFloatingDate();
+          setScrolled(e.target.scrollTop > 20);
+        }}
+      >
         {!readyToRender && (
           <div className="chat-loading">
             <div className="chat-spinner" />
@@ -865,7 +863,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Full screen image */}
       {fullScreenImage && (
         <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}>
           <button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button>
@@ -873,12 +870,14 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </div>
       )}
 
-      {/* Input area */}
       {isRecording ? (
         <div className="recording-bar">
           <div className="recording-dot" />
           <span className="recording-time">0:{recordingTime < 10 ? '0' : ''}{recordingTime}</span>
           <button onClick={cancelRecording} className="recording-cancel">Cancel</button>
+          <button onClick={stopRecording} className="recording-send">
+            <IconSend />
+          </button>
         </div>
       ) : (
         <form onSubmit={handleSend} className="chat-input-bar">
@@ -912,7 +911,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </form>
       )}
 
-      {/* Review sheet */}
       {showReviewForm && (
         <div className="bottom-sheet-overlay" onClick={() => setShowReviewForm(false)}>
           <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
