@@ -1111,11 +1111,13 @@
   z-index: 1;
 }
 
+/* Active row lifted above the blur */
 .chat-list-item-row.active-row {
+  position: relative;
   z-index: 10;
 }
 
-/* Background blur overlay */
+/* Background blur overlay — behind the active row */
 .chat-list-blur-overlay {
   position: fixed;
   top: 0;
@@ -1128,7 +1130,7 @@
   z-index: 5;
 }
 
-/* Actions dropdown — narrower, aligned right */
+/* Actions dropdown stays above */
 .chat-list-actions {
   display: flex;
   flex-direction: column;
