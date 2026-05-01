@@ -257,80 +257,14 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   }, [currentUserId]);
 
   const sendTextMessage = async (text, tempId) => {
-  const channelKey = channelIdRef.current;
-  console.log('=== sendTextMessage called ===');
-  console.log('channelKey:', channelKey);
-  console.log('currentUserId:', currentUserId);
-  console.log('otherUserId:', otherUserId);
-  console.log('text:', text);
-  console.log('tempId:', tempId);
-  
-  try {
-    console.log('Calling supabase.rpc send_message...');
-    const result = await supabase.rpc('send_message', {
-      p_channel_key: channelKey,
-      p_sender_id: currentUserId,
-      p_other_user_id: otherUserId,
-      p_text: text,
-    });
-
-    console.log('RPC result:', result);
-    console.log('RPC result.data:', result.data);
-    console.log('RPC result.error:', result.error);
-
-    const savedMessage = result.data || result;
-    console.log('savedMessage:', savedMessage);
-
-    if (result.error && !savedMessage) {
-      console.error('RPC error:', result.error);
-      throw new Error(result.error.message || 'Failed to send');
-    }
-    if (!savedMessage || !savedMessage.id) {
-      console.error('No message returned');
-      throw new Error('Failed to send - no message returned');
-    }
-
-    console.log('Message saved, ID:', savedMessage.id);
-
-    setMessages(prev => {
-      const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
-      setCached(msgCacheKey, updated);
-      return updated;
-    });
-    seenIds.current.add(savedMessage.id);
-
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      }).catch(() => {});
-    }
-
-    if (otherUser?.onesignal_player_id) {
-      fetch(PUSH_NOTIFICATION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          include_player_ids: [otherUser.onesignal_player_id],
-          headings: { en: currentUserName || 'New message' },
-          contents: { en: text },
-          data: { channel_id: channelKey },
-        }),
-      }).catch(() => {});
-    }
-
-    await checkBannerReappear();
-    console.log('=== sendTextMessage SUCCESS ===');
-  } catch (err) {
-    console.error('=== sendTextMessage FAILED ===');
-    console.error('Error:', err.message);
-    console.error('Full error:', err);
-    setMessages(prev =>
-      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-    );
-  }
-};
+    const channelKey = channelIdRef.current;
+    try {
+      const result = await supabase.rpc('send_message', {
+        p_channel_key: channelKey,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: text,
+      });
 
       const savedMessage = result.data || result;
       if (result.error && !savedMessage) throw new Error(result.error.message || 'Failed to send');
@@ -373,36 +307,26 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handleSend = (e) => {
-  e.preventDefault();
-  console.log('=== handleSend called ===');
-  console.log('newMessage:', newMessage);
-  console.log('currentUserId:', currentUserId);
-  console.log('channelId:', channelIdRef.current);
-  
-  if (!newMessage.trim() || !currentUserId) {
-    console.log('EXIT - empty message or no user');
-    return;
-  }
-  const text = newMessage.trim();
-  const tempId = 'temp-' + Date.now();
-  setNewMessage('');
-  
-  const optimistic = {
-    id: tempId,
-    channel_id: channelIdRef.current,
-    sender_id: currentUserId,
-    text,
-    image_url: null,
-    audio_url: null,
-    created_at: new Date().toISOString(),
-    is_read: false,
-    status: 'sending',
+    e.preventDefault();
+    if (!newMessage.trim() || !currentUserId) return;
+    const text = newMessage.trim();
+    const tempId = 'temp-' + Date.now();
+    setNewMessage('');
+    const optimistic = {
+      id: tempId,
+      channel_id: channelIdRef.current,
+      sender_id: currentUserId,
+      text,
+      image_url: null,
+      audio_url: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      status: 'sending',
+    };
+    setMessages(prev => [...prev, optimistic]);
+    scrollToBottom();
+    sendTextMessage(text, tempId);
   };
-  console.log('Adding optimistic message:', optimistic);
-  setMessages(prev => [...prev, optimistic]);
-  scrollToBottom();
-  sendTextMessage(text, tempId);
-};
 
   const handleRetry = (msg) => {
     setMessages(prev => prev.filter(m => m.id !== msg.id));
