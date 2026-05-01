@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { checkExpiredGigs } from '../gigSystem';
 import { Haptics } from '@capacitor/haptics';
+import '../Chat.css';
+
 
 // Cache helpers
 const CACHE_KEY = 'gigscourt_chatlist_cache';
