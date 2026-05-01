@@ -15,6 +15,40 @@ import AdminScreen from './screens/AdminScreen';
 import './App.css';
 import './SplashScreen.css';
 
+// ── Premium SVG Navigation Icons ──
+const IconHome = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
+const IconSearch = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const IconChats = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const IconProfile = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M20 21a8 8 0 0 0-16 0" />
+  </svg>
+);
+
+const IconAdmin = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
 function App() {
   const [screen, setScreen] = useState('splash');
   const [activeTab, setActiveTab] = useState('home');
@@ -22,8 +56,10 @@ function App() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState('');
+  const [navVisible, setNavVisible] = useState(true);
   const splashTimerRef = useRef(null);
   const screenRef = useRef(screen);
+  const lastScrollY = useRef(0);
   screenRef.current = screen;
 
   useEffect(() => {
@@ -32,6 +68,27 @@ function App() {
       if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
     };
   }, []);
+
+  // Auto-hide nav on scroll (only on Home and Search tabs)
+  useEffect(() => {
+    if (activeTab !== 'home' && activeTab !== 'search') {
+      setNavVisible(true);
+      return;
+    }
+
+    const handleScroll = () => {
+      const currentY = window.scrollY || document.querySelector('.home-screen')?.scrollTop || 0;
+      if (currentY > lastScrollY.current && currentY > 80) {
+        setNavVisible(false);
+      } else {
+        setNavVisible(true);
+      }
+      lastScrollY.current = currentY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeTab]);
 
   const initApp = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -255,6 +312,7 @@ function App() {
           <ChatListScreen
             isVisible={activeTab === 'chats' && !currentDeepScreen}
             onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name, chatId: user.chatId || null })}
+            onUnreadUpdate={checkUnreadBadge}
           />
         </div>
 
@@ -311,19 +369,23 @@ function App() {
       </div>
 
       {showBottomNav && (
-        <nav className="bottom-nav">
+        <nav className={`bottom-nav ${navVisible ? 'visible' : 'hidden'}`}>
           <button
             className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
             onClick={() => setActiveTab('home')}
           >
-            <span className="nav-icon">🏠</span>
+            <span className="nav-icon">
+              <IconHome filled={activeTab === 'home'} />
+            </span>
             <span className="nav-label">Home</span>
           </button>
           <button
             className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
             onClick={() => setActiveTab('search')}
           >
-            <span className="nav-icon">🔍</span>
+            <span className="nav-icon">
+              <IconSearch filled={activeTab === 'search'} />
+            </span>
             <span className="nav-label">Search</span>
           </button>
           <button
@@ -331,9 +393,11 @@ function App() {
             onClick={() => setActiveTab('chats')}
           >
             <span className="nav-icon" style={{ position: 'relative' }}>
-              💬
+              <IconChats filled={activeTab === 'chats'} />
               {unreadCount > 0 && (
-                <span className="badge-dot"></span>
+                <span className="nav-unread-badge">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
               )}
             </span>
             <span className="nav-label">Chats</span>
@@ -342,7 +406,9 @@ function App() {
             className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveTab('profile')}
           >
-            <span className="nav-icon">👤</span>
+            <span className="nav-icon">
+              <IconProfile filled={activeTab === 'profile'} />
+            </span>
             <span className="nav-label">Profile</span>
           </button>
           {isAdmin && (
@@ -350,7 +416,9 @@ function App() {
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
-              <span className="nav-icon">🛡️</span>
+              <span className="nav-icon">
+                <IconAdmin filled={activeTab === 'admin'} />
+              </span>
               <span className="nav-label">Admin</span>
             </button>
           )}
