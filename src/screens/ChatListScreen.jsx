@@ -4,7 +4,6 @@ import { checkExpiredGigs } from '../gigSystem';
 import { Haptics } from '@capacitor/haptics';
 import '../Chat.css';
 
-
 // Cache helpers
 const CACHE_KEY = 'gigscourt_chatlist_cache';
 
@@ -23,7 +22,7 @@ function setCachedChats(chats) {
   } catch {}
 }
 
-// Bold SVG icons — strokeWidth 2.5
+// Bold SVG icons
 const IconAvatar = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4" />
@@ -38,14 +37,14 @@ const IconPin = () => (
 );
 
 const IconUnpin = () => (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <line x1="4" y1="4" x2="20" y2="20" />
     <path d="M12 2l3.09 6.26L22 9.27l-5 4.14 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
   </svg>
 );
 
 const IconDelete = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
@@ -65,7 +64,7 @@ const IconClose = () => (
   </svg>
 );
 
-export default function ChatListScreen({ onStartChat, isVisible }) {
+export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate }) {
   // Instant cache load — no blank screen
   const [chats, setChats] = useState(getCachedChats);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -81,9 +80,9 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
   const longPressTimer = useRef(null);
   const channelRef = useRef(null);
   const isMounted = useRef(true);
-  const visibleRef = useRef(false);
+  const initialLoadDone = useRef(false);
 
-  // Mount/unmount
+  // Mount
   useEffect(() => {
     isMounted.current = true;
     loadChatList(false);
@@ -91,11 +90,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
       isMounted.current = false;
     };
   }, []);
-
-  // Track visibility for broadcast
-  useEffect(() => {
-    visibleRef.current = isVisible;
-  }, [isVisible]);
 
   // Broadcast: only when tab is visible
   useEffect(() => {
@@ -126,6 +120,8 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
           : null;
         const result = updated ? [updated, ...rest] : prev;
         setCachedChats(result);
+        // Notify App.jsx to refresh badge
+        if (onUnreadUpdate) onUnreadUpdate();
         return result;
       });
     });
@@ -138,14 +134,11 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
     };
   }, [isVisible, currentUserId]);
 
-  // Window focus refresh — catch up after absence
+  // Window focus — silent background refresh with merge (not replace)
   useEffect(() => {
     const handleFocus = () => {
-      if (isMounted.current && currentUserId && !fetchingRef.current) {
-        cursorRef.current = null;
-        hasMoreRef.current = true;
-        setHasMore(true);
-        loadChatList(false);
+      if (isMounted.current && currentUserId && initialLoadDone.current && !fetchingRef.current) {
+        loadChatList(false, true);
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -160,7 +153,7 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
     }
   };
 
-  const loadChatList = async (append) => {
+  const loadChatList = async (append, silent = false) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
 
@@ -189,36 +182,63 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
 
       const pinnedIds = new Set((pinnedData || []).map(p => p.channel_id));
       const seen = new Set();
-      const validChats = data
+      const freshChats = data
         .filter(c => c.other_user_id && !seen.has(c.channel_id) && seen.add(c.channel_id))
         .map(c => ({ ...c, isPinned: pinnedIds.has(c.channel_id) }));
 
-      // Pinned first, then rest
-      const sorted = [...validChats].sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return 0;
-      });
-
       if (append) {
+        // Merge: add new conversations, don't duplicate
         setChats(prev => {
           const existingIds = new Set(prev.map(c => c.channel_id));
-          const newOnes = sorted.filter(c => !existingIds.has(c.channel_id));
-          const result = [...prev, ...newOnes];
-          setCachedChats(result);
-          return result;
+          const newOnes = freshChats.filter(c => !existingIds.has(c.channel_id));
+          return [...prev, ...newOnes];
+        });
+      } else if (silent && initialLoadDone.current) {
+        // Silent merge: update existing conversations in-place, add new ones
+        setChats(prev => {
+          const merged = new Map(prev.map(c => [c.channel_id, c]));
+          freshChats.forEach(c => {
+            const existing = merged.get(c.channel_id);
+            if (existing) {
+              // Preserve local pin state, update the rest
+              merged.set(c.channel_id, {
+                ...c,
+                isPinned: existing.isPinned,
+                has_unread: existing.has_unread || c.has_unread,
+                unread_count: Math.max(existing.unread_count || 0, c.unread_count || 0),
+              });
+            } else {
+              merged.set(c.channel_id, c);
+            }
+          });
+          return [...merged.values()];
         });
       } else {
-        setChats(sorted);
-        setCachedChats(sorted);
+        // Initial load: use fresh data, but preserve any local pinned chats
+        setChats(prev => {
+          const localMap = new Map(prev.map(c => [c.channel_id, c]));
+          const freshMap = new Map(freshChats.map(c => [c.channel_id, c]));
+          // Keep locally pinned chats that aren't in fresh data
+          localMap.forEach((c, id) => {
+            if (c.isPinned && !freshMap.has(id)) {
+              freshMap.set(id, c);
+            }
+          });
+          return [...freshMap.values()].sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+          });
+        });
       }
 
+      setCachedChats(chats);
       if (data.length > 0) {
         cursorRef.current = data[data.length - 1].last_message_at;
       }
-      const more = data.length === 30;
-      hasMoreRef.current = more;
-      setHasMore(more);
+      hasMoreRef.current = data.length === 30;
+      setHasMore(data.length === 30);
+      initialLoadDone.current = true;
     } catch (err) {
       console.error('Chat list error:', err);
     } finally {
@@ -233,7 +253,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
     loadChatList(true);
   }, [currentUserId]);
 
-  // IntersectionObserver for infinite scroll
   const lastChatRef = useCallback(
     node => {
       if (loadingMoreRef.current) return;
@@ -251,13 +270,10 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
     [loadMore]
   );
 
-  // Haptic trigger
   const triggerHaptic = async () => {
     try {
       await Haptics.impact({ style: 'MEDIUM' });
-    } catch {
-      // Fallback silently
-    }
+    } catch {}
   };
 
   // Long press
@@ -277,7 +293,7 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
   // Tap — navigate
   const handleTap = useCallback(
     chat => {
-      setActionChat(null);
+      if (actionChat) return;
       if (onStartChat) {
         onStartChat({
           id: chat.other_user_id,
@@ -286,51 +302,88 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
         });
       }
     },
-    [onStartChat]
+    [onStartChat, actionChat]
   );
 
-  // Dismiss overlay — only action is dismiss, nothing else passes through
   const handleDismissOverlay = useCallback(() => {
     setActionChat(null);
   }, []);
 
-  // Pin / Unpin
+  // Pin / Unpin — instant UI + background DB update + cache save
   const handleTogglePin = async channelId => {
     if (!currentUserId) return;
     const chat = chats.find(c => c.channel_id === channelId);
     const isPinned = !!chat?.isPinned;
-    await supabase
-      .from('channel_members')
-      .update({ pinned_at: isPinned ? null : new Date().toISOString() })
-      .eq('channel_id', channelId)
-      .eq('user_id', currentUserId);
-    setChats(prev => {
-      const result = prev.map(c =>
+
+    // 1. Update UI instantly
+    const updater = prev => {
+      const updated = prev.map(c =>
         c.channel_id === channelId ? { ...c, isPinned: !isPinned } : c
       );
-      setCachedChats(result);
-      return result;
-    });
-    setActionChat(null);
+      return [...updated].sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+      });
+    };
+    setChats(updater);
+    setActionChat(prev =>
+      prev?.channel_id === channelId ? { ...prev, isPinned: !isPinned } : prev
+    );
+
+    // 2. Update cache immediately
+    const currentChats = getCachedChats();
+    const cachedUpdated = currentChats.map(c =>
+      c.channel_id === channelId ? { ...c, isPinned: !isPinned } : c
+    );
+    setCachedChats(cachedUpdated);
+
+    // 3. Database update in background
+    try {
+      await supabase
+        .from('channel_members')
+        .update({ pinned_at: isPinned ? null : new Date().toISOString() })
+        .eq('channel_id', channelId)
+        .eq('user_id', currentUserId);
+    } catch (err) {
+      // Revert on failure
+      console.error('Pin toggle failed:', err);
+      setChats(prev => {
+        const reverted = prev.map(c =>
+          c.channel_id === channelId ? { ...c, isPinned } : c
+        );
+        setCachedChats(reverted);
+        return reverted;
+      });
+    }
   };
 
-  // Delete (soft)
+  // Delete — instant removal + background DB update + cache save
   const handleDeleteChat = async channelId => {
     if (!currentUserId) return;
-    await supabase
-      .from('channel_members')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('channel_id', channelId)
-      .eq('user_id', currentUserId);
+
+    // 1. Remove from UI instantly
     setChats(prev => {
       const result = prev.filter(c => c.channel_id !== channelId);
       setCachedChats(result);
       return result;
     });
     setActionChat(null);
+
+    // 2. Database update in background
+    try {
+      await supabase
+        .from('channel_members')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('channel_id', channelId)
+        .eq('user_id', currentUserId);
+    } catch (err) {
+      // Revert on failure — refetch to restore
+      console.error('Delete failed:', err);
+      loadChatList(false);
+    }
   };
 
-  // Format time
   const formatTime = timestamp => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -343,7 +396,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
     return date.toLocaleDateString();
   };
 
-  // Filter chats locally by search
   const filteredChats = searchQuery.trim()
     ? chats.filter(c => {
         const q = searchQuery.toLowerCase();
@@ -359,12 +411,10 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
 
   return (
     <div className="chat-list-screen">
-      {/* Header */}
       <header className="chat-list-header">
         <h1>Chats</h1>
       </header>
 
-      {/* Search Bar */}
       <div className="chat-list-search">
         <div className="chat-list-search-input-wrapper">
           <span className="chat-list-search-icon">
@@ -390,7 +440,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
         </div>
       </div>
 
-      {/* Empty: no conversations at all */}
       {isEmpty && (
         <div className="chat-list-empty">
           <p className="chat-list-empty-title">No conversations yet</p>
@@ -398,7 +447,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
         </div>
       )}
 
-      {/* Empty: search found nothing */}
       {isSearchEmpty && (
         <div className="chat-list-empty">
           <p className="chat-list-empty-title">No conversations match</p>
@@ -406,7 +454,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
         </div>
       )}
 
-      {/* Conversation List */}
       {!isEmpty && (
         <div className="chat-list-scroll">
           {filteredChats.map((chat, index) => {
@@ -424,10 +471,7 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
                   className={`chat-list-item ${chat.isPinned ? 'pinned' : ''} ${
                     isActionTarget ? 'highlighted' : ''
                   } ${isDimmed ? 'dimmed' : ''}`}
-                  onClick={() => {
-                    if (actionChat) return; // blocked by overlay
-                    handleTap(chat);
-                  }}
+                  onClick={() => handleTap(chat)}
                   onContextMenu={e => handleLongPress(e, chat)}
                   onTouchStart={e => {
                     longPressTimer.current = setTimeout(() => {
@@ -440,7 +484,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
                   tabIndex={0}
                   aria-label={`Conversation with ${chat.other_user_name}`}
                 >
-                  {/* Avatar */}
                   <div className="chat-list-avatar">
                     {chat.other_user_pic ? (
                       <img src={chat.other_user_pic} alt="" />
@@ -451,7 +494,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
                     )}
                   </div>
 
-                  {/* Info */}
                   <div className="chat-list-info">
                     <div className="chat-list-top">
                       <h3 className="chat-list-name">
@@ -482,7 +524,6 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
                   </div>
                 </div>
 
-                {/* Long Press Actions — below the highlighted row, right-aligned, stacked vertically */}
                 {isActionTarget && (
                   <div className="chat-list-actions">
                     <button
@@ -507,15 +548,16 @@ export default function ChatListScreen({ onStartChat, isVisible }) {
         </div>
       )}
 
-      {/* Dismiss overlay — blocks all taps, only dismisses long press */}
       {actionChat && (
         <div
           className="chat-list-dismiss-overlay"
           onClick={handleDismissOverlay}
-          onTouchEnd={e => {
+          onTouchStart={e => {
             e.preventDefault();
+            e.stopPropagation();
             handleDismissOverlay();
           }}
+          onContextMenu={e => e.preventDefault()}
         />
       )}
     </div>
