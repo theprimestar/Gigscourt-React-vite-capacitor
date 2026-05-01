@@ -257,54 +257,68 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   }, [currentUserId]);
 
   const sendTextMessage = async (text, tempId) => {
-    const channelKey = channelIdRef.current;
-    try {
-      const result = await supabase.rpc('send_message', {
-        p_channel_key: channelKey,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: text,
-      });
+  const channelKey = channelIdRef.current;
+  console.log('=== sendTextMessage ===');
+  console.log('channelKey:', channelKey);
+  console.log('currentUserId:', currentUserId);
+  console.log('otherUserId:', otherUserId);
+  console.log('text:', text);
+  
+  try {
+    console.log('Calling RPC...');
+    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+      p_channel_key: channelKey,
+      p_sender_id: currentUserId,
+      p_other_user_id: otherUserId,
+      p_text: text,
+    });
 
-      const savedMessage = result.data || result;
-      if (result.error && !savedMessage) throw new Error(result.error.message || 'Failed to send');
-      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send');
+    console.log('savedMessage:', savedMessage);
+    console.log('rpcError:', rpcError);
 
-      setMessages(prev => {
-        const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
-        setCached(msgCacheKey, updated);
-        return updated;
-      });
-      seenIds.current.add(savedMessage.id);
+    if (rpcError) throw new Error(rpcError.message || 'Failed to send');
+    if (!savedMessage || !savedMessage.id) throw new Error('No message returned');
 
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
+    console.log('SUCCESS - message ID:', savedMessage.id);
 
-      if (otherUser?.onesignal_player_id) {
-        fetch(PUSH_NOTIFICATION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            include_player_ids: [otherUser.onesignal_player_id],
-            headings: { en: currentUserName || 'New message' },
-            contents: { en: text },
-            data: { channel_id: channelKey },
-          }),
-        }).catch(() => {});
-      }
+    setMessages(prev => {
+      const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
+      setCached(msgCacheKey, updated);
+      return updated;
+    });
+    seenIds.current.add(savedMessage.id);
 
-      await checkBannerReappear();
-    } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      }).catch(() => {});
     }
-  };
+
+    if (otherUser?.onesignal_player_id) {
+      fetch(PUSH_NOTIFICATION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          include_player_ids: [otherUser.onesignal_player_id],
+          headings: { en: currentUserName || 'New message' },
+          contents: { en: text },
+          data: { channel_id: channelKey },
+        }),
+      }).catch(() => {});
+    }
+
+    await checkBannerReappear();
+    console.log('=== sendTextMessage COMPLETE ===');
+  } catch (err) {
+    console.error('=== sendTextMessage FAILED ===');
+    console.error(err);
+    setMessages(prev =>
+      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+    );
+  }
+};
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -348,79 +362,79 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !currentUserId) return;
+  const file = e.target.files?.[0];
+  if (!file || !currentUserId) return;
 
-    const tempId = 'temp-photo-' + Date.now();
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text: '',
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'uploading',
-    };
-    setMessages(prev => [...prev, optimistic]);
-    scrollToBottom();
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
-
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('fileName', 'chat-photo.jpg');
-      fd.append('folder', '/chat-photos');
-      fd.append('useUniqueFileName', 'true');
-      fd.append('publicKey', imagekitPublicKey);
-      fd.append('token', auth.token);
-      fd.append('signature', auth.signature);
-      fd.append('expire', auth.expire);
-
-      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        body: fd,
-      });
-      const uploadResult = await upRes.json();
-      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
-
-      const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
-
-      const rpcResult = await supabase.rpc('send_message', {
-        p_channel_key: channelIdRef.current,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: '',
-        p_image_url: url,
-      });
-      const savedMessage = rpcResult.data || rpcResult;
-      if (rpcResult.error && !savedMessage) throw new Error(rpcResult.error.message || 'Failed to send photo');
-      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
-
-      setMessages(prev => {
-        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
-        setCached(msgCacheKey, updated);
-        return updated;
-      });
-      seenIds.current.add(savedMessage.id);
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
-    } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
-    }
+  const tempId = 'temp-photo-' + Date.now();
+  const optimistic = {
+    id: tempId,
+    channel_id: channelIdRef.current,
+    sender_id: currentUserId,
+    text: '',
+    image_url: null,
+    audio_url: null,
+    created_at: new Date().toISOString(),
+    is_read: false,
+    status: 'uploading',
   };
+  setMessages(prev => [...prev, optimistic]);
+  scrollToBottom();
+  if (fileInputRef.current) fileInputRef.current.value = '';
+
+  try {
+    const authRes = await fetch(IMAGEKIT_AUTH_URL);
+    const auth = await authRes.json();
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('fileName', 'chat-photo.jpg');
+    fd.append('folder', '/chat-photos');
+    fd.append('useUniqueFileName', 'true');
+    fd.append('publicKey', imagekitPublicKey);
+    fd.append('token', auth.token);
+    fd.append('signature', auth.signature);
+    fd.append('expire', auth.expire);
+
+    const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      body: fd,
+    });
+    const uploadResult = await upRes.json();
+    if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
+
+    const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
+
+    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+      p_channel_key: channelIdRef.current,
+      p_sender_id: currentUserId,
+      p_other_user_id: otherUserId,
+      p_text: '',
+      p_image_url: url,
+    });
+
+    if (rpcError) throw new Error(rpcError.message || 'Failed to send photo');
+    if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
+
+    setMessages(prev => {
+      const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+      setCached(msgCacheKey, updated);
+      return updated;
+    });
+    seenIds.current.add(savedMessage.id);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    setMessages(prev =>
+      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+    );
+  }
+};
 
   const startRecording = async () => {
     try {
@@ -470,73 +484,73 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const uploadAudio = async (blob) => {
-    const tempId = 'temp-audio-' + Date.now();
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text: '',
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'uploading',
-    };
-    setMessages(prev => [...prev, optimistic]);
-    scrollToBottom();
-
-    try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
-
-      const fd = new FormData();
-      fd.append('file', blob, 'voice-message.webm');
-      fd.append('fileName', 'voice-message.webm');
-      fd.append('folder', '/chat-audio');
-      fd.append('useUniqueFileName', 'true');
-      fd.append('publicKey', imagekitPublicKey);
-      fd.append('token', auth.token);
-      fd.append('signature', auth.signature);
-      fd.append('expire', auth.expire);
-
-      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        body: fd,
-      });
-      const uploadResult = await upRes.json();
-      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
-
-      const rpcResult = await supabase.rpc('send_message', {
-        p_channel_key: channelIdRef.current,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: '',
-        p_audio_url: uploadResult.url,
-      });
-      const savedMessage = rpcResult.data || rpcResult;
-      if (rpcResult.error && !savedMessage) throw new Error(rpcResult.error.message || 'Failed to send audio');
-      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
-
-      setMessages(prev => {
-        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
-        setCached(msgCacheKey, updated);
-        return updated;
-      });
-      seenIds.current.add(savedMessage.id);
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
-    } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
-    }
+  const tempId = 'temp-audio-' + Date.now();
+  const optimistic = {
+    id: tempId,
+    channel_id: channelIdRef.current,
+    sender_id: currentUserId,
+    text: '',
+    image_url: null,
+    audio_url: null,
+    created_at: new Date().toISOString(),
+    is_read: false,
+    status: 'uploading',
   };
+  setMessages(prev => [...prev, optimistic]);
+  scrollToBottom();
+
+  try {
+    const authRes = await fetch(IMAGEKIT_AUTH_URL);
+    const auth = await authRes.json();
+
+    const fd = new FormData();
+    fd.append('file', blob, 'voice-message.webm');
+    fd.append('fileName', 'voice-message.webm');
+    fd.append('folder', '/chat-audio');
+    fd.append('useUniqueFileName', 'true');
+    fd.append('publicKey', imagekitPublicKey);
+    fd.append('token', auth.token);
+    fd.append('signature', auth.signature);
+    fd.append('expire', auth.expire);
+
+    const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+      method: 'POST',
+      body: fd,
+    });
+    const uploadResult = await upRes.json();
+    if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
+
+    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+      p_channel_key: channelIdRef.current,
+      p_sender_id: currentUserId,
+      p_other_user_id: otherUserId,
+      p_text: '',
+      p_audio_url: uploadResult.url,
+    });
+
+    if (rpcError) throw new Error(rpcError.message || 'Failed to send audio');
+    if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
+
+    setMessages(prev => {
+      const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+      setCached(msgCacheKey, updated);
+      return updated;
+    });
+    seenIds.current.add(savedMessage.id);
+
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: savedMessage,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    setMessages(prev =>
+      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+    );
+  }
+};
 
   const stopAudio = () => {
     if (audioRef.current) {
