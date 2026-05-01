@@ -1319,6 +1319,73 @@
   50% { opacity: 0.3; }
 }
 
+/* ── Date Separator (between messages) ── */
+.date-separator {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.date-separator span {
+  font-family: var(--chat-font);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--chat-text-secondary);
+  background: var(--chat-bg-elevated);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+/* ── Floating Date Chip (fixed below banner) ── */
+.floating-date-chip {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.floating-date-chip span {
+  font-family: var(--chat-font);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--chat-text);
+  background: var(--chat-bg-elevated);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 4px 12px;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+/* ── Typing Indicator ── */
+.typing-indicator {
+  display: flex;
+  gap: 3px;
+  padding: 6px 14px;
+  align-items: center;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chat-text-secondary);
+  animation: typingBounce 1.2s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-4px); }
+}
+
 /* ----------------------------------------------------------
    6. REDUCED MOTION
    ---------------------------------------------------------- */
