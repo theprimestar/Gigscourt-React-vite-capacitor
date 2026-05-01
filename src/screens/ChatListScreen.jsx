@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { checkExpiredGigs } from '../gigSystem';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import '../Chat.css';
 
-// ──────────────────────────────────────
-//  SVG ICONS
-// ──────────────────────────────────────
 const IconAvatar = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
@@ -36,17 +32,8 @@ const CACHE_KEY = 'gigscourt_chatlist_cache';
 function getCachedChats() { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; } catch { return []; } }
 function setCachedChats(chats) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(chats)); } catch {} }
 
-const haptic = (style = 'medium') => {
-  try { Haptics.impact({ style: style === 'light' ? ImpactStyle.Light : style === 'heavy' ? ImpactStyle.Heavy : ImpactStyle.Medium }); } catch {}
-};
-
-// ──────────────────────────────────────
-//  CHAT LIST SCREEN
-// ──────────────────────────────────────
 function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartChat, isVisible }) {
   const [chats, setChats] = useState(getCachedChats);
-  const [loading, setLoading] = useState(!chats.length);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [actionChat, setActionChat] = useState(null);
@@ -56,10 +43,13 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const isMounted = useRef(true);
   const fetchingRef = useRef(false);
   const initialLoadDone = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
   const longPressTimer = useRef(null);
+  const channelRef = useRef(null);
 
   // ──────────────────────────────────────
-  //  EFFECTS
+  //  INITIAL LOAD
   // ──────────────────────────────────────
   useEffect(() => {
     isMounted.current = true;
@@ -67,14 +57,56 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     return () => { isMounted.current = false; };
   }, []);
 
+  // ──────────────────────────────────────
+  //  BROADCAST (only when tab is visible)
+  // ──────────────────────────────────────
   useEffect(() => {
-    if (isVisible && initialLoadDone.current && isMounted.current) {
-      cursorRef.current = null;
-      setHasMore(true);
-      loadChatList(false);
+    if (!isVisible || !currentUserId) {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      return;
     }
-  }, [isVisible]);
 
+    const channel = supabase.channel(`user:${currentUserId}:chatlist`, {
+      config: { broadcast: { self: false, ack: true } },
+    });
+
+    channel.on('broadcast', { event: 'chat_update' }, (payload) => {
+      const update = payload?.payload;
+      if (!update) return;
+
+      setChats(prev => {
+        const updated = prev.map(c =>
+          c.channel_id === update.channel_id
+            ? { ...c, last_message: update.preview, last_message_at: update.timestamp, has_unread: true, unread_count: (c.unread_count || 0) + 1 }
+            : c
+        );
+        const target = updated.find(c => c.channel_id === update.channel_id);
+        const rest = updated.filter(c => c.channel_id !== update.channel_id);
+        const result = target ? [target, ...rest] : updated;
+        setCachedChats(result);
+        return result;
+      });
+    });
+
+    channel.subscribe();
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [isVisible, currentUserId]);
+
+  // ──────────────────────────────────────
+  //  CHAT TARGET
+  // ──────────────────────────────────────
   useEffect(() => {
     if (chatTarget && currentUserId && onStartChat) {
       onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User', chatId: chatTarget.channel_id || null });
@@ -83,17 +115,21 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     }
   }, [chatTarget, currentUserId]);
 
+  // ──────────────────────────────────────
+  //  WINDOW FOCUS — catch up after absence
+  // ──────────────────────────────────────
   useEffect(() => {
     const handleFocus = () => {
-      if (isMounted.current && currentUserId && isVisible && !fetchingRef.current) {
+      if (isMounted.current && currentUserId && !fetchingRef.current) {
         cursorRef.current = null;
+        hasMoreRef.current = true;
         setHasMore(true);
         loadChatList(false);
       }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [currentUserId, isVisible]);
+  }, [currentUserId]);
 
   // ──────────────────────────────────────
   //  DATA FETCHING
@@ -140,33 +176,31 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
       }
 
       if (data.length > 0) cursorRef.current = data[data.length - 1].last_message_at;
+      hasMoreRef.current = data.length === 30;
       setHasMore(data.length === 30);
       initialLoadDone.current = true;
     } catch (err) {
       console.error('Chat list error:', err);
     } finally {
-      if (isMounted.current) {
-        setLoading(false);
-        setLoadingMore(false);
-      }
+      loadingMoreRef.current = false;
       fetchingRef.current = false;
     }
   };
 
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore || !currentUserId) return;
-    setLoadingMore(true);
+    if (loadingMoreRef.current || !hasMoreRef.current || !currentUserId) return;
+    loadingMoreRef.current = true;
     loadChatList(true);
-  }, [loadingMore, hasMore, currentUserId]);
+  }, [currentUserId]);
 
   const lastChatRef = useCallback((node) => {
-    if (loading || loadingMore) return;
+    if (loadingMoreRef.current) return;
     if (observerRef.current) observerRef.current.disconnect();
     observerRef.current = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && hasMore) loadMore();
+      if (entries[0].isIntersecting && hasMoreRef.current) loadMore();
     });
     if (node) observerRef.current.observe(node);
-  }, [loading, loadingMore, hasMore, loadMore]);
+  }, []);
 
   // ──────────────────────────────────────
   //  ACTIONS
@@ -189,7 +223,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
 
   const handleLongPress = (e, chat) => {
     e.preventDefault();
-    haptic('medium');
     setActionChat(actionChat?.channel_id === chat.channel_id ? null : chat);
   };
 
@@ -221,10 +254,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     <div className="chat-list-screen">
       <header className="chat-list-header"><h1>Chats</h1></header>
 
-      {/* Background blur overlay */}
       {actionChat && <div className="chat-list-blur-overlay" onClick={() => setActionChat(null)} />}
 
-      {chats.length === 0 && !loading ? (
+      {chats.length === 0 ? (
         <div className="chat-list-empty">
           <p>No conversations yet</p>
           <p className="chat-list-empty-sub">Find a provider and start chatting!</p>
@@ -288,7 +320,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
               </div>
             );
           })}
-          {loadingMore && <div className="chat-list-loading-more"><span className="loading-dots">Loading</span></div>}
         </div>
       )}
     </div>
