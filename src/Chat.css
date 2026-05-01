@@ -1111,25 +1111,6 @@
   z-index: 1;
 }
 
-/* Active row lifted above the blur */
-.chat-list-item-row.active-row {
-  position: relative;
-  z-index: 10;
-}
-
-/* Background blur overlay — behind the active row */
-.chat-list-blur-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 5;
-}
-
 /* Actions dropdown stays above */
 .chat-list-actions {
   display: flex;
@@ -1242,4 +1223,77 @@
   50% { content: '..'; }
   75% { content: '...'; }
   100% { content: ''; }
+}
+
+/* Long press highlight */
+.chat-list-item.highlighted {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+  transform: scale(1.01);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-item.highlighted {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Actions dropdown */
+.chat-list-actions {
+  display: flex;
+  flex-direction: column;
+  width: 180px;
+  margin-left: auto;
+  margin-right: 12px;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 14px;
+  padding: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-actions {
+    background: rgba(44, 44, 46, 0.97);
+  }
+}
+
+.chat-list-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+  border-radius: 10px;
+  gap: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-list-action-btn {
+    color: #ffffff;
+  }
+}
+
+.chat-list-action-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.chat-list-action-btn.danger {
+  color: #ff3b30;
+}
+
+.chat-list-action-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
