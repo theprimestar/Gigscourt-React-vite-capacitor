@@ -77,7 +77,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [otherTyping, setOtherTyping] = useState(false);
   const [floatingDate, setFloatingDate] = useState('');
   const [initDone, setInitDone] = useState(false);
-
+  const [scrolled, setScrolled] = useState(false);
+  
   const chatContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
@@ -722,7 +723,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   return (
     <div className="chat-screen">
       {/* Header */}
-      <div className="chat-header">
+      <div className={`chat-header ${scrolled ? 'scrolled' : ''}`}>
         <button onClick={onBack} className="chat-back-btn" aria-label="Back">
           <IconBack />
         </button>
@@ -780,7 +781,14 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       )}
 
       {/* Messages */}
-      <div className="chat-messages" ref={chatContainerRef} onScroll={updateFloatingDate}>
+      <div
+  className="chat-messages"
+  ref={chatContainerRef}
+  onScroll={(e) => {
+    updateFloatingDate();
+    setScrolled(e.target.scrollTop > 20);
+  }}
+>
         {!readyToRender && (
           <div className="chat-loading">
             <div className="chat-spinner" />
