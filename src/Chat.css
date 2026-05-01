@@ -70,11 +70,13 @@
 
 /* Screen container — fills parent, doesn't fight App.css layout */
 .chat-list-screen {
-  height: 100%;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  background: var(--chat-bg);
   display: flex;
   flex-direction: column;
-  background: var(--chat-bg);
-  position: relative;
 }
 
 /* Header */
@@ -190,6 +192,11 @@
 
 .chat-list-item-wrapper.has-actions {
   z-index: 10;
+}
+
+/* Needed so absolute actions position relative to the row */
+.chat-list-item-row {
+  position: relative;
 }
 
 /* Conversation row */
@@ -359,11 +366,15 @@
 
 /* Long press actions — floating overlay below row, right-aligned, stacked vertically */
 .chat-list-actions {
+  position: absolute;
+  right: 12px;
+  top: 100%;
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  padding: 6px 16px 10px;
+  z-index: 20;
   animation: actionsSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
