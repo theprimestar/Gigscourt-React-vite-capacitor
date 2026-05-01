@@ -48,18 +48,12 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
   const longPressTimer = useRef(null);
   const channelRef = useRef(null);
 
-  // ──────────────────────────────────────
-  //  INITIAL LOAD
-  // ──────────────────────────────────────
   useEffect(() => {
     isMounted.current = true;
     loadChatList(false);
     return () => { isMounted.current = false; };
   }, []);
 
-  // ──────────────────────────────────────
-  //  BROADCAST (only when tab is visible)
-  // ──────────────────────────────────────
   useEffect(() => {
     if (!isVisible || !currentUserId) {
       if (channelRef.current) {
@@ -104,9 +98,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     };
   }, [isVisible, currentUserId]);
 
-  // ──────────────────────────────────────
-  //  CHAT TARGET
-  // ──────────────────────────────────────
   useEffect(() => {
     if (chatTarget && currentUserId && onStartChat) {
       onStartChat({ id: chatTarget.id, full_name: chatTarget.userName || 'User', chatId: chatTarget.channel_id || null });
@@ -115,9 +106,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     }
   }, [chatTarget, currentUserId]);
 
-  // ──────────────────────────────────────
-  //  WINDOW FOCUS — catch up after absence
-  // ──────────────────────────────────────
   useEffect(() => {
     const handleFocus = () => {
       if (isMounted.current && currentUserId && !fetchingRef.current) {
@@ -131,9 +119,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     return () => window.removeEventListener('focus', handleFocus);
   }, [currentUserId]);
 
-  // ──────────────────────────────────────
-  //  DATA FETCHING
-  // ──────────────────────────────────────
   const loadChatList = async (append) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -202,9 +187,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     if (node) observerRef.current.observe(node);
   }, []);
 
-  // ──────────────────────────────────────
-  //  ACTIONS
-  // ──────────────────────────────────────
   const handleDeleteChat = async (channelId) => {
     if (!currentUserId) return;
     await supabase.from('channel_members').update({ deleted_at: new Date().toISOString() }).eq('channel_id', channelId).eq('user_id', currentUserId);
@@ -232,9 +214,6 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     if (onDeepScreen) onDeepScreen('chat');
   };
 
-  // ──────────────────────────────────────
-  //  HELPERS
-  // ──────────────────────────────────────
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -247,14 +226,9 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
     return date.toLocaleDateString();
   };
 
-  // ──────────────────────────────────────
-  //  RENDER
-  // ──────────────────────────────────────
   return (
     <div className="chat-list-screen">
       <header className="chat-list-header"><h1>Chats</h1></header>
-
-      {actionChat && <div className="chat-list-blur-overlay" onClick={() => setActionChat(null)} />}
 
       {chats.length === 0 ? (
         <div className="chat-list-empty">
@@ -268,10 +242,11 @@ function ChatListScreen({ chatTarget, onClearChatTarget, onDeepScreen, onStartCh
             const isActive = actionChat?.channel_id === chat.channel_id;
 
             return (
-              <div key={chat.channel_id} className={`chat-list-item-row ${isActive ? 'active-row' : ''}`}>
+              <div key={chat.channel_id}>
                 <div
                   ref={isLast ? lastChatRef : null}
-                  className={`chat-list-item ${chat.isPinned ? 'pinned' : ''}`}
+                  className={`chat-list-item ${chat.isPinned ? 'pinned' : ''} ${isActive ? 'highlighted' : ''}`}
+                  style={actionChat && !isActive ? { opacity: 0.3 } : {}}
                   onContextMenu={(e) => handleLongPress(e, chat)}
                   onTouchStart={(e) => { longPressTimer.current = setTimeout(() => handleLongPress(e, chat), 500); }}
                   onTouchEnd={() => clearTimeout(longPressTimer.current)}
