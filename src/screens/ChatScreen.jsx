@@ -520,7 +520,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       )}
 
       {/* Long Press Dismiss Overlay */}
-      {actionMsg && <div className="chat-list-dismiss-overlay" onClick={() => setActionMsg(null)} onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setActionMsg(null); }} />}
+      {actionMsg && <div className="chat-list-dismiss-overlay" onClick={() => setActionMsg(null)} />}
     </div>
   );
 }
