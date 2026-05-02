@@ -438,6 +438,22 @@
   font-size: 11px;
   color: #34c759;
   font-weight: 500;
+  flex: 1;
+}
+
+.chat-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-header-row2 {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+}
+
+.chat-gig-btn-pending {
+  background: #ff3b30 !important;
 }
 
 .chat-gig-btn {
@@ -510,15 +526,15 @@
   position: relative;
 }
 
-.gig-banner-inner {
+.gig-banner-track {
   display: flex;
-  animation: gig-scroll 12s linear infinite;
+  animation: gig-scroll 16s linear infinite;
   white-space: nowrap;
-  gap: 40px;
 }
 
-.gig-banner-inner p {
-  margin: 0;
+.gig-banner-track span {
+  display: inline-block;
+  padding-right: 60px;
   font-size: 13px;
   font-weight: 500;
   color: #1d1d1f;
@@ -526,7 +542,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .gig-banner-inner p {
+  .gig-banner-track span {
     color: #ffffff;
   }
 }
@@ -555,7 +571,7 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-.gig-banner-locked .gig-banner-inner p {
+.gig-banner-locked .gig-banner-track span {
   font-weight: 600;
 }
 
@@ -844,9 +860,9 @@
 }
 
 .voice-time {
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
-  min-width: 32px;
+  min-width: 60px;
   text-align: right;
 }
 
