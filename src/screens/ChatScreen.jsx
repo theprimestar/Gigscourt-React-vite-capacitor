@@ -148,18 +148,24 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       init();
     }
     const handleFocus = () => {
-  console.log('Focus handler called, isVisible:', isVisible, 'initRan:', initRan.current, 'syncing:', syncingRef.current);
   if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
     syncFromServer(true);
   }
 };
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      isMounted.current = false;
-      stopAudio();
-      stopRecording();
-      window.removeEventListener('focus', handleFocus);
-    };
+const handleVisibility = () => {
+  if (document.visibilityState === 'visible' && isVisible && isMounted.current && initRan.current && !syncingRef.current) {
+    syncFromServer(true);
+  }
+};
+window.addEventListener('focus', handleFocus);
+window.addEventListener('visibilitychange', handleVisibility);
+return () => {
+  isMounted.current = false;
+  stopAudio();
+  stopRecording();
+  window.removeEventListener('focus', handleFocus);
+  window.removeEventListener('visibilitychange', handleVisibility);
+};
   }, [chatId, otherUserId, isVisible]);
 
   useEffect(() => {
