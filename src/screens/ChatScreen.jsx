@@ -256,9 +256,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       const channelKey = chatId || [user.id, otherUserId].sort().join(':');
       channelIdRef.current = channelKey;
 
-      await supabase.rpc('reset_unread', { p_user_id: user.id, p_channel_id: channelKey });
-      await checkExpiredGigs(user.id);
-
       const currentGig = await getGigForChannel(channelKey);
       if (isMounted.current) {
         const prevGig = getCached(gigCacheKey);
@@ -286,6 +283,17 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
       subscribeToChannel(channelKey);
       subscribeToTyping(channelKey);
+
+      await supabase.rpc('reset_unread', { p_user_id: user.id, p_channel_id: channelKey });
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'bulk_read',
+          payload: { channel_id: channelKey, reader_id: user.id },
+        }).catch(() => {});
+      }
+      await checkExpiredGigs(user.id);
+
       syncFromServer(true);
     } catch (err) {
       if (isMounted.current) setError(err.message);
@@ -313,16 +321,26 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       if (isMounted.current) setGig(currentGig);
     });
     channelRef.current.on('broadcast', { event: 'message_read' }, (payload) => {
-  console.log('RECEIVED message_read broadcast:', payload);
-  if (!isMounted.current) return;
-  const messageId = payload?.payload?.message_id;
-  if (!messageId) return;
-  setMessages(prev => {
-    const updated = prev.map(m => m.id === messageId ? { ...m, is_read: true } : m);
-    setCached(msgCacheKey, updated);
-    return updated;
-  });
-});
+      if (!isMounted.current) return;
+      const messageId = payload?.payload?.message_id;
+      if (!messageId) return;
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === messageId ? { ...m, is_read: true } : m);
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+    });
+    channelRef.current.on('broadcast', { event: 'bulk_read' }, (payload) => {
+      if (!isMounted.current) return;
+      const { reader_id } = payload?.payload || {};
+      setMessages(prev => {
+        const updated = prev.map(m => 
+          m.sender_id !== reader_id ? { ...m, is_read: true } : m
+        );
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+    });
     channelRef.current.subscribe();
   };
 
