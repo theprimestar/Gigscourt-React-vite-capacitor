@@ -6,38 +6,27 @@ import '../Chat.css';
 const CACHE_KEY = 'gigscourt_chatlist';
 
 function getCachedChats() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  try { const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : []; }
+  catch { return []; }
 }
-
 function setCachedChats(chats) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(chats));
-  } catch {}
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(chats)); }
+  catch {}
 }
 
 const IconAvatar = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
   </svg>
 );
-
 const IconSearch = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"/>
-    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
   </svg>
 );
-
 const IconClose = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"/>
-    <line x1="6" y1="6" x2="18" y2="18"/>
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
 
@@ -63,9 +52,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
       initRan.current = true;
       loadChatList(false);
     }
-    return () => {
-      isMounted.current = false;
-    };
+    return () => { isMounted.current = false; };
   }, []);
 
   useEffect(() => {
@@ -76,10 +63,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
   }, [isVisible]);
 
   useEffect(() => {
-    if (!isVisible || !currentUserId) {
-      unsubscribeBroadcast();
-      return;
-    }
+    if (!isVisible || !currentUserId) { unsubscribeBroadcast(); return; }
 
     const channel = supabase.channel(`user:${currentUserId}:chatlist`, {
       config: { broadcast: { self: false, ack: true } },
@@ -93,13 +77,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
         const target = prev.find(c => c.channel_id === update.channel_id);
         const rest = prev.filter(c => c.channel_id !== update.channel_id);
         const updated = target
-          ? {
-              ...target,
-              last_message: update.preview,
-              last_message_at: update.timestamp,
-              has_unread: true,
-              unread_count: (target.unread_count || 0) + 1,
-            }
+          ? { ...target, last_message: update.preview, last_message_at: update.timestamp, has_unread: true, unread_count: (target.unread_count || 0) + 1 }
           : null;
         const result = updated ? [updated, ...rest] : prev;
         setCachedChats(result);
@@ -111,9 +89,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
     channel.subscribe();
     channelRef.current = channel;
 
-    return () => {
-      unsubscribeBroadcast();
-    };
+    return () => { unsubscribeBroadcast(); };
   }, [isVisible, currentUserId]);
 
   useEffect(() => {
@@ -168,11 +144,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
           freshChats.forEach(c => {
             const existing = merged.get(c.channel_id);
             if (existing) {
-              merged.set(c.channel_id, {
-                ...c,
-                has_unread: existing.has_unread || c.has_unread,
-                unread_count: Math.max(existing.unread_count || 0, c.unread_count || 0),
-              });
+              merged.set(c.channel_id, { ...c, has_unread: existing.has_unread || c.has_unread, unread_count: Math.max(existing.unread_count || 0, c.unread_count || 0) });
             } else {
               merged.set(c.channel_id, c);
             }
@@ -186,15 +158,13 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
         setCachedChats(freshChats);
       }
 
-      if (data.length > 0) {
-        cursorRef.current = data[data.length - 1].last_message_at;
-      }
+      if (data.length > 0) cursorRef.current = data[data.length - 1].last_message_at;
       hasMoreRef.current = data.length === 30;
       setHasMore(data.length === 30);
       initialLoadDone.current = true;
       if (onUnreadUpdate) onUnreadUpdate();
     } catch (err) {
-      console.error('Chat list error:', err);
+      // silent
     } finally {
       loadingMoreRef.current = false;
       fetchingRef.current = false;
@@ -207,22 +177,14 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
     loadChatList(true);
   }, [currentUserId]);
 
-  const lastChatRef = useCallback(
-    (node) => {
-      if (loadingMoreRef.current) return;
-      if (observerRef.current) observerRef.current.disconnect();
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          if (entries[0].isIntersecting && hasMoreRef.current) {
-            loadMore();
-          }
-        },
-        { rootMargin: '100px' }
-      );
-      if (node) observerRef.current.observe(node);
-    },
-    [loadMore]
-  );
+  const lastChatRef = useCallback(node => {
+    if (loadingMoreRef.current) return;
+    if (observerRef.current) observerRef.current.disconnect();
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMoreRef.current) loadMore();
+    }, { rootMargin: '100px' });
+    if (node) observerRef.current.observe(node);
+  }, [loadMore]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
@@ -254,23 +216,17 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
 
       <div className="chat-list-search">
         <div className="chat-list-search-bar">
-          <span className="chat-list-search-icon">
-            <IconSearch />
-          </span>
+          <span className="chat-list-search-icon"><IconSearch /></span>
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search chats"
             className="chat-list-search-input"
             autoComplete="off"
           />
           {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="chat-list-search-clear"
-              aria-label="Clear search"
-            >
+            <button onClick={() => setSearchQuery('')} className="chat-list-search-clear" aria-label="Clear search">
               <IconClose />
             </button>
           )}
@@ -302,11 +258,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
                 className="chat-list-item"
                 onClick={() => {
                   if (onStartChat) {
-                    onStartChat({
-                      id: chat.other_user_id,
-                      full_name: chat.other_user_name,
-                      chatId: chat.channel_id,
-                    });
+                    onStartChat({ id: chat.other_user_id, full_name: chat.other_user_name, chatId: chat.channel_id });
                   }
                 }}
               >
@@ -314,30 +266,21 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
                   {chat.other_user_pic ? (
                     <img src={chat.other_user_pic} alt="" />
                   ) : (
-                    <div className="chat-list-avatar-placeholder">
-                      <IconAvatar />
-                    </div>
+                    <div className="chat-list-avatar-placeholder"><IconAvatar /></div>
                   )}
                 </div>
-
                 <div className="chat-list-info">
                   <div className="chat-list-top">
                     <h3 className="chat-list-name">{chat.other_user_name}</h3>
                     <div className="chat-list-meta">
-                      {chat.pending_gig && (
-                        <span className="chat-list-pending-badge">Pending</span>
-                      )}
+                      {chat.pending_gig && <span className="chat-list-pending-badge">Pending</span>}
                       <span className="chat-list-time">{formatTime(chat.last_message_at)}</span>
                     </div>
                   </div>
                   <div className="chat-list-bottom">
-                    <p className="chat-list-preview">
-                      {chat.last_message || ''}
-                    </p>
+                    <p className="chat-list-preview">{chat.last_message || ''}</p>
                     {chat.has_unread && chat.unread_count > 0 && (
-                      <span className="chat-list-unread">
-                        {chat.unread_count > 99 ? '99+' : chat.unread_count}
-                      </span>
+                      <span className="chat-list-unread">{chat.unread_count > 99 ? '99+' : chat.unread_count}</span>
                     )}
                   </div>
                 </div>
