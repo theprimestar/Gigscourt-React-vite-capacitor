@@ -1195,3 +1195,10 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.message-photo-status {
+  font-size: 11px;
+  color: #8e8e93;
+  padding: 2px 14px 0;
+  align-self: flex-end;
+}
