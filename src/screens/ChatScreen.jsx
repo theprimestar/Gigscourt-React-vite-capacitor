@@ -597,20 +597,30 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handleRegisterGig = async () => {
-    if (!currentUserId || !otherUserId) return;
-    setGigLoading(true);
-    try {
-      const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
-      if (result?.gig_id) {
-        setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
-      }
-      setBannerDismissed(false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGigLoading(false);
+  console.log('=== handleRegisterGig ===');
+  console.log('currentUserId:', currentUserId);
+  console.log('otherUserId:', otherUserId);
+  console.log('channelId:', channelIdRef.current);
+  
+  if (!currentUserId || !otherUserId) {
+    console.log('Missing IDs');
+    return;
+  }
+  setGigLoading(true);
+  try {
+    const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
+    console.log('registerGig result:', result);
+    if (result?.gig_id) {
+      setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
     }
-  };
+    setBannerDismissed(false);
+  } catch (err) {
+    console.error('registerGig error:', err.message);
+    setError(err.message);
+  } finally {
+    setGigLoading(false);
+  }
+};
 
   const handleCancelGig = async () => {
     if (!gig || !currentUserId) return;
