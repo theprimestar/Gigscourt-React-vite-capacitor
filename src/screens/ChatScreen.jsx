@@ -98,14 +98,13 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const mediaRecorderRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const audioRef = useRef(null);
+  const pausedAudioRef = useRef(null);
   const typingTimerRef = useRef(null);
   const typingSendTimerRef = useRef(null);
   const isMounted = useRef(true);
   const initRan = useRef(false);
   const syncingRef = useRef(false);
-  const seekRAF = useRef(null);
 
-  // Cache gig state whenever it changes
   useEffect(() => {
     if (gig !== undefined) setCached(gigCacheKey, gig);
   }, [gig]);
@@ -157,7 +156,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     }
   };
 
-  const syncFromServer = async (silent) => {
+  const syncFromServer = async () => {
     if (!channelIdRef.current || !currentUserId || syncingRef.current) return;
     syncingRef.current = true;
     try {
@@ -180,7 +179,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           });
         }
       }
-      // Only update gig if it changed
       const currentGig = await getGigForChannel(channelIdRef.current);
       if (isMounted.current) {
         const prevGig = getCached(gigCacheKey);
@@ -207,9 +205,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       }
 
       const { data: myProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-      if (isMounted.current && myProfile) {
-        setCurrentUserName(myProfile.full_name || '');
-      }
+      if (isMounted.current && myProfile) setCurrentUserName(myProfile.full_name || '');
 
       const channelKey = chatId || [user.id, otherUserId].sort().join(':');
       channelIdRef.current = channelKey;
@@ -220,9 +216,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       const currentGig = await getGigForChannel(channelKey);
       if (isMounted.current) {
         const prevGig = getCached(gigCacheKey);
-        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) {
-          setGig(currentGig);
-        }
+        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) setGig(currentGig);
       }
 
       const { data: channelData } = await supabase.from('channels').select('banner_dismissed_at, banner_dismissed_by').eq('id', channelKey).single();
@@ -253,26 +247,18 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
+    if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
   };
 
   const subscribeToChannel = (channelId) => {
     cleanupChannels();
-    channelRef.current = supabase.channel(`chat:${channelId}`, {
-      config: { broadcast: { self: true, ack: true } },
-    });
+    channelRef.current = supabase.channel(`chat:${channelId}`, { config: { broadcast: { self: true, ack: true } } });
     channelRef.current.on('broadcast', { event: 'message' }, (payload) => {
       if (!isMounted.current) return;
       const msg = payload?.payload;
       if (!msg?.id || seenIds.current.has(msg.id)) return;
       seenIds.current.add(msg.id);
-      setMessages(prev => {
-        const updated = [...prev, msg];
-        setCached(msgCacheKey, updated);
-        return updated;
-      });
+      setMessages(prev => { const updated = [...prev, msg]; setCached(msgCacheKey, updated); return updated; });
       scrollToBottom();
     });
     channelRef.current.on('broadcast', { event: 'gig_update' }, async () => {
@@ -284,26 +270,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const broadcastGigUpdate = () => {
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'gig_update',
-        payload: {},
-      }).catch(() => {});
-    }
+    if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'gig_update', payload: {} }).catch(() => {});
   };
 
   const subscribeToTyping = (channelId) => {
-    typingChannelRef.current = supabase.channel(`typing:${channelId}`, {
-      config: { broadcast: { self: false, ack: true } },
-    });
+    typingChannelRef.current = supabase.channel(`typing:${channelId}`, { config: { broadcast: { self: false, ack: true } } });
     typingChannelRef.current.on('broadcast', { event: 'typing' }, () => {
       if (!isMounted.current) return;
       setOtherTyping(true);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = setTimeout(() => {
-        if (isMounted.current) setOtherTyping(false);
-      }, 3000);
+      typingTimerRef.current = setTimeout(() => { if (isMounted.current) setOtherTyping(false); }, 3000);
     });
     typingChannelRef.current.subscribe();
   };
@@ -316,18 +292,29 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     typingSendTimerRef.current = setTimeout(() => {}, 2000);
   }, [currentUserId]);
 
+  // ── Unified status helpers ──
+  const getStatusText = (msg) => {
+    if (msg.status === 'sending' || msg.status === 'uploading') return ' · · ·';
+    if (msg.status === 'sent') {
+      if (msg.image_url) return ' · Sent';
+      if (msg.audio_url) return ' · Sent';
+      return ' · Sent';
+    }
+    if (msg.is_read) {
+      if (msg.image_url) return ' · Viewed';
+      if (msg.audio_url) return ' · Played';
+      return ' · Read';
+    }
+    return '';
+  };
+
   const sendTextMessage = async (text, tempId) => {
-    const channelKey = channelIdRef.current;
     try {
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-        p_channel_key: channelKey,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: text,
+        p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: text,
       });
-
-      if (rpcError) throw new Error(rpcError.message || 'Failed to send');
-      if (!savedMessage || !savedMessage.id) throw new Error('No message returned');
+      if (rpcError) throw new Error(rpcError.message);
+      if (!savedMessage?.id) throw new Error('No message returned');
 
       setMessages(prev => {
         const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
@@ -336,32 +323,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       });
       seenIds.current.add(savedMessage.id);
 
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
-
+      if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
       if (otherUser?.onesignal_player_id) {
         fetch(PUSH_NOTIFICATION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            include_player_ids: [otherUser.onesignal_player_id],
-            headings: { en: currentUserName || 'New message' },
-            contents: { en: text },
-            data: { channel_id: channelKey },
-          }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ include_player_ids: [otherUser.onesignal_player_id], headings: { en: currentUserName || 'New message' }, contents: { en: text }, data: { channel_id: channelIdRef.current } }),
         }).catch(() => {});
       }
-
       await checkBannerReappear();
     } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
   };
 
@@ -371,18 +342,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     const text = newMessage.trim();
     const tempId = 'temp-' + Date.now();
     setNewMessage('');
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text,
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'sending',
-    };
-    setMessages(prev => [...prev, optimistic]);
+    setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
     scrollToBottom();
     sendTextMessage(text, tempId);
   };
@@ -390,18 +350,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const handleRetry = (msg) => {
     setMessages(prev => prev.filter(m => m.id !== msg.id));
     const tempId = 'temp-' + Date.now();
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text: msg.text,
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'sending',
-    };
-    setMessages(prev => [...prev, optimistic]);
+    setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: msg.text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
     scrollToBottom();
     sendTextMessage(msg.text, tempId);
   };
@@ -409,86 +358,47 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file || !currentUserId) return;
-
     const tempId = 'temp-photo-' + Date.now();
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text: '',
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'uploading',
-    };
-    setMessages(prev => [...prev, optimistic]);
+    setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
     scrollToBottom();
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
-
+      const authRes = await fetch(IMAGEKIT_AUTH_URL); const auth = await authRes.json();
       const fd = new FormData();
-      fd.append('file', file);
-      fd.append('fileName', 'chat-photo.jpg');
-      fd.append('folder', '/chat-photos');
-      fd.append('useUniqueFileName', 'true');
-      fd.append('publicKey', imagekitPublicKey);
-      fd.append('token', auth.token);
-      fd.append('signature', auth.signature);
-      fd.append('expire', auth.expire);
-
-      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        body: fd,
-      });
+      fd.append('file', file); fd.append('fileName', 'chat-photo.jpg'); fd.append('folder', '/chat-photos'); fd.append('useUniqueFileName', 'true'); fd.append('publicKey', imagekitPublicKey); fd.append('token', auth.token); fd.append('signature', auth.signature); fd.append('expire', auth.expire);
+      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: fd });
       const uploadResult = await upRes.json();
       if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
-
       const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
 
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-        p_channel_key: channelIdRef.current,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: '',
-        p_image_url: url,
+        p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_image_url: url,
       });
-
-      if (rpcError) throw new Error(rpcError.message || 'Failed to send photo');
-      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
+      if (rpcError) throw new Error(rpcError.message);
+      if (!savedMessage?.id) throw new Error('Failed to send photo');
 
       setMessages(prev => {
-        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+        const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
         setCached(msgCacheKey, updated);
         return updated;
       });
       seenIds.current.add(savedMessage.id);
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
+      if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
     } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
   };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm', audioBitsPerSecond: 32000 });
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 24000 });
       const chunks = [];
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const blob = new Blob(chunks, { type: mimeType });
         await uploadAudio(blob);
         stream.getTracks().forEach(t => t.stop());
       };
@@ -497,23 +407,13 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       setIsRecording(true);
       setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= 59) {
-            stopRecording();
-            return 60;
-          }
-          return prev + 1;
-        });
+        setRecordingTime(prev => { if (prev >= 59) { stopRecording(); return 60; } return prev + 1; });
       }, 1000);
-    } catch {
-      setError('Microphone access denied');
-    }
+    } catch { setError('Microphone access denied'); }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
     setIsRecording(false);
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
   };
@@ -530,93 +430,66 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
   const uploadAudio = async (blob) => {
     const tempId = 'temp-audio-' + Date.now();
-    const optimistic = {
-      id: tempId,
-      channel_id: channelIdRef.current,
-      sender_id: currentUserId,
-      text: '',
-      image_url: null,
-      audio_url: null,
-      created_at: new Date().toISOString(),
-      is_read: false,
-      status: 'uploading',
-    };
-    setMessages(prev => [...prev, optimistic]);
+    setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
     scrollToBottom();
 
     try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
-
+      const authRes = await fetch(IMAGEKIT_AUTH_URL); const auth = await authRes.json();
       const fd = new FormData();
-      fd.append('file', blob, 'voice-message.webm');
-      fd.append('fileName', 'voice-message.webm');
-      fd.append('folder', '/chat-audio');
-      fd.append('useUniqueFileName', 'true');
-      fd.append('publicKey', imagekitPublicKey);
-      fd.append('token', auth.token);
-      fd.append('signature', auth.signature);
-      fd.append('expire', auth.expire);
-
-      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        body: fd,
-      });
+      fd.append('file', blob, 'voice-message'); fd.append('fileName', 'voice-message'); fd.append('folder', '/chat-audio'); fd.append('useUniqueFileName', 'true'); fd.append('publicKey', imagekitPublicKey); fd.append('token', auth.token); fd.append('signature', auth.signature); fd.append('expire', auth.expire);
+      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: fd });
       const uploadResult = await upRes.json();
       if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
 
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-        p_channel_key: channelIdRef.current,
-        p_sender_id: currentUserId,
-        p_other_user_id: otherUserId,
-        p_text: '',
-        p_audio_url: uploadResult.url,
+        p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_audio_url: uploadResult.url,
       });
-
-      if (rpcError) throw new Error(rpcError.message || 'Failed to send audio');
-      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
+      if (rpcError) throw new Error(rpcError.message);
+      if (!savedMessage?.id) throw new Error('Failed to send audio');
 
       setMessages(prev => {
-        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+        const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
         setCached(msgCacheKey, updated);
         return updated;
       });
       seenIds.current.add(savedMessage.id);
-
-      if (channelRef.current) {
-        channelRef.current.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: savedMessage,
-        }).catch(() => {});
-      }
+      if (channelRef.current) channelRef.current.send({ type: 'broadcast', event: 'message', payload: savedMessage }).catch(() => {});
     } catch (err) {
-      setMessages(prev =>
-        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-      );
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
     }
   };
 
+  // ── Audio playback ──
   const stopAudio = () => {
-  if (audioRef.current) {
-    audioRef.current.pause();
-    audioRef.current = null;
-  }
-  setPlayingAudio(null);
-};
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setPlayingAudio(null);
+  };
 
   const handlePlayAudio = (msg) => {
     if (playingAudio === msg.id) {
+      // Pause
       audioRef.current?.pause();
-      const currentState = audioState[msg.id] || {};
-      setAudioState(prev => ({
-        ...prev,
-        [msg.id]: { ...currentState, currentTime: audioRef.current?.currentTime || 0, playing: false },
-      }));
+      setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], currentTime: audioRef.current?.currentTime || 0, playing: false } }));
+      pausedAudioRef.current = audioRef.current;
+      audioRef.current = null;
       setPlayingAudio(null);
       return;
     }
 
+    // Stop any currently playing
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+
+    // Resume paused audio for this message
+    if (pausedAudioRef.current && pausedAudioRef.current.src === msg.audio_url) {
+      audioRef.current = pausedAudioRef.current;
+      pausedAudioRef.current = null;
+      audioRef.current.play();
+      setPlayingAudio(msg.id);
+      setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], playing: true } }));
+      return;
+    }
+
+    // Fresh play
     stopAudio();
     const startFrom = audioState[msg.id]?.currentTime || 0;
     const audio = new Audio(msg.audio_url);
@@ -625,34 +498,21 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     setPlayingAudio(msg.id);
 
     audio.onloadedmetadata = () => {
-      if (isMounted.current) {
-        setAudioState(prev => ({
-          ...prev,
-          [msg.id]: { duration: audio.duration, currentTime: startFrom, playing: true },
-        }));
-      }
+      if (isMounted.current) setAudioState(prev => ({ ...prev, [msg.id]: { duration: audio.duration, currentTime: startFrom, playing: true } }));
     };
     audio.ontimeupdate = () => {
-      if (isMounted.current && !isSeeking) {
-        setAudioState(prev => ({
-          ...prev,
-          [msg.id]: { ...prev[msg.id], currentTime: audio.currentTime, duration: audio.duration, playing: true },
-        }));
-      }
+      if (isMounted.current && !isSeeking) setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], currentTime: audio.currentTime, duration: audio.duration, playing: true } }));
     };
     audio.onended = () => {
       if (isMounted.current) {
         setPlayingAudio(null);
-        setAudioState(prev => ({
-          ...prev,
-          [msg.id]: { ...prev[msg.id], currentTime: 0, playing: false },
-        }));
+        setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], currentTime: 0, playing: false } }));
       }
     };
     audio.play();
   };
 
-  // Seek handlers — tap + drag
+  // ── Seek ──
   const seekTo = (msg, clientX) => {
     const bar = document.getElementById(`voice-bar-${msg.id}`);
     if (!bar || !audioRef.current || playingAudio !== msg.id) return;
@@ -661,64 +521,40 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     const duration = audioState[msg.id]?.duration || audioRef.current.duration || 0;
     const newTime = ratio * duration;
     audioRef.current.currentTime = newTime;
-    setAudioState(prev => ({
-      ...prev,
-      [msg.id]: { ...prev[msg.id], currentTime: newTime },
-    }));
+    setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], currentTime: newTime } }));
   };
 
-  const handleSeekStart = (msg, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsSeeking(true);
-    seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX);
-  };
-
-  const handleSeekMove = (msg, e) => {
-    if (!isSeeking) return;
-    e.preventDefault();
-    e.stopPropagation();
-    seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX);
-  };
-
-  const handleSeekEnd = () => {
-    setIsSeeking(false);
-  };
+  const handleSeekStart = (msg, e) => { e.preventDefault(); e.stopPropagation(); setIsSeeking(true); seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX); };
+  const handleSeekMove = (msg, e) => { if (!isSeeking) return; e.preventDefault(); e.stopPropagation(); seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX); };
+  const handleSeekEnd = () => { setIsSeeking(false); };
 
   useEffect(() => {
     if (!isSeeking) return;
-    const handleUp = () => setIsSeeking(false);
-    window.addEventListener('mouseup', handleUp);
-    window.addEventListener('touchend', handleUp);
-    return () => {
-      window.removeEventListener('mouseup', handleUp);
-      window.removeEventListener('touchend', handleUp);
-    };
+    const up = () => setIsSeeking(false);
+    window.addEventListener('mouseup', up);
+    window.addEventListener('touchend', up);
+    return () => { window.removeEventListener('mouseup', up); window.removeEventListener('touchend', up); };
   }, [isSeeking]);
 
   const formatDuration = (s) => {
     if (!s || isNaN(s)) return '0:00';
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
+    const m = Math.floor(s / 60); const sec = Math.floor(s % 60);
     return `${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
+  // ── Gig ──
   const handleRegisterGig = async () => {
     if (!currentUserId || !otherUserId) return;
     setGigLoading(true);
     try {
       const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
       if (result?.gig_id) {
-        const newGig = { id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId };
-        setGig(newGig);
+        setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
         broadcastGigUpdate();
       }
       setBannerDismissed(false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGigLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setGigLoading(false); }
   };
 
   const handleCancelGig = async () => {
@@ -729,11 +565,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       setGig(null);
       setBannerDismissed(false);
       broadcastGigUpdate();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setGigLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setGigLoading(false); }
   };
 
   const handleSubmitReview = async () => {
@@ -741,57 +574,35 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     setSubmittingReview(true);
     try {
       await submitReview(gig.id, currentUserId, reviewRating, reviewText);
-      setGig(null);
-      setShowReviewForm(false);
-      setReviewRating(0);
-      setReviewText('');
-      setBannerDismissed(false);
+      setGig(null); setShowReviewForm(false); setReviewRating(0); setReviewText(''); setBannerDismissed(false);
       broadcastGigUpdate();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSubmittingReview(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setSubmittingReview(false); }
   };
 
   const handleDismissBanner = async () => {
     if (gig && gig.status === 'pending_review') return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    setBannerDismissed(true);
-    bannerDismissedByRef.current = user.id;
-    await supabase.from('channels').update({
-      banner_dismissed_at: new Date().toISOString(),
-      banner_dismissed_by: user.id,
-    }).eq('id', channelIdRef.current);
+    setBannerDismissed(true); bannerDismissedByRef.current = user.id;
+    await supabase.from('channels').update({ banner_dismissed_at: new Date().toISOString(), banner_dismissed_by: user.id }).eq('id', channelIdRef.current);
   };
 
   const checkBannerReappear = async () => {
     if (!bannerDismissed || !bannerDismissedByRef.current) return;
-    const { data: channelData } = await supabase.from('channels').select('banner_dismissed_at').eq('id', channelIdRef.current).single();
-    if (!channelData?.banner_dismissed_at) return;
-    const { count } = await supabase.from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('channel_id', channelIdRef.current)
-      .gt('created_at', channelData.banner_dismissed_at);
+    const { data: cd } = await supabase.from('channels').select('banner_dismissed_at').eq('id', channelIdRef.current).single();
+    if (!cd?.banner_dismissed_at) return;
+    const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('channel_id', channelIdRef.current).gt('created_at', cd.banner_dismissed_at);
     if (count >= 8) {
-      await supabase.from('channels').update({
-        banner_dismissed_at: null,
-        banner_dismissed_by: null,
-      }).eq('id', channelIdRef.current);
-      setBannerDismissed(false);
-      bannerDismissedByRef.current = null;
+      await supabase.from('channels').update({ banner_dismissed_at: null, banner_dismissed_by: null }).eq('id', channelIdRef.current);
+      setBannerDismissed(false); bannerDismissedByRef.current = null;
     }
   };
 
   const getBannerText = () => {
     const name = otherUser?.full_name || otherUserName || 'this person';
     if (!gig) return `Did you complete a gig with ${name}? Tap Register Gig above to boost your reputation.`;
-    if (gig.status === 'pending_review') {
-      return currentUserId === gig.provider_id
-        ? `Waiting for ${name} to submit their review.`
-        : `Please submit your rating and review for ${name}. Tap Pending Gig above.`;
-    }
+    if (gig.status === 'pending_review') return currentUserId === gig.provider_id ? `Waiting for ${name} to submit their review.` : `Please submit your rating and review for ${name}. Tap Pending Gig above.`;
     return `Did you complete a gig with ${name}? Tap Register Gig above to boost your reputation.`;
   };
 
@@ -803,9 +614,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const getGigButtonLabel = () => {
     if (gigLoading) return 'Register Gig';
     if (!gig) return 'Register Gig';
-    if (gig.status === 'pending_review') {
-      return currentUserId === gig.provider_id ? 'Cancel Gig' : 'Pending Gig';
-    }
+    if (gig.status === 'pending_review') return currentUserId === gig.provider_id ? 'Cancel Gig' : 'Pending Gig';
     return 'Register Gig';
   };
 
@@ -817,8 +626,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
   const formatDate = (ts) => {
     if (!ts) return '';
-    const d = new Date(ts);
-    const now = new Date();
+    const d = new Date(ts), now = new Date();
     const days = Math.floor((now - d) / 86400000);
     if (days === 0) return 'Today';
     if (days === 1) return 'Yesterday';
@@ -827,112 +635,48 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const shouldShowDateSeparator = (msg, prevMsg) => {
-    if (!prevMsg) return true;
-    return new Date(msg.created_at).toDateString() !== new Date(prevMsg.created_at).toDateString();
-  };
+  const shouldShowDateSeparator = (msg, prevMsg) => !prevMsg || new Date(msg.created_at).toDateString() !== new Date(prevMsg.created_at).toDateString();
 
   const updateFloatingDate = useCallback(() => {
     if (!chatContainerRef.current) return;
-    const scrollTop = chatContainerRef.current.scrollTop;
-    let currentDate = '';
-    const els = chatContainerRef.current.querySelectorAll('[data-date]');
-    els.forEach(el => {
-      if (el.offsetTop > scrollTop && el.getBoundingClientRect().top < 200 && !currentDate) {
-        currentDate = el.getAttribute('data-date');
-      }
-    });
-    setFloatingDate(currentDate || '');
+    const st = chatContainerRef.current.scrollTop;
+    let cd = '';
+    chatContainerRef.current.querySelectorAll('[data-date]').forEach(el => { if (el.offsetTop > st && el.getBoundingClientRect().top < 200 && !cd) cd = el.getAttribute('data-date'); });
+    setFloatingDate(cd || '');
   }, []);
 
-  const formatTime = (ts) => {
-    if (!ts) return '';
-    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
+  const formatTime = (ts) => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const hasMessages = messages.length > 0;
 
   return (
     <div className="chat-screen">
       <div className={`chat-header ${scrolled ? 'scrolled' : ''}`}>
-        <button onClick={onBack} className="chat-back-btn" aria-label="Back">
-          <IconBack />
-        </button>
-        <div
-          className="chat-header-info"
-          onClick={() => otherUser?.id && onViewProfile?.({ id: otherUser.id, full_name: otherUser.full_name })}
-        >
-          <div className="chat-header-avatar">
-            {otherUser?.profile_pic_url ? (
-              <img src={otherUser.profile_pic_url} alt="" />
-            ) : (
-              <div className="chat-avatar-placeholder"><IconAvatar /></div>
-            )}
-          </div>
+        <button onClick={onBack} className="chat-back-btn"><IconBack /></button>
+        <div className="chat-header-info" onClick={() => otherUser?.id && onViewProfile?.({ id: otherUser.id, full_name: otherUser.full_name })}>
+          <div className="chat-header-avatar">{otherUser?.profile_pic_url ? <img src={otherUser.profile_pic_url} alt="" /> : <div className="chat-avatar-placeholder"><IconAvatar /></div>}</div>
           <div className="chat-header-text">
             <h3>{otherUser?.full_name || otherUserName || 'User'}</h3>
-            <div className="chat-header-row2">
-              {otherTyping && <span className="chat-header-typing">typing...</span>}
-            </div>
+            <div className="chat-header-row2">{otherTyping && <span className="chat-header-typing">typing...</span>}</div>
           </div>
         </div>
         {currentUserId !== otherUserId && (
-  <button
-    onClick={handleGigButtonClick}
-    className={`chat-gig-btn ${isPendingGig ? 'chat-gig-btn-pending' : ''}`}
-    disabled={gigLoading}
-  >
-    {getGigButtonLabel()}
-  </button>
-)}
+          <button onClick={handleGigButtonClick} className={`chat-gig-btn ${isPendingGig ? 'chat-gig-btn-pending' : ''}`} disabled={gigLoading}>{getGigButtonLabel()}</button>
+        )}
       </div>
 
-      {error && (
-        <div className="chat-error-toast" onClick={() => setError(null)}>
-          <span>{error}</span>
-          <button>×</button>
-        </div>
-      )}
+      {error && <div className="chat-error-toast" onClick={() => setError(null)}><span>{error}</span><button>×</button></div>}
 
       {showBanner && bannerText && (
         <div className={`gig-banner ${!isBannerDismissible ? 'gig-banner-locked' : ''}`}>
-          <div className="gig-banner-inner">
-            <p>{bannerText}</p>
-            <p>{bannerText}</p>
-            <p>{bannerText}</p>
-            <p>{bannerText}</p>
-          </div>
-          {isBannerDismissible && (
-            <button onClick={handleDismissBanner} className="gig-banner-dismiss">×</button>
-          )}
+          <div className="gig-banner-inner"><p>{bannerText}</p><p>{bannerText}</p><p>{bannerText}</p><p>{bannerText}</p></div>
+          {isBannerDismissible && <button onClick={handleDismissBanner} className="gig-banner-dismiss">×</button>}
         </div>
       )}
 
-      {floatingDate && (
-        <div className="floating-date">
-          <span>{floatingDate}</span>
-        </div>
-      )}
+      {floatingDate && <div className="floating-date"><span>{floatingDate}</span></div>}
 
-      <div
-        className="chat-messages"
-        ref={chatContainerRef}
-        onScroll={(e) => {
-          updateFloatingDate();
-          const currentScroll = e.target.scrollTop;
-          if (currentScroll < lastScrollTop) {
-            setScrolled(false);
-          } else if (currentScroll > lastScrollTop && currentScroll > 10) {
-            setScrolled(true);
-          }
-          setLastScrollTop(currentScroll);
-        }}
-      >
-        {!hasMessages && currentUserId && (
-          <div className="chat-empty">
-            <p>No messages yet. Say hello!</p>
-          </div>
-        )}
+      <div className="chat-messages" ref={chatContainerRef} onScroll={(e) => { updateFloatingDate(); const cs = e.target.scrollTop; if (cs < lastScrollTop) setScrolled(false); else if (cs > lastScrollTop && cs > 10) setScrolled(true); setLastScrollTop(cs); }}>
+        {!hasMessages && currentUserId && <div className="chat-empty"><p>No messages yet. Say hello!</p></div>}
 
         {hasMessages && currentUserId && messages.map((msg, i) => {
           const isMine = msg.sender_id === currentUserId;
@@ -941,159 +685,70 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           const msgAudioState = audioState[msg.id] || {};
           const progress = msgAudioState.duration > 0 ? ((msgAudioState.currentTime || 0) / msgAudioState.duration) * 100 : 0;
           const showDuration = msg.audio_url && msgAudioState.duration;
+          const hasMedia = msg.audio_url || msg.image_url;
 
           return (
             <React.Fragment key={msg.id}>
-              {shouldShowDateSeparator(msg, prevMsg) && (
-                <div className="date-separator" data-date={formatDate(msg.created_at)}>
-                  <span>{formatDate(msg.created_at)}</span>
-                </div>
-              )}
+              {shouldShowDateSeparator(msg, prevMsg) && <div className="date-separator" data-date={formatDate(msg.created_at)}><span>{formatDate(msg.created_at)}</span></div>}
               <div className={`message-row ${isMine ? 'message-mine' : 'message-theirs'}`}>
-                <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-theirs'} ${msg.status === 'failed' ? 'bubble-failed' : ''}`}>
-                  {msg.audio_url ? (
-                    <div className="voice-message">
-                      <button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>
-                        {isPlayingThis && msgAudioState.playing ? <IconPause /> : <IconPlay />}
-                      </button>
-                      <div
-                        id={`voice-bar-${msg.id}`}
-                        className="voice-progress"
-                        onMouseDown={(e) => handleSeekStart(msg, e)}
-                        onTouchStart={(e) => handleSeekStart(msg, e)}
-                        onMouseMove={(e) => handleSeekMove(msg, e)}
-                        onTouchMove={(e) => handleSeekMove(msg, e)}
-                        onMouseUp={handleSeekEnd}
-                        onTouchEnd={handleSeekEnd}
-                        onClick={(e) => { e.stopPropagation(); seekTo(msg, e.clientX); }}
-                      >
-                        <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
+                {/* Photo: standalone, no bubble */}
+                {msg.image_url ? (
+                  <img src={msg.image_url} alt="" className="message-photo" onClick={() => setFullScreenImage(msg.image_url)} loading="lazy" />
+                ) : (
+                  <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-theirs'} ${msg.status === 'failed' ? 'bubble-failed' : ''}`}>
+                    {msg.audio_url ? (
+                      <div className="voice-message">
+                        <button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>{isPlayingThis && msgAudioState.playing ? <IconPause /> : <IconPlay />}</button>
+                        <div id={`voice-bar-${msg.id}`} className="voice-progress"
+                          onMouseDown={(e) => handleSeekStart(msg, e)} onTouchStart={(e) => handleSeekStart(msg, e)}
+                          onMouseMove={(e) => handleSeekMove(msg, e)} onTouchMove={(e) => handleSeekMove(msg, e)}
+                          onMouseUp={handleSeekEnd} onTouchEnd={handleSeekEnd}
+                          onClick={(e) => { e.stopPropagation(); seekTo(msg, e.clientX); }}>
+                          <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
+                        </div>
+                        <span className="voice-time">{showDuration ? `${formatDuration(msgAudioState.currentTime || 0)} / ${formatDuration(msgAudioState.duration)}` : ''}</span>
                       </div>
-                      <span className="voice-time">
-                        {showDuration
-                          ? `${formatDuration(msgAudioState.currentTime || 0)} / ${formatDuration(msgAudioState.duration)}`
-                          : ''}
-                      </span>
-                    </div>
-                  ) : msg.image_url ? (
-                    <img
-                      src={msg.image_url}
-                      alt=""
-                      className="message-photo"
-                      onClick={() => setFullScreenImage(msg.image_url)}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <p className="message-text">{msg.text}</p>
-                  )}
-                  <span className="message-time">
-                    {formatTime(msg.created_at)}
-                    {isMine && msg.status === 'sending' && ' · Sending...'}
-                    {isMine && msg.status === 'uploading' && ' · Uploading...'}
-                    {isMine && msg.status === 'sent' && ' · Sent'}
-                    {isMine && msg.is_read && ' · Read'}
-                  </span>
-                </div>
-                {msg.status === 'failed' && (
-                  <button className="message-retry" onClick={() => handleRetry(msg)}>
-                    Retry
-                  </button>
+                    ) : (
+                      <p className="message-text">{msg.text}</p>
+                    )}
+                    <span className="message-time">{formatTime(msg.created_at)}{isMine && getStatusText(msg)}</span>
+                  </div>
                 )}
+                {/* Status for photos (standalone) */}
+                {msg.image_url && isMine && (
+                  <span className="message-photo-status">{getStatusText(msg)}</span>
+                )}
+                {msg.status === 'failed' && <button className="message-retry" onClick={() => handleRetry(msg)}>Retry</button>}
               </div>
             </React.Fragment>
           );
         })}
 
-        {otherTyping && (
-          <div className="typing-indicator">
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-            <span className="typing-dot" />
-          </div>
-        )}
+        {otherTyping && <div className="typing-indicator"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div>}
         <div ref={messagesEndRef} />
       </div>
 
-      {fullScreenImage && (
-        <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}>
-          <button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button>
-          <img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+      {fullScreenImage && <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}><button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button><img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} /></div>}
 
       {isRecording ? (
-        <div className="recording-bar">
-          <div className="recording-dot" />
-          <span className="recording-time">0:{recordingTime < 10 ? '0' : ''}{recordingTime}</span>
-          <button onClick={cancelRecording} className="recording-cancel">Cancel</button>
-          <button onClick={stopRecording} className="recording-send">
-            <IconSend />
-          </button>
-        </div>
+        <div className="recording-bar"><div className="recording-dot" /><span className="recording-time">0:{recordingTime < 10 ? '0' : ''}{recordingTime}</span><button onClick={cancelRecording} className="recording-cancel">Cancel</button><button onClick={stopRecording} className="recording-send"><IconSend /></button></div>
       ) : (
         <form onSubmit={handleSend} className="chat-input-bar">
-          <button type="button" className="chat-input-circle-btn" onClick={() => fileInputRef.current?.click()} aria-label="Add photo">
-            <IconPlus />
-          </button>
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => { setNewMessage(e.target.value); sendTypingIndicator(); }}
-            placeholder="Message..."
-            className="chat-input"
-            autoComplete="off"
-          />
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            onChange={handlePhotoUpload}
-          />
-          {newMessage.trim() ? (
-            <button type="submit" className="chat-input-circle-btn chat-send-circle-btn" aria-label="Send">
-              <IconSend />
-            </button>
-          ) : (
-            <button type="button" className="chat-input-circle-btn" onClick={startRecording} aria-label="Record voice message">
-              <IconMic />
-            </button>
-          )}
+          <button type="button" className="chat-input-circle-btn" onClick={() => fileInputRef.current?.click()}><IconPlus /></button>
+          <input type="text" value={newMessage} onChange={(e) => { setNewMessage(e.target.value); sendTypingIndicator(); }} placeholder="Message..." className="chat-input" autoComplete="off" />
+          <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handlePhotoUpload} />
+          {newMessage.trim() ? <button type="submit" className="chat-input-circle-btn chat-send-circle-btn"><IconSend /></button> : <button type="button" className="chat-input-circle-btn" onClick={startRecording}><IconMic /></button>}
         </form>
       )}
 
       {showReviewForm && (
         <div className="bottom-sheet-overlay" onClick={() => setShowReviewForm(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle" />
+          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}><div className="bottom-sheet-handle" />
             <div className="bottom-sheet-content">
-              <h2>Rate your experience</h2>
-              <p>How was your gig with {otherUser?.full_name || otherUserName || 'the provider'}?</p>
-              <div className="star-selector">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <button
-                    key={s}
-                    className={`star-btn ${s <= reviewRating ? 'active' : ''}`}
-                    onClick={() => setReviewRating(s)}
-                  >
-                    {s <= reviewRating ? '★' : '☆'}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
-                placeholder="Write your review (optional)..."
-                className="review-textarea"
-                rows={3}
-              />
-              <button
-                onClick={handleSubmitReview}
-                disabled={reviewRating === 0 || submittingReview}
-                className="review-submit-btn"
-              >
-                {submittingReview ? 'Submitting...' : 'Submit Review'}
-              </button>
+              <h2>Rate your experience</h2><p>How was your gig with {otherUser?.full_name || otherUserName || 'the provider'}?</p>
+              <div className="star-selector">{[1,2,3,4,5].map(s => <button key={s} className={`star-btn ${s <= reviewRating ? 'active' : ''}`} onClick={() => setReviewRating(s)}>{s <= reviewRating ? '★' : '☆'}</button>)}</div>
+              <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder="Write your review (optional)..." className="review-textarea" rows={3} />
+              <button onClick={handleSubmitReview} disabled={reviewRating === 0 || submittingReview} className="review-submit-btn">{submittingReview ? 'Submitting...' : 'Submit Review'}</button>
             </div>
           </div>
         </div>
