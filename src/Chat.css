@@ -526,15 +526,15 @@
   position: relative;
 }
 
-.gig-banner-track {
+.gig-banner-inner {
   display: flex;
-  animation: gig-scroll 16s linear infinite;
+  animation: gig-scroll 14s linear infinite;
   white-space: nowrap;
+  gap: 40px;
 }
 
-.gig-banner-track span {
-  display: inline-block;
-  padding-right: 60px;
+.gig-banner-inner p {
+  margin: 0;
   font-size: 13px;
   font-weight: 500;
   color: #1d1d1f;
@@ -542,7 +542,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .gig-banner-track span {
+  .gig-banner-inner p {
     color: #ffffff;
   }
 }
@@ -571,7 +571,7 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-.gig-banner-locked .gig-banner-track span {
+.gig-banner-locked .gig-banner-inner p {
   font-weight: 600;
 }
 
@@ -836,6 +836,9 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .bubble-theirs .voice-progress {
@@ -971,11 +974,11 @@
   }
 }
 
-.chat-input-btn {
+.chat-input-circle-btn {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: none;
+  border: 1.5px solid #d1d1d6;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -983,20 +986,23 @@
   flex-shrink: 0;
   background: none;
   color: #007aff;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.chat-input-btn:active {
-  background: rgba(0, 122, 255, 0.1);
+.chat-input-circle-btn:active {
+  background: rgba(0, 122, 255, 0.08);
+  border-color: #007aff;
 }
 
-.chat-send-btn {
+.chat-send-circle-btn {
   background: #1a3a8a;
   color: #ffffff;
+  border-color: #1a3a8a;
 }
 
-.chat-send-btn:active {
+.chat-send-circle-btn:active {
   background: #152d6e;
+  border-color: #152d6e;
 }
 
 .chat-input {
