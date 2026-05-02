@@ -598,13 +598,12 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const stopAudio = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    setPlayingAudio(null);
-    setAudioState({});
-  };
+  if (audioRef.current) {
+    audioRef.current.pause();
+    audioRef.current = null;
+  }
+  setPlayingAudio(null);
+};
 
   const handlePlayAudio = (msg) => {
     if (playingAudio === msg.id) {
