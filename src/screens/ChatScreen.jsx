@@ -387,6 +387,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
   const sendTextMessage = async (text, tempId) => {
     try {
+      console.log('sendTextMessage - msgCacheKey:', msgCacheKey, 'channelIdRef:', channelIdRef.current);
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
         p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: text,
       });
