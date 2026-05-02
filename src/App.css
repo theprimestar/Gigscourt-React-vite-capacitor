@@ -65,7 +65,7 @@ input, textarea {
   max-width: 480px;
   margin: 0 auto;
   padding-top: max(1px, env(safe-area-inset-top));
-  padding-bottom: max(1px, env(safe-area-inset-bottom));
+  padding-bottom: 0;
 }
 
 .app-content {
