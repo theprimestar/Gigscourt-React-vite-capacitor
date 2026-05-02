@@ -372,15 +372,15 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
   const getStatusText = (msg) => {
     if (msg.status === 'sending' || msg.status === 'uploading') return ' · · ·';
-    if (msg.status === 'sent') {
-      if (msg.image_url) return ' · Sent';
-      if (msg.audio_url) return ' · Sent';
-      return ' · Sent';
-    }
     if (msg.is_read) {
       if (msg.image_url) return ' · Viewed';
       if (msg.audio_url) return ' · Played';
       return ' · Read';
+    }
+    if (msg.status === 'sent') {
+      if (msg.image_url) return ' · Sent';
+      if (msg.audio_url) return ' · Sent';
+      return ' · Sent';
     }
     return '';
   };
