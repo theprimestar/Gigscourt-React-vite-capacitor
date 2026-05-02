@@ -306,15 +306,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       if (isMounted.current) setGig(currentGig);
     });
     channelRef.current.on('broadcast', { event: 'message_read' }, (payload) => {
-      if (!isMounted.current) return;
-      const messageId = payload?.payload?.message_id;
-      if (!messageId) return;
-      setMessages(prev => {
-        const updated = prev.map(m => m.id === messageId ? { ...m, is_read: true } : m);
-        setCached(msgCacheKey, updated);
-        return updated;
-      });
-    });
+  console.log('RECEIVED message_read broadcast:', payload);
+  if (!isMounted.current) return;
+  const messageId = payload?.payload?.message_id;
+  if (!messageId) return;
+  setMessages(prev => {
+    const updated = prev.map(m => m.id === messageId ? { ...m, is_read: true } : m);
+    setCached(msgCacheKey, updated);
+    return updated;
+  });
+});
     channelRef.current.subscribe();
   };
 
