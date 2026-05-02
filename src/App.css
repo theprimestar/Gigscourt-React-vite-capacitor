@@ -82,7 +82,7 @@ input, textarea {
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border-top: 0.5px solid rgba(0, 0, 0, 0.08);
-  padding: 4px 0 0;
+  padding: 0 0 0;
   position: fixed;
   bottom: 0;
   left: 0;
