@@ -365,6 +365,11 @@ return () => {
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       typingTimerRef.current = setTimeout(() => { if (isMounted.current) setOtherTyping(false); }, 3000);
     });
+    typingChannelRef.current.on('broadcast', { event: 'typing_stop' }, () => {
+      if (!isMounted.current) return;
+      setOtherTyping(false);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    });
     typingChannelRef.current.subscribe();
   };
 
@@ -426,6 +431,10 @@ return () => {
     const text = newMessage.trim();
     const tempId = 'temp-' + Date.now();
     setNewMessage('');
+    // Clear typing indicator on receiver's side
+    if (typingChannelRef.current) {
+      typingChannelRef.current.send({ type: 'broadcast', event: 'typing_stop', payload: {} });
+    }
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
     scrollToBottom();
     sendTextMessage(text, tempId);
@@ -813,8 +822,7 @@ return () => {
             </React.Fragment>
           );
         })}
-
-        {otherTyping && <div className="typing-indicator"><span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" /></div>}
+        
         <div ref={messagesEndRef} />
       </div>
 
