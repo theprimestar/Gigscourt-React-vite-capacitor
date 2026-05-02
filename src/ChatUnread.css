@@ -5,7 +5,6 @@
   padding: 6px 16px;
   background: #f2f2f7;
   flex-shrink: 0;
-  position: relative;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,36 +20,41 @@
 }
 
 .unread-banner-dismiss {
-  position: absolute;
-  right: 12px;
   background: none;
   border: none;
   color: #8e8e93;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 2px 8px;
+  margin-left: 8px;
 }
 
 .scroll-to-bottom-btn {
   position: absolute;
-  bottom: 16px;
+  bottom: 80px;
   right: 16px;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: #1a3a8a;
-  color: #ffffff;
-  border: none;
-  box-shadow: 0 2px 12px rgba(26, 58, 138, 0.35);
+  background: transparent;
+  color: #1d1d1f;
+  border: 2px solid #1d1d1f;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 20;
   transition: transform 0.15s, opacity 0.2s;
+  pointer-events: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .scroll-to-bottom-btn {
+    color: #ffffff;
+    border-color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
 }
 
 .scroll-to-bottom-btn:active {
