@@ -211,6 +211,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           const toAdd = serverMsgs.filter(m => !existingIds.has(m.id));
           
           const serverMap = new Map(serverMsgs.map(m => [m.id, m]));
+          console.log('syncFromServer - server messages with is_read:', serverMsgs.filter(m => m.is_read).map(m => ({id: m.id, is_read: m.is_read})));
           const updated = prev.map(m => {
             const sm = serverMap.get(m.id);
             if (sm && sm.is_read && !m.is_read) {
