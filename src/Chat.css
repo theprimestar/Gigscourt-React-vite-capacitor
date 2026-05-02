@@ -959,9 +959,7 @@
   padding: 8px 10px;
   padding-top: 8px;
   padding-bottom: max(8px, env(safe-area-inset-bottom));
-  padding-left: max(10px, env(safe-area-inset-left));
-  padding-right: max(10px, env(safe-area-inset-right));
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
   background: #ffffff;
   border-top: 0.5px solid rgba(0, 0, 0, 0.08);
@@ -975,8 +973,8 @@
 }
 
 .chat-input-circle-btn {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 1.5px solid #d1d1d6;
   cursor: pointer;
