@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL } from '../lib/config';
 import { imagekitPublicKey } from '../lib/imagekit';
-import { getGigForChannel, registerGig, cancelGig, submitReview, checkExpiredGigs, shouldSendReminder, updateReminderSent } from '../gigSystem';
+import { getGigForChannel, registerGig, cancelGig, submitReview, checkExpiredGigs } from '../gigSystem';
 import '../Chat.css';
 
 const MSG_CACHE_PREFIX = 'gigscourt_msgs_';
 const PROFILE_CACHE_PREFIX = 'gigscourt_profile_';
+const USER_CACHE_KEY = 'gigscourt_my_id';
 
 function getCached(key) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
@@ -55,36 +56,40 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const msgCacheKey = MSG_CACHE_PREFIX + (chatId || otherUserId);
   const profileCacheKey = PROFILE_CACHE_PREFIX + otherUserId;
 
-  const [messages, setMessages] = useState([]);
+  const cachedMessages = getCached(msgCacheKey) || [];
+  const cachedUserId = getCached(USER_CACHE_KEY);
+
+  const [messages, setMessages] = useState(cachedMessages);
   const [otherUser, setOtherUser] = useState(() => getCached(profileCacheKey) || null);
   const [newMessage, setNewMessage] = useState('');
   const [error, setError] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(cachedUserId);
   const [currentUserName, setCurrentUserName] = useState('');
   const [gig, setGig] = useState(null);
-  const [gigLoading, setGigLoading] = useState(true);
+  const [gigLoading, setGigLoading] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudio, setPlayingAudio] = useState(null);
-  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioPausedAt, setAudioPausedAt] = useState(0);
+  const [audioState, setAudioState] = useState({});
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [otherTyping, setOtherTyping] = useState(false);
   const [floatingDate, setFloatingDate] = useState('');
-  const [initDone, setInitDone] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [lastScrollTop, setLastScrollTop] = useState(0);
+  const [initialScrollDone, setInitialScrollDone] = useState(false);
 
   const chatContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
   const typingChannelRef = useRef(null);
   const channelIdRef = useRef(null);
-  const seenIds = useRef(new Set());
+  const seenIds = useRef(new Set(cachedMessages.map(m => m.id)));
   const bannerDismissedByRef = useRef(null);
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -94,6 +99,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const typingSendTimerRef = useRef(null);
   const isMounted = useRef(true);
   const initRan = useRef(false);
+  const syncingRef = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -101,10 +107,17 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       initRan.current = true;
       init();
     }
+    const handleFocus = () => {
+      if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
+        syncFromServer(true);
+      }
+    };
+    window.addEventListener('focus', handleFocus);
     return () => {
       isMounted.current = false;
       stopAudio();
       stopRecording();
+      window.removeEventListener('focus', handleFocus);
     };
   }, [chatId, otherUserId, isVisible]);
 
@@ -114,6 +127,13 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       cleanupChannels();
     }
   }, [isVisible]);
+
+  useEffect(() => {
+    if (messages.length > 0 && currentUserId && !initialScrollDone) {
+      scrollToBottom();
+      setInitialScrollDone(true);
+    }
+  }, [messages, currentUserId]);
 
   const cleanupChannels = () => {
     if (channelRef.current) {
@@ -128,17 +148,49 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     }
   };
 
+  const syncFromServer = async (silent) => {
+    if (!channelIdRef.current || !currentUserId || syncingRef.current) return;
+    syncingRef.current = true;
+    try {
+      const { data: history } = await supabase.rpc('get_messages', {
+        p_channel_id: channelIdRef.current,
+        p_user_id: currentUserId,
+        p_limit: 50,
+        p_cursor: null,
+        p_cursor_id: null,
+      });
+      if (isMounted.current && history) {
+        const serverMsgs = [...history].reverse();
+        const existingIds = new Set(messages.map(m => m.id));
+        const newMsgs = serverMsgs.filter(m => !existingIds.has(m.id));
+        if (newMsgs.length > 0) {
+          newMsgs.forEach(m => seenIds.current.add(m.id));
+          setMessages(prev => {
+            const updated = [...prev, ...newMsgs];
+            setCached(msgCacheKey, updated);
+            return updated;
+          });
+        }
+      }
+      const currentGig = await getGigForChannel(channelIdRef.current);
+      if (isMounted.current) setGig(currentGig);
+    } catch (err) {
+      console.error('Sync error:', err);
+    } finally {
+      syncingRef.current = false;
+    }
+  };
+
   const init = async () => {
     setError(null);
-    seenIds.current = new Set();
-    setGigLoading(true);
-    setInitDone(false);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted.current) return;
 
-      setCurrentUserId(user.id);
+      if (!cachedUserId || cachedUserId !== user.id) {
+        setCurrentUserId(user.id);
+        setCached(USER_CACHE_KEY, user.id);
+      }
 
       const { data: myProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
       if (isMounted.current && myProfile) {
@@ -152,10 +204,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       await checkExpiredGigs(user.id);
 
       const currentGig = await getGigForChannel(channelKey);
-      if (isMounted.current) {
-        setGig(currentGig);
-        setGigLoading(false);
-      }
+      if (isMounted.current) setGig(currentGig);
 
       const { data: channelData } = await supabase.from('channels').select('banner_dismissed_at, banner_dismissed_by').eq('id', channelKey).single();
       if (isMounted.current && channelData) {
@@ -176,39 +225,13 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         setOtherUser({ full_name: otherUserName || 'User', profile_pic_url: null, id: otherUserId });
       }
 
-      await loadMessages(channelKey, user.id);
       subscribeToChannel(channelKey);
       subscribeToTyping(channelKey);
-      if (isMounted.current) setInitDone(true);
+      syncFromServer(true);
     } catch (err) {
-      if (isMounted.current) {
-        setError(err.message);
-        setGigLoading(false);
-        setInitDone(true);
-      }
+      if (isMounted.current) setError(err.message);
     }
   };
-
-  const loadMessages = async (channelId, userId) => {
-  const { data: history } = await supabase.rpc('get_messages', {
-    p_channel_id: channelId,
-    p_user_id: userId,
-    p_limit: 50,
-    p_cursor: null,
-    p_cursor_id: null,
-  });
-
-  console.log('loadMessages - history:', history);
-
-  if (isMounted.current && history) {
-    const sorted = [...history].reverse();
-    console.log('loadMessages - sorted:', sorted);
-    sorted.forEach(m => seenIds.current.add(m.id));
-    setMessages(sorted);
-    setCached(msgCacheKey, sorted);
-    setTimeout(scrollToBottom, 100);
-  }
-};
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -233,7 +256,22 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       });
       scrollToBottom();
     });
+    channelRef.current.on('broadcast', { event: 'gig_update' }, async () => {
+      if (!isMounted.current || !channelIdRef.current) return;
+      const currentGig = await getGigForChannel(channelIdRef.current);
+      if (isMounted.current) setGig(currentGig);
+    });
     channelRef.current.subscribe();
+  };
+
+  const broadcastGigUpdate = () => {
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'gig_update',
+        payload: {},
+      }).catch(() => {});
+    }
   };
 
   const subscribeToTyping = (channelId) => {
@@ -254,74 +292,59 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const sendTypingIndicator = useCallback(() => {
     if (!channelIdRef.current || !currentUserId) return;
     if (typingSendTimerRef.current) clearTimeout(typingSendTimerRef.current);
-    typingSendTimerRef.current = setTimeout(() => {}, 2000);
     const ch = supabase.channel(`typing:${channelIdRef.current}`);
     ch.send({ type: 'broadcast', event: 'typing', payload: {} });
+    typingSendTimerRef.current = setTimeout(() => {}, 2000);
   }, [currentUserId]);
 
   const sendTextMessage = async (text, tempId) => {
-  const channelKey = channelIdRef.current;
-  console.log('=== sendTextMessage ===');
-  console.log('channelKey:', channelKey);
-  console.log('currentUserId:', currentUserId);
-  console.log('otherUserId:', otherUserId);
-  console.log('text:', text);
-  
-  try {
-    console.log('Calling RPC...');
-    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-      p_channel_key: channelKey,
-      p_sender_id: currentUserId,
-      p_other_user_id: otherUserId,
-      p_text: text,
-    });
+    const channelKey = channelIdRef.current;
+    try {
+      const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+        p_channel_key: channelKey,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: text,
+      });
 
-    console.log('savedMessage:', savedMessage);
-    console.log('rpcError:', rpcError);
+      if (rpcError) throw new Error(rpcError.message || 'Failed to send');
+      if (!savedMessage || !savedMessage.id) throw new Error('No message returned');
 
-    if (rpcError) throw new Error(rpcError.message || 'Failed to send');
-    if (!savedMessage || !savedMessage.id) throw new Error('No message returned');
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+      seenIds.current.add(savedMessage.id);
 
-    console.log('SUCCESS - message ID:', savedMessage.id);
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
 
-    setMessages(prev => {
-      const updated = prev.map(m => m.id === tempId ? { ...savedMessage, status: 'sent' } : m);
-      setCached(msgCacheKey, updated);
-      return updated;
-    });
-    seenIds.current.add(savedMessage.id);
+      if (otherUser?.onesignal_player_id) {
+        fetch(PUSH_NOTIFICATION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            include_player_ids: [otherUser.onesignal_player_id],
+            headings: { en: currentUserName || 'New message' },
+            contents: { en: text },
+            data: { channel_id: channelKey },
+          }),
+        }).catch(() => {});
+      }
 
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      }).catch(() => {});
+      await checkBannerReappear();
+    } catch (err) {
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+      );
     }
-
-    if (otherUser?.onesignal_player_id) {
-      fetch(PUSH_NOTIFICATION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          include_player_ids: [otherUser.onesignal_player_id],
-          headings: { en: currentUserName || 'New message' },
-          contents: { en: text },
-          data: { channel_id: channelKey },
-        }),
-      }).catch(() => {});
-    }
-
-    await checkBannerReappear();
-    console.log('=== sendTextMessage COMPLETE ===');
-  } catch (err) {
-    console.error('=== sendTextMessage FAILED ===');
-    console.error(err);
-    setMessages(prev =>
-      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-    );
-  }
-};
+  };
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -365,79 +388,79 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handlePhotoUpload = async (e) => {
-  const file = e.target.files?.[0];
-  if (!file || !currentUserId) return;
+    const file = e.target.files?.[0];
+    if (!file || !currentUserId) return;
 
-  const tempId = 'temp-photo-' + Date.now();
-  const optimistic = {
-    id: tempId,
-    channel_id: channelIdRef.current,
-    sender_id: currentUserId,
-    text: '',
-    image_url: null,
-    audio_url: null,
-    created_at: new Date().toISOString(),
-    is_read: false,
-    status: 'uploading',
-  };
-  setMessages(prev => [...prev, optimistic]);
-  scrollToBottom();
-  if (fileInputRef.current) fileInputRef.current.value = '';
+    const tempId = 'temp-photo-' + Date.now();
+    const optimistic = {
+      id: tempId,
+      channel_id: channelIdRef.current,
+      sender_id: currentUserId,
+      text: '',
+      image_url: null,
+      audio_url: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      status: 'uploading',
+    };
+    setMessages(prev => [...prev, optimistic]);
+    scrollToBottom();
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
-  try {
-    const authRes = await fetch(IMAGEKIT_AUTH_URL);
-    const auth = await authRes.json();
+    try {
+      const authRes = await fetch(IMAGEKIT_AUTH_URL);
+      const auth = await authRes.json();
 
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('fileName', 'chat-photo.jpg');
-    fd.append('folder', '/chat-photos');
-    fd.append('useUniqueFileName', 'true');
-    fd.append('publicKey', imagekitPublicKey);
-    fd.append('token', auth.token);
-    fd.append('signature', auth.signature);
-    fd.append('expire', auth.expire);
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('fileName', 'chat-photo.jpg');
+      fd.append('folder', '/chat-photos');
+      fd.append('useUniqueFileName', 'true');
+      fd.append('publicKey', imagekitPublicKey);
+      fd.append('token', auth.token);
+      fd.append('signature', auth.signature);
+      fd.append('expire', auth.expire);
 
-    const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-      method: 'POST',
-      body: fd,
-    });
-    const uploadResult = await upRes.json();
-    if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
+      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+        method: 'POST',
+        body: fd,
+      });
+      const uploadResult = await upRes.json();
+      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
 
-    const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
+      const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
 
-    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-      p_channel_key: channelIdRef.current,
-      p_sender_id: currentUserId,
-      p_other_user_id: otherUserId,
-      p_text: '',
-      p_image_url: url,
-    });
+      const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+        p_channel_key: channelIdRef.current,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: '',
+        p_image_url: url,
+      });
 
-    if (rpcError) throw new Error(rpcError.message || 'Failed to send photo');
-    if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
+      if (rpcError) throw new Error(rpcError.message || 'Failed to send photo');
+      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send photo');
 
-    setMessages(prev => {
-      const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
-      setCached(msgCacheKey, updated);
-      return updated;
-    });
-    seenIds.current.add(savedMessage.id);
+      setMessages(prev => {
+        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+      seenIds.current.add(savedMessage.id);
 
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      }).catch(() => {});
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
+    } catch (err) {
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+      );
     }
-  } catch (err) {
-    setMessages(prev =>
-      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-    );
-  }
-};
+  };
 
   const startRecording = async () => {
     try {
@@ -487,73 +510,73 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const uploadAudio = async (blob) => {
-  const tempId = 'temp-audio-' + Date.now();
-  const optimistic = {
-    id: tempId,
-    channel_id: channelIdRef.current,
-    sender_id: currentUserId,
-    text: '',
-    image_url: null,
-    audio_url: null,
-    created_at: new Date().toISOString(),
-    is_read: false,
-    status: 'uploading',
-  };
-  setMessages(prev => [...prev, optimistic]);
-  scrollToBottom();
+    const tempId = 'temp-audio-' + Date.now();
+    const optimistic = {
+      id: tempId,
+      channel_id: channelIdRef.current,
+      sender_id: currentUserId,
+      text: '',
+      image_url: null,
+      audio_url: null,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      status: 'uploading',
+    };
+    setMessages(prev => [...prev, optimistic]);
+    scrollToBottom();
 
-  try {
-    const authRes = await fetch(IMAGEKIT_AUTH_URL);
-    const auth = await authRes.json();
+    try {
+      const authRes = await fetch(IMAGEKIT_AUTH_URL);
+      const auth = await authRes.json();
 
-    const fd = new FormData();
-    fd.append('file', blob, 'voice-message.webm');
-    fd.append('fileName', 'voice-message.webm');
-    fd.append('folder', '/chat-audio');
-    fd.append('useUniqueFileName', 'true');
-    fd.append('publicKey', imagekitPublicKey);
-    fd.append('token', auth.token);
-    fd.append('signature', auth.signature);
-    fd.append('expire', auth.expire);
+      const fd = new FormData();
+      fd.append('file', blob, 'voice-message.webm');
+      fd.append('fileName', 'voice-message.webm');
+      fd.append('folder', '/chat-audio');
+      fd.append('useUniqueFileName', 'true');
+      fd.append('publicKey', imagekitPublicKey);
+      fd.append('token', auth.token);
+      fd.append('signature', auth.signature);
+      fd.append('expire', auth.expire);
 
-    const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-      method: 'POST',
-      body: fd,
-    });
-    const uploadResult = await upRes.json();
-    if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
+      const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+        method: 'POST',
+        body: fd,
+      });
+      const uploadResult = await upRes.json();
+      if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
 
-    const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
-      p_channel_key: channelIdRef.current,
-      p_sender_id: currentUserId,
-      p_other_user_id: otherUserId,
-      p_text: '',
-      p_audio_url: uploadResult.url,
-    });
+      const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
+        p_channel_key: channelIdRef.current,
+        p_sender_id: currentUserId,
+        p_other_user_id: otherUserId,
+        p_text: '',
+        p_audio_url: uploadResult.url,
+      });
 
-    if (rpcError) throw new Error(rpcError.message || 'Failed to send audio');
-    if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
+      if (rpcError) throw new Error(rpcError.message || 'Failed to send audio');
+      if (!savedMessage || !savedMessage.id) throw new Error('Failed to send audio');
 
-    setMessages(prev => {
-      const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
-      setCached(msgCacheKey, updated);
-      return updated;
-    });
-    seenIds.current.add(savedMessage.id);
+      setMessages(prev => {
+        const updated = prev.map(m => (m.id === tempId ? { ...savedMessage, status: 'sent' } : m));
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+      seenIds.current.add(savedMessage.id);
 
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: savedMessage,
-      }).catch(() => {});
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: savedMessage,
+        }).catch(() => {});
+      }
+    } catch (err) {
+      setMessages(prev =>
+        prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
+      );
     }
-  } catch (err) {
-    setMessages(prev =>
-      prev.map(m => (m.id === tempId ? { ...m, status: 'failed' } : m))
-    );
-  }
-};
+  };
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -561,66 +584,94 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       audioRef.current = null;
     }
     setPlayingAudio(null);
-    setAudioCurrentTime(0);
-    setAudioDuration(0);
+    setAudioPausedAt(0);
+    setAudioState({});
   };
 
   const handlePlayAudio = (msg) => {
     if (playingAudio === msg.id) {
-      stopAudio();
+      audioRef.current?.pause();
+      setAudioPausedAt(audioRef.current?.currentTime || 0);
+      const currentState = audioState[msg.id] || {};
+      setAudioState(prev => ({
+        ...prev,
+        [msg.id]: { ...currentState, currentTime: audioRef.current?.currentTime || 0, playing: false },
+      }));
+      setPlayingAudio(null);
       return;
     }
+
     stopAudio();
+    const startFrom = audioState[msg.id]?.currentTime || 0;
     const audio = new Audio(msg.audio_url);
     audioRef.current = audio;
+    audio.currentTime = startFrom;
     setPlayingAudio(msg.id);
+    setAudioPausedAt(startFrom);
+
     audio.onloadedmetadata = () => {
-      if (isMounted.current) setAudioDuration(audio.duration);
+      if (isMounted.current) {
+        setAudioState(prev => ({
+          ...prev,
+          [msg.id]: { duration: audio.duration, currentTime: startFrom, playing: true },
+        }));
+      }
     };
     audio.ontimeupdate = () => {
-      if (isMounted.current) setAudioCurrentTime(audio.currentTime);
+      if (isMounted.current) {
+        setAudioState(prev => ({
+          ...prev,
+          [msg.id]: { ...prev[msg.id], currentTime: audio.currentTime, duration: audio.duration, playing: true },
+        }));
+      }
     };
     audio.onended = () => {
       if (isMounted.current) {
         setPlayingAudio(null);
-        setAudioCurrentTime(0);
+        setAudioState(prev => ({
+          ...prev,
+          [msg.id]: { ...prev[msg.id], currentTime: 0, playing: false },
+        }));
       }
     };
     audio.play();
   };
 
+  const handleSeek = (msg, e) => {
+    if (!audioRef.current || playingAudio !== msg.id) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    const newTime = ratio * (audioState[msg.id]?.duration || 0);
+    audioRef.current.currentTime = newTime;
+    setAudioState(prev => ({
+      ...prev,
+      [msg.id]: { ...prev[msg.id], currentTime: newTime },
+    }));
+  };
+
   const formatDuration = (s) => {
-    if (!s) return '0:00';
+    if (!s || isNaN(s)) return '0:00';
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
   const handleRegisterGig = async () => {
-  console.log('=== handleRegisterGig ===');
-  console.log('currentUserId:', currentUserId);
-  console.log('otherUserId:', otherUserId);
-  console.log('channelId:', channelIdRef.current);
-  
-  if (!currentUserId || !otherUserId) {
-    console.log('Missing IDs');
-    return;
-  }
-  setGigLoading(true);
-  try {
-    const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
-    console.log('registerGig result:', result);
-    if (result?.gig_id) {
-      setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
+    if (!currentUserId || !otherUserId) return;
+    setGigLoading(true);
+    try {
+      const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
+      if (result?.gig_id) {
+        setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
+        broadcastGigUpdate();
+      }
+      setBannerDismissed(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGigLoading(false);
     }
-    setBannerDismissed(false);
-  } catch (err) {
-    console.error('registerGig error:', err.message);
-    setError(err.message);
-  } finally {
-    setGigLoading(false);
-  }
-};
+  };
 
   const handleCancelGig = async () => {
     if (!gig || !currentUserId) return;
@@ -629,6 +680,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       await cancelGig(gig.id, currentUserId);
       setGig(null);
       setBannerDismissed(false);
+      broadcastGigUpdate();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -646,6 +698,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       setReviewRating(0);
       setReviewText('');
       setBannerDismissed(false);
+      broadcastGigUpdate();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -697,6 +750,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const isBannerDismissible = !gig || gig.status !== 'pending_review';
   const showBanner = gig ? true : !bannerDismissed;
   const bannerText = getBannerText();
+  const isPendingGig = gig && gig.status === 'pending_review';
 
   const getGigButtonLabel = () => {
     if (gigLoading) return 'Register Gig';
@@ -708,20 +762,10 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handleGigButtonClick = () => {
-  console.log('handleGigButtonClick - gig:', gig, 'currentUserId:', currentUserId);
-  if (!gig) {
-    console.log('No gig - calling handleRegisterGig');
-    handleRegisterGig();
-  }
-  else if (gig.status === 'pending_review' && currentUserId === gig.provider_id) {
-    console.log('Provider cancelling gig');
-    handleCancelGig();
-  }
-  else if (gig.status === 'pending_review' && currentUserId === gig.client_id) {
-    console.log('Client opening review form');
-    setShowReviewForm(true);
-  }
-};
+    if (!gig) handleRegisterGig();
+    else if (gig.status === 'pending_review' && currentUserId === gig.provider_id) handleCancelGig();
+    else if (gig.status === 'pending_review' && currentUserId === gig.client_id) setShowReviewForm(true);
+  };
 
   const formatDate = (ts) => {
     if (!ts) return '';
@@ -758,7 +802,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const readyToRender = initDone && currentUserId;
+  const hasMessages = messages.length > 0;
 
   return (
     <div className="chat-screen">
@@ -777,14 +821,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
               <div className="chat-avatar-placeholder"><IconAvatar /></div>
             )}
           </div>
-          <div>
+          <div className="chat-header-text">
             <h3>{otherUser?.full_name || otherUserName || 'User'}</h3>
-            {otherTyping && <span className="chat-header-typing">typing...</span>}
+            <div className="chat-header-row2">
+              {otherTyping && <span className="chat-header-typing">typing...</span>}
+            </div>
           </div>
         </div>
         <button
           onClick={handleGigButtonClick}
-          className="chat-gig-btn"
+          className={`chat-gig-btn ${isPendingGig ? 'chat-gig-btn-pending' : ''}`}
           disabled={gigLoading}
         >
           {getGigButtonLabel()}
@@ -800,9 +846,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
       {showBanner && bannerText && (
         <div className={`gig-banner ${!isBannerDismissible ? 'gig-banner-locked' : ''}`}>
-          <div className="gig-banner-inner">
-            <p>{bannerText}</p>
-            <p>{bannerText}</p>
+          <div className="gig-banner-track">
+            <span>{bannerText}</span>
+            <span>{bannerText}</span>
+            <span>{bannerText}</span>
+            <span>{bannerText}</span>
           </div>
           {isBannerDismissible && (
             <button onClick={handleDismissBanner} className="gig-banner-dismiss">×</button>
@@ -821,26 +869,28 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         ref={chatContainerRef}
         onScroll={(e) => {
           updateFloatingDate();
-          setScrolled(e.target.scrollTop > 20);
+          const currentScroll = e.target.scrollTop;
+          if (currentScroll < lastScrollTop) {
+            setScrolled(false);
+          } else if (currentScroll > lastScrollTop && currentScroll > 10) {
+            setScrolled(true);
+          }
+          setLastScrollTop(currentScroll);
         }}
       >
-        {!readyToRender && (
-          <div className="chat-loading">
-            <div className="chat-spinner" />
-          </div>
-        )}
-
-        {readyToRender && messages.length === 0 && (
+        {!hasMessages && currentUserId && (
           <div className="chat-empty">
             <p>No messages yet. Say hello!</p>
           </div>
         )}
 
-        {readyToRender && messages.map((msg, i) => {
+        {hasMessages && currentUserId && messages.map((msg, i) => {
           const isMine = msg.sender_id === currentUserId;
           const prevMsg = i > 0 ? messages[i - 1] : null;
           const isPlayingThis = playingAudio === msg.id;
-          const progress = audioDuration > 0 ? (audioCurrentTime / audioDuration) * 100 : 0;
+          const msgAudioState = audioState[msg.id] || {};
+          const progress = msgAudioState.duration > 0 ? ((msgAudioState.currentTime || 0) / msgAudioState.duration) * 100 : 0;
+          const showDuration = msg.audio_url && msgAudioState.duration;
 
           return (
             <React.Fragment key={msg.id}>
@@ -854,12 +904,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
                   {msg.audio_url ? (
                     <div className="voice-message">
                       <button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>
-                        {isPlayingThis ? <IconPause /> : <IconPlay />}
+                        {isPlayingThis && msgAudioState.playing ? <IconPause /> : <IconPlay />}
                       </button>
-                      <div className="voice-progress">
+                      <div className="voice-progress" onClick={(e) => handleSeek(msg, e)}>
                         <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
                       </div>
-                      <span className="voice-time">{isPlayingThis ? formatDuration(audioDuration - audioCurrentTime) : ''}</span>
+                      <span className="voice-time">
+                        {showDuration
+                          ? `${formatDuration(msgAudioState.currentTime || 0)} / ${formatDuration(msgAudioState.duration)}`
+                          : ''}
+                      </span>
                     </div>
                   ) : msg.image_url ? (
                     <img
@@ -890,7 +944,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           );
         })}
 
-        {readyToRender && otherTyping && (
+        {otherTyping && (
           <div className="typing-indicator">
             <span className="typing-dot" />
             <span className="typing-dot" />
