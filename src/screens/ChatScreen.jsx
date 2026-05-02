@@ -4,6 +4,8 @@ import { PUSH_NOTIFICATION_URL, IMAGEKIT_AUTH_URL } from '../lib/config';
 import { imagekitPublicKey } from '../lib/imagekit';
 import { getGigForChannel, registerGig, cancelGig, submitReview, checkExpiredGigs } from '../gigSystem';
 import '../Chat.css';
+import '../ChatUnread.css';
+import { UnreadBanner, ScrollToBottomButton } from '../ChatUnread';
 
 const MSG_CACHE_PREFIX = 'gigscourt_msgs_';
 const PROFILE_CACHE_PREFIX = 'gigscourt_profile_';
@@ -110,6 +112,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [scrolled, setScrolled] = useState(false);
   const [lastScrollTop, setLastScrollTop] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [lastReadAt, setLastReadAt] = useState(null);
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showUnreadBanner, setShowUnreadBanner] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
@@ -165,6 +172,59 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       cleanupChannels();
     }
   }, [isVisible]);
+
+  const scrollToMessage = (index) => {
+    if (!chatContainerRef.current || index < 0) return;
+    const el = chatContainerRef.current.querySelector(`[data-msg-index="${index}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'start' });
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  };
+
+  const loadAndScroll = async (lastRead) => {
+    if (!channelIdRef.current || !currentUserId) return;
+    try {
+      const { data: history } = await supabase.rpc('get_messages', {
+        p_channel_id: channelIdRef.current,
+        p_user_id: currentUserId,
+        p_limit: 50,
+        p_cursor: null,
+        p_cursor_id: null,
+      });
+      if (isMounted.current && history) {
+        const serverMsgs = [...history].reverse();
+        serverMsgs.forEach(m => seenIds.current.add(m.id));
+        setMessages(serverMsgs);
+        setCached(msgCacheKey, serverMsgs);
+
+        if (lastRead) {
+          const lastReadTime = new Date(lastRead).getTime();
+          const firstUnread = serverMsgs.findIndex(m =>
+            m.sender_id !== currentUserId && new Date(m.created_at).getTime() > lastReadTime
+          );
+          if (firstUnread !== -1) {
+            setFirstUnreadIndex(firstUnread);
+            const count = serverMsgs.filter((m, i) =>
+              i >= firstUnread && m.sender_id !== currentUserId
+            ).length;
+            setUnreadCount(count);
+            setShowUnreadBanner(true);
+            setTimeout(() => scrollToMessage(firstUnread), 200);
+            return;
+          }
+        }
+        setTimeout(() => scrollToBottom(), 200);
+      }
+    } catch (err) {
+      // silent
+    }
+  };
 
   const cleanupChannels = () => {
     if (channelRef.current) {
@@ -275,6 +335,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       subscribeToChannel(channelKey);
       subscribeToTyping(channelKey);
 
+      const { data: memberData } = await supabase
+        .from('channel_members')
+        .select('last_read_at')
+        .eq('channel_id', channelKey)
+        .eq('user_id', user.id)
+        .single();
+
+      const lastRead = memberData?.last_read_at || null;
+      setLastReadAt(lastRead);
+
       await supabase.rpc('reset_unread', { p_user_id: user.id, p_channel_id: channelKey });
       if (channelRef.current) {
         channelRef.current.send({
@@ -285,7 +355,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       }
       await checkExpiredGigs(user.id);
 
-      syncFromServer();
+      loadAndScroll(lastRead);
     } catch (err) {
       if (isMounted.current) setError(err.message);
     }
@@ -299,7 +369,21 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       const msg = payload?.payload;
       if (!msg?.id || seenIds.current.has(msg.id)) return;
       seenIds.current.add(msg.id);
-      setMessages(prev => { const updated = [...prev, msg]; setCached(msgCacheKey, updated); return updated; });
+      setMessages(prev => {
+        const updated = [...prev, msg];
+        setCached(msgCacheKey, updated);
+        const container = chatContainerRef.current;
+        if (container) {
+          const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+          if (isNearBottom || msg.sender_id === currentUserId) {
+            setTimeout(() => scrollToBottom(), 50);
+          } else {
+            setUnreadCount(c => c + 1);
+            setShowScrollBtn(true);
+          }
+        }
+        return updated;
+      });
     });
     channelRef.current.on('broadcast', { event: 'gig_update' }, async () => {
       if (!isMounted.current || !channelIdRef.current) return;
@@ -320,9 +404,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       if (!isMounted.current) return;
       const { reader_id } = payload?.payload || {};
       setMessages(prev => {
-        const updated = prev.map(m => 
-          m.sender_id !== reader_id ? { ...m, is_read: true } : m
-        );
+        const updated = prev.map(m => m.sender_id !== reader_id ? { ...m, is_read: true } : m);
         setCached(msgCacheKey, updated);
         return updated;
       });
@@ -734,7 +816,26 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
       {floatingDate && <div className="floating-date"><span>{floatingDate}</span></div>}
 
-      <div className="chat-messages" ref={chatContainerRef} onScroll={(e) => { updateFloatingDate(); const cs = e.target.scrollTop; if (cs < lastScrollTop) setScrolled(false); else if (cs > lastScrollTop && cs > 10) setScrolled(true); setLastScrollTop(cs); }}>
+      <div className="chat-messages" ref={chatContainerRef} onScroll={(e) => {
+        updateFloatingDate();
+        const cs = e.target.scrollTop;
+        if (cs < lastScrollTop) setScrolled(false);
+        else if (cs > lastScrollTop && cs > 10) setScrolled(true);
+        setLastScrollTop(cs);
+
+        const container = chatContainerRef.current;
+        if (container) {
+          const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+          setShowScrollBtn(distanceFromBottom > 200);
+
+          if (firstUnreadIndex >= 0) {
+            const unreadEl = container.querySelector(`[data-msg-index="${firstUnreadIndex}"]`);
+            if (unreadEl && unreadEl.getBoundingClientRect().top < container.getBoundingClientRect().top) {
+              setShowUnreadBanner(false);
+            }
+          }
+        }
+      }}>
         {!hasMessages && currentUserId && <div className="chat-empty"><p>No messages yet. Say hello!</p></div>}
 
         {hasMessages && currentUserId && messages.map((msg, i) => {
@@ -748,7 +849,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           return (
             <React.Fragment key={msg.id}>
               {shouldShowDateSeparator(msg, prevMsg) && <div className="date-separator" data-date={formatDate(msg.created_at)}><span>{formatDate(msg.created_at)}</span></div>}
-              <div className={`message-row ${isMine ? 'message-mine' : 'message-theirs'}`}>
+              <div className={`message-row ${isMine ? 'message-mine' : 'message-theirs'}`} data-msg-index={i}>
                 {msg.image_url ? (
                   <img
                     src={msg.image_url}
@@ -789,6 +890,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           );
         })}
 
+        {showUnreadBanner && <UnreadBanner count={unreadCount} onDismiss={() => setShowUnreadBanner(false)} />}
+        <ScrollToBottomButton
+          count={unreadCount}
+          visible={showScrollBtn}
+          onClick={() => {
+            scrollToBottom();
+            setUnreadCount(0);
+            setShowUnreadBanner(false);
+          }}
+        />
         <div style={{ flexGrow: 1 }} />
       </div>
 
