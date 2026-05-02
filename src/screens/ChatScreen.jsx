@@ -54,20 +54,27 @@ const IconPause = () => (
 );
 
 const markMessageRead = (msg, currentUserId, channelIdRef, channelRef) => {
+  console.log('markMessageRead called, msg.id:', msg.id, 'msg.is_read:', msg.is_read, 'msg.sender_id:', msg.sender_id, 'currentUserId:', currentUserId);
   if (!msg.is_read && msg.sender_id !== currentUserId) {
+    console.log('Calling RPC and broadcasting...');
     supabase.rpc('mark_message_read', {
       p_message_id: msg.id,
       p_channel_id: channelIdRef.current,
       p_user_id: currentUserId,
     }).then(() => {
+      console.log('RPC success, broadcasting...');
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event: 'message_read',
           payload: { message_id: msg.id },
-        }).catch(() => {});
+        }).then(() => console.log('Broadcast sent successfully')).catch(err => console.error('Broadcast failed:', err));
+      } else {
+        console.log('No channelRef.current to broadcast on');
       }
-    });
+    }).catch(err => console.error('RPC failed:', err));
+  } else {
+    console.log('Skipping - already read or own message');
   }
 };
 
