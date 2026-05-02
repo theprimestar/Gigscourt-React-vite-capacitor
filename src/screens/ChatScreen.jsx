@@ -109,11 +109,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [floatingDate, setFloatingDate] = useState('');
   const [scrolled, setScrolled] = useState(false);
   const [lastScrollTop, setLastScrollTop] = useState(0);
-  const [initialScrollDone, setInitialScrollDone] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
 
   const chatContainerRef = useRef(null);
-  const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
   const typingChannelRef = useRef(null);
   const channelIdRef = useRef(null);
@@ -167,13 +165,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       cleanupChannels();
     }
   }, [isVisible]);
-
-  useEffect(() => {
-    if (messages.length > 0 && currentUserId && !initialScrollDone) {
-      scrollToBottom();
-      setInitialScrollDone(true);
-    }
-  }, [messages, currentUserId]);
 
   const cleanupChannels = () => {
     if (channelRef.current) {
@@ -300,10 +291,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     }
   };
 
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-  };
-
   const subscribeToChannel = (channelId) => {
     cleanupChannels();
     channelRef.current = supabase.channel(`chat:${channelId}`, { config: { broadcast: { self: true, ack: true } } });
@@ -313,7 +300,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       if (!msg?.id || seenIds.current.has(msg.id)) return;
       seenIds.current.add(msg.id);
       setMessages(prev => { const updated = [...prev, msg]; setCached(msgCacheKey, updated); return updated; });
-      scrollToBottom();
     });
     channelRef.current.on('broadcast', { event: 'gig_update' }, async () => {
       if (!isMounted.current || !channelIdRef.current) return;
@@ -425,7 +411,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       typingChannelRef.current.send({ type: 'broadcast', event: 'typing_stop', payload: {} });
     }
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
-    scrollToBottom();
     sendTextMessage(text, tempId);
   };
 
@@ -433,7 +418,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     setMessages(prev => prev.filter(m => m.id !== msg.id));
     const tempId = 'temp-' + Date.now();
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: msg.text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
-    scrollToBottom();
     sendTextMessage(msg.text, tempId);
   };
 
@@ -442,7 +426,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     if (!file || !currentUserId) return;
     const tempId = 'temp-photo-' + Date.now();
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
-    scrollToBottom();
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     try {
@@ -513,7 +496,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const uploadAudio = async (blob) => {
     const tempId = 'temp-audio-' + Date.now();
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
-    scrollToBottom();
 
     try {
       const authRes = await fetch(IMAGEKIT_AUTH_URL); const auth = await authRes.json();
