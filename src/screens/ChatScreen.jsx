@@ -789,7 +789,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           );
         })}
 
-        <div ref={messagesEndRef} />
+        <div style={{ flexGrow: 1 }} />
       </div>
 
       {fullScreenImage && <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}><button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button><img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} /></div>}
