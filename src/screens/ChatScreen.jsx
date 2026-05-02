@@ -53,6 +53,31 @@ const IconPause = () => (
   </svg>
 );
 
+const markMessageRead = (msg, currentUserId, channelIdRef, channelRef) => {
+  if (!msg.is_read && msg.sender_id !== currentUserId) {
+    supabase.rpc('mark_message_read', {
+      p_message_id: msg.id,
+      p_channel_id: channelIdRef.current,
+      p_user_id: currentUserId,
+    }).then(() => {
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: 'broadcast',
+          event: 'message_read',
+          payload: { message_id: msg.id },
+        }).catch(() => {});
+      }
+    });
+  }
+};
+
+const getPhotoUrl = (url, size) => {
+  if (!url) return '';
+  const base = url.split('?')[0];
+  if (size === 'thumb') return base + '?tr=f-webp,fo-auto,w-600,q-80';
+  return base + '?tr=f-webp,fo-auto,w-1200,q-85';
+};
+
 export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const msgCacheKey = MSG_CACHE_PREFIX + (chatId || otherUserId);
   const profileCacheKey = PROFILE_CACHE_PREFIX + otherUserId;
@@ -266,6 +291,16 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       const currentGig = await getGigForChannel(channelIdRef.current);
       if (isMounted.current) setGig(currentGig);
     });
+    channelRef.current.on('broadcast', { event: 'message_read' }, (payload) => {
+      if (!isMounted.current) return;
+      const messageId = payload?.payload?.message_id;
+      if (!messageId) return;
+      setMessages(prev => {
+        const updated = prev.map(m => m.id === messageId ? { ...m, is_read: true } : m);
+        setCached(msgCacheKey, updated);
+        return updated;
+      });
+    });
     channelRef.current.subscribe();
   };
 
@@ -292,7 +327,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     typingSendTimerRef.current = setTimeout(() => {}, 2000);
   }, [currentUserId]);
 
-  // ── Unified status helpers ──
   const getStatusText = (msg) => {
     if (msg.status === 'sending' || msg.status === 'uploading') return ' · · ·';
     if (msg.status === 'sent') {
@@ -370,7 +404,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       const upRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: fd });
       const uploadResult = await upRes.json();
       if (!upRes.ok) throw new Error(uploadResult.message || 'Upload failed');
-      const url = uploadResult.url + '?tr=f-webp,fo-auto,q-80';
+      const url = getPhotoUrl(uploadResult.url, 'thumb');
 
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
         p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: '', p_image_url: url,
@@ -466,8 +500,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handlePlayAudio = (msg) => {
+    markMessageRead(msg, currentUserId, channelIdRef, channelRef);
+
     if (playingAudio === msg.id) {
-      // Pause
       audioRef.current?.pause();
       setAudioState(prev => ({ ...prev, [msg.id]: { ...prev[msg.id], currentTime: audioRef.current?.currentTime || 0, playing: false } }));
       pausedAudioRef.current = audioRef.current;
@@ -476,10 +511,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       return;
     }
 
-    // Stop any currently playing
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
 
-    // Resume paused audio for this message
     if (pausedAudioRef.current && pausedAudioRef.current.src === msg.audio_url) {
       audioRef.current = pausedAudioRef.current;
       pausedAudioRef.current = null;
@@ -489,7 +522,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       return;
     }
 
-    // Fresh play
     stopAudio();
     const startFrom = audioState[msg.id]?.currentTime || 0;
     const audio = new Audio(msg.audio_url);
@@ -512,7 +544,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     audio.play();
   };
 
-  // ── Seek ──
   const seekTo = (msg, clientX) => {
     const bar = document.getElementById(`voice-bar-${msg.id}`);
     if (!bar || !audioRef.current || playingAudio !== msg.id) return;
@@ -685,15 +716,22 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           const msgAudioState = audioState[msg.id] || {};
           const progress = msgAudioState.duration > 0 ? ((msgAudioState.currentTime || 0) / msgAudioState.duration) * 100 : 0;
           const showDuration = msg.audio_url && msgAudioState.duration;
-          const hasMedia = msg.audio_url || msg.image_url;
 
           return (
             <React.Fragment key={msg.id}>
               {shouldShowDateSeparator(msg, prevMsg) && <div className="date-separator" data-date={formatDate(msg.created_at)}><span>{formatDate(msg.created_at)}</span></div>}
               <div className={`message-row ${isMine ? 'message-mine' : 'message-theirs'}`}>
-                {/* Photo: standalone, no bubble */}
                 {msg.image_url ? (
-                  <img src={msg.image_url} alt="" className="message-photo" onClick={() => setFullScreenImage(msg.image_url)} loading="lazy" />
+                  <img
+                    src={msg.image_url}
+                    alt=""
+                    className="message-photo"
+                    onClick={() => {
+                      setFullScreenImage(getPhotoUrl(msg.image_url, 'full'));
+                      markMessageRead(msg, currentUserId, channelIdRef, channelRef);
+                    }}
+                    loading="lazy"
+                  />
                 ) : (
                   <div className={`message-bubble ${isMine ? 'bubble-mine' : 'bubble-theirs'} ${msg.status === 'failed' ? 'bubble-failed' : ''}`}>
                     {msg.audio_url ? (
@@ -714,7 +752,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
                     <span className="message-time">{formatTime(msg.created_at)}{isMine && getStatusText(msg)}</span>
                   </div>
                 )}
-                {/* Status for photos (standalone) */}
                 {msg.image_url && isMine && (
                   <span className="message-photo-status">{getStatusText(msg)}</span>
                 )}
