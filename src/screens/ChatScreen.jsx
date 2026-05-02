@@ -54,27 +54,20 @@ const IconPause = () => (
 );
 
 const markMessageRead = (msg, currentUserId, channelIdRef, channelRef) => {
-  console.log('markMessageRead called, msg.id:', msg.id, 'msg.is_read:', msg.is_read, 'msg.sender_id:', msg.sender_id, 'currentUserId:', currentUserId);
   if (!msg.is_read && msg.sender_id !== currentUserId) {
-    console.log('Calling RPC and broadcasting...');
     supabase.rpc('mark_message_read', {
       p_message_id: msg.id,
       p_channel_id: channelIdRef.current,
       p_user_id: currentUserId,
     }).then(() => {
-      console.log('RPC success, broadcasting...');
       if (channelRef.current) {
         channelRef.current.send({
           type: 'broadcast',
           event: 'message_read',
           payload: { message_id: msg.id },
-        }).then(() => console.log('Broadcast sent successfully')).catch(err => console.error('Broadcast failed:', err));
-      } else {
-        console.log('No channelRef.current to broadcast on');
+        }).catch(() => {});
       }
-    }).catch(err => console.error('RPC failed:', err));
-  } else {
-    console.log('Skipping - already read or own message');
+    }).catch(() => {});
   }
 };
 
@@ -148,24 +141,24 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       init();
     }
     const handleFocus = () => {
-  if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
-    syncFromServer(true);
-  }
-};
-const handleVisibility = () => {
-  if (document.visibilityState === 'visible' && isVisible && isMounted.current && initRan.current && !syncingRef.current) {
-    syncFromServer(true);
-  }
-};
-window.addEventListener('focus', handleFocus);
-window.addEventListener('visibilitychange', handleVisibility);
-return () => {
-  isMounted.current = false;
-  stopAudio();
-  stopRecording();
-  window.removeEventListener('focus', handleFocus);
-  window.removeEventListener('visibilitychange', handleVisibility);
-};
+      if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
+        syncFromServer();
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isVisible && isMounted.current && initRan.current && !syncingRef.current) {
+        syncFromServer();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      isMounted.current = false;
+      stopAudio();
+      stopRecording();
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [chatId, otherUserId, isVisible]);
 
   useEffect(() => {
@@ -208,7 +201,6 @@ return () => {
       });
       if (isMounted.current && history) {
         const serverMsgs = [...history].reverse();
-        console.log('syncFromServer - first 3 messages:', serverMsgs.slice(0, 3).map(m => ({id: m.id, is_read: m.is_read, type: typeof m.is_read})));
         const newMsgs = serverMsgs.filter(m => !seenIds.current.has(m.id));
         if (newMsgs.length > 0) {
           newMsgs.forEach(m => seenIds.current.add(m.id));
@@ -219,7 +211,6 @@ return () => {
           const toAdd = serverMsgs.filter(m => !existingIds.has(m.id));
           
           const serverMap = new Map(serverMsgs.map(m => [m.id, m]));
-          console.log('syncFromServer - server messages with is_read:', serverMsgs.filter(m => m.is_read).map(m => ({id: m.id, is_read: m.is_read})));
           const updated = prev.map(m => {
             const sm = serverMap.get(m.id);
             if (sm && sm.is_read && !m.is_read) {
@@ -242,7 +233,7 @@ return () => {
         }
       }
     } catch (err) {
-      console.error('Sync error:', err);
+      // silent
     } finally {
       syncingRef.current = false;
     }
@@ -303,7 +294,7 @@ return () => {
       }
       await checkExpiredGigs(user.id);
 
-      syncFromServer(true);
+      syncFromServer();
     } catch (err) {
       if (isMounted.current) setError(err.message);
     }
@@ -398,7 +389,6 @@ return () => {
 
   const sendTextMessage = async (text, tempId) => {
     try {
-      console.log('sendTextMessage - msgCacheKey:', msgCacheKey, 'channelIdRef:', channelIdRef.current);
       const { data: savedMessage, error: rpcError } = await supabase.rpc('send_message', {
         p_channel_key: channelIdRef.current, p_sender_id: currentUserId, p_other_user_id: otherUserId, p_text: text,
       });
@@ -431,7 +421,6 @@ return () => {
     const text = newMessage.trim();
     const tempId = 'temp-' + Date.now();
     setNewMessage('');
-    // Clear typing indicator on receiver's side
     if (typingChannelRef.current) {
       typingChannelRef.current.send({ type: 'broadcast', event: 'typing_stop', payload: {} });
     }
@@ -552,7 +541,6 @@ return () => {
     }
   };
 
-  // ── Audio playback ──
   const stopAudio = () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setPlayingAudio(null);
@@ -632,7 +620,6 @@ return () => {
     return `${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
-  // ── Gig ──
   const handleRegisterGig = async () => {
     if (!currentUserId || !otherUserId) return;
     setGigLoading(true);
@@ -786,9 +773,6 @@ return () => {
                     alt=""
                     className="message-photo"
                     onClick={() => {
-
-                      console.log('Photo tapped, msg.id:', msg.id, 'sender_id:', msg.sender_id, 'my id:', currentUserId);
-                      
                       setFullScreenImage(getPhotoUrl(msg.image_url, 'full'));
                       markMessageRead(msg, currentUserId, channelIdRef, channelRef);
                     }}
@@ -822,7 +806,7 @@ return () => {
             </React.Fragment>
           );
         })}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
