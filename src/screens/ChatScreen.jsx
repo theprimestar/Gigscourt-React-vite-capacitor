@@ -148,10 +148,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       init();
     }
     const handleFocus = () => {
-      if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
-        syncFromServer(true);
-      }
-    };
+  console.log('Focus handler called, isVisible:', isVisible, 'initRan:', initRan.current, 'syncing:', syncingRef.current);
+  if (isVisible && isMounted.current && initRan.current && !syncingRef.current) {
+    syncFromServer(true);
+  }
+};
     window.addEventListener('focus', handleFocus);
     return () => {
       isMounted.current = false;
