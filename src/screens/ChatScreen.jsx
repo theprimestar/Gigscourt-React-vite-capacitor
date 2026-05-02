@@ -877,13 +877,15 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
             </div>
           </div>
         </div>
-        <button
-          onClick={handleGigButtonClick}
-          className={`chat-gig-btn ${isPendingGig ? 'chat-gig-btn-pending' : ''}`}
-          disabled={gigLoading}
-        >
-          {getGigButtonLabel()}
-        </button>
+        {currentUserId !== otherUserId && (
+  <button
+    onClick={handleGigButtonClick}
+    className={`chat-gig-btn ${isPendingGig ? 'chat-gig-btn-pending' : ''}`}
+    disabled={gigLoading}
+  >
+    {getGigButtonLabel()}
+  </button>
+)}
       </div>
 
       {error && (
