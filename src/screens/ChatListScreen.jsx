@@ -53,7 +53,7 @@ export default function ChatListScreen({ onStartChat, isVisible, onUnreadUpdate 
       loadChatList(false);
     }
     return () => { isMounted.current = false; };
-  }, []);
+  }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible) {
