@@ -202,6 +202,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       });
       if (isMounted.current && history) {
         const serverMsgs = [...history].reverse();
+        console.log('syncFromServer - first 3 messages:', serverMsgs.slice(0, 3).map(m => ({id: m.id, is_read: m.is_read, type: typeof m.is_read})));
         const newMsgs = serverMsgs.filter(m => !seenIds.current.has(m.id));
         if (newMsgs.length > 0) {
           newMsgs.forEach(m => seenIds.current.add(m.id));
