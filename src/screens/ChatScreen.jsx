@@ -8,6 +8,7 @@ import '../Chat.css';
 const MSG_CACHE_PREFIX = 'gigscourt_msgs_';
 const PROFILE_CACHE_PREFIX = 'gigscourt_profile_';
 const USER_CACHE_KEY = 'gigscourt_my_id';
+const GIG_CACHE_PREFIX = 'gigscourt_gig_';
 
 function getCached(key) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
@@ -32,13 +33,13 @@ const IconSend = () => (
   </svg>
 );
 const IconMic = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>
   </svg>
 );
-const IconPhoto = () => (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+const IconPlus = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
   </svg>
 );
 const IconPlay = () => (
@@ -55,9 +56,11 @@ const IconPause = () => (
 export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack, onViewProfile, isVisible }) {
   const msgCacheKey = MSG_CACHE_PREFIX + (chatId || otherUserId);
   const profileCacheKey = PROFILE_CACHE_PREFIX + otherUserId;
+  const gigCacheKey = GIG_CACHE_PREFIX + (chatId || otherUserId);
 
   const cachedMessages = getCached(msgCacheKey) || [];
   const cachedUserId = getCached(USER_CACHE_KEY);
+  const cachedGig = getCached(gigCacheKey) || null;
 
   const [messages, setMessages] = useState(cachedMessages);
   const [otherUser, setOtherUser] = useState(() => getCached(profileCacheKey) || null);
@@ -65,14 +68,13 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [error, setError] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(cachedUserId);
   const [currentUserName, setCurrentUserName] = useState('');
-  const [gig, setGig] = useState(null);
+  const [gig, setGig] = useState(cachedGig);
   const [gigLoading, setGigLoading] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [fullScreenImage, setFullScreenImage] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingAudio, setPlayingAudio] = useState(null);
-  const [audioPausedAt, setAudioPausedAt] = useState(0);
   const [audioState, setAudioState] = useState({});
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
@@ -83,6 +85,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [scrolled, setScrolled] = useState(false);
   const [lastScrollTop, setLastScrollTop] = useState(0);
   const [initialScrollDone, setInitialScrollDone] = useState(false);
+  const [isSeeking, setIsSeeking] = useState(false);
 
   const chatContainerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -100,6 +103,12 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const isMounted = useRef(true);
   const initRan = useRef(false);
   const syncingRef = useRef(false);
+  const seekRAF = useRef(null);
+
+  // Cache gig state whenever it changes
+  useEffect(() => {
+    if (gig !== undefined) setCached(gigCacheKey, gig);
+  }, [gig]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -161,8 +170,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       });
       if (isMounted.current && history) {
         const serverMsgs = [...history].reverse();
-        const existingIds = new Set(messages.map(m => m.id));
-        const newMsgs = serverMsgs.filter(m => !existingIds.has(m.id));
+        const newMsgs = serverMsgs.filter(m => !seenIds.current.has(m.id));
         if (newMsgs.length > 0) {
           newMsgs.forEach(m => seenIds.current.add(m.id));
           setMessages(prev => {
@@ -172,8 +180,14 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           });
         }
       }
+      // Only update gig if it changed
       const currentGig = await getGigForChannel(channelIdRef.current);
-      if (isMounted.current) setGig(currentGig);
+      if (isMounted.current) {
+        const prevGig = getCached(gigCacheKey);
+        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) {
+          setGig(currentGig);
+        }
+      }
     } catch (err) {
       console.error('Sync error:', err);
     } finally {
@@ -204,7 +218,12 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       await checkExpiredGigs(user.id);
 
       const currentGig = await getGigForChannel(channelKey);
-      if (isMounted.current) setGig(currentGig);
+      if (isMounted.current) {
+        const prevGig = getCached(gigCacheKey);
+        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) {
+          setGig(currentGig);
+        }
+      }
 
       const { data: channelData } = await supabase.from('channels').select('banner_dismissed_at, banner_dismissed_by').eq('id', channelKey).single();
       if (isMounted.current && channelData) {
@@ -584,14 +603,12 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       audioRef.current = null;
     }
     setPlayingAudio(null);
-    setAudioPausedAt(0);
     setAudioState({});
   };
 
   const handlePlayAudio = (msg) => {
     if (playingAudio === msg.id) {
       audioRef.current?.pause();
-      setAudioPausedAt(audioRef.current?.currentTime || 0);
       const currentState = audioState[msg.id] || {};
       setAudioState(prev => ({
         ...prev,
@@ -607,7 +624,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     audioRef.current = audio;
     audio.currentTime = startFrom;
     setPlayingAudio(msg.id);
-    setAudioPausedAt(startFrom);
 
     audio.onloadedmetadata = () => {
       if (isMounted.current) {
@@ -618,7 +634,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       }
     };
     audio.ontimeupdate = () => {
-      if (isMounted.current) {
+      if (isMounted.current && !isSeeking) {
         setAudioState(prev => ({
           ...prev,
           [msg.id]: { ...prev[msg.id], currentTime: audio.currentTime, duration: audio.duration, playing: true },
@@ -637,17 +653,49 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     audio.play();
   };
 
-  const handleSeek = (msg, e) => {
-    if (!audioRef.current || playingAudio !== msg.id) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    const newTime = ratio * (audioState[msg.id]?.duration || 0);
+  // Seek handlers — tap + drag
+  const seekTo = (msg, clientX) => {
+    const bar = document.getElementById(`voice-bar-${msg.id}`);
+    if (!bar || !audioRef.current || playingAudio !== msg.id) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const duration = audioState[msg.id]?.duration || audioRef.current.duration || 0;
+    const newTime = ratio * duration;
     audioRef.current.currentTime = newTime;
     setAudioState(prev => ({
       ...prev,
       [msg.id]: { ...prev[msg.id], currentTime: newTime },
     }));
   };
+
+  const handleSeekStart = (msg, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSeeking(true);
+    seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX);
+  };
+
+  const handleSeekMove = (msg, e) => {
+    if (!isSeeking) return;
+    e.preventDefault();
+    e.stopPropagation();
+    seekTo(msg, e.touches ? e.touches[0].clientX : e.clientX);
+  };
+
+  const handleSeekEnd = () => {
+    setIsSeeking(false);
+  };
+
+  useEffect(() => {
+    if (!isSeeking) return;
+    const handleUp = () => setIsSeeking(false);
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchend', handleUp);
+    return () => {
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchend', handleUp);
+    };
+  }, [isSeeking]);
 
   const formatDuration = (s) => {
     if (!s || isNaN(s)) return '0:00';
@@ -662,7 +710,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     try {
       const result = await registerGig(channelIdRef.current, currentUserId, otherUserId);
       if (result?.gig_id) {
-        setGig({ id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId });
+        const newGig = { id: result.gig_id, status: 'pending_review', provider_id: currentUserId, client_id: otherUserId };
+        setGig(newGig);
         broadcastGigUpdate();
       }
       setBannerDismissed(false);
@@ -846,11 +895,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
       {showBanner && bannerText && (
         <div className={`gig-banner ${!isBannerDismissible ? 'gig-banner-locked' : ''}`}>
-          <div className="gig-banner-track">
-            <span>{bannerText}</span>
-            <span>{bannerText}</span>
-            <span>{bannerText}</span>
-            <span>{bannerText}</span>
+          <div className="gig-banner-inner">
+            <p>{bannerText}</p>
+            <p>{bannerText}</p>
+            <p>{bannerText}</p>
+            <p>{bannerText}</p>
           </div>
           {isBannerDismissible && (
             <button onClick={handleDismissBanner} className="gig-banner-dismiss">×</button>
@@ -906,7 +955,17 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
                       <button className="voice-play-btn" onClick={() => handlePlayAudio(msg)}>
                         {isPlayingThis && msgAudioState.playing ? <IconPause /> : <IconPlay />}
                       </button>
-                      <div className="voice-progress" onClick={(e) => handleSeek(msg, e)}>
+                      <div
+                        id={`voice-bar-${msg.id}`}
+                        className="voice-progress"
+                        onMouseDown={(e) => handleSeekStart(msg, e)}
+                        onTouchStart={(e) => handleSeekStart(msg, e)}
+                        onMouseMove={(e) => handleSeekMove(msg, e)}
+                        onTouchMove={(e) => handleSeekMove(msg, e)}
+                        onMouseUp={handleSeekEnd}
+                        onTouchEnd={handleSeekEnd}
+                        onClick={(e) => { e.stopPropagation(); seekTo(msg, e.clientX); }}
+                      >
                         <div className="voice-progress-fill" style={{ width: `${progress}%` }} />
                       </div>
                       <span className="voice-time">
@@ -972,8 +1031,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         </div>
       ) : (
         <form onSubmit={handleSend} className="chat-input-bar">
-          <button type="button" className="chat-input-btn" onClick={() => fileInputRef.current?.click()} aria-label="Add photo">
-            <IconPhoto />
+          <button type="button" className="chat-input-circle-btn" onClick={() => fileInputRef.current?.click()} aria-label="Add photo">
+            <IconPlus />
           </button>
           <input
             type="text"
@@ -991,11 +1050,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
             onChange={handlePhotoUpload}
           />
           {newMessage.trim() ? (
-            <button type="submit" className="chat-input-btn chat-send-btn" aria-label="Send">
+            <button type="submit" className="chat-input-circle-btn chat-send-circle-btn" aria-label="Send">
               <IconSend />
             </button>
           ) : (
-            <button type="button" className="chat-input-btn" onClick={startRecording} aria-label="Record voice message">
+            <button type="button" className="chat-input-circle-btn" onClick={startRecording} aria-label="Record voice message">
               <IconMic />
             </button>
           )}
