@@ -200,11 +200,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         }
 
         setMessages(prev => {
-          // Merge new messages
           const existingIds = new Set(prev.map(m => m.id));
           const toAdd = serverMsgs.filter(m => !existingIds.has(m.id));
           
-          // Update is_read on existing messages
           const serverMap = new Map(serverMsgs.map(m => [m.id, m]));
           const updated = prev.map(m => {
             const sm = serverMap.get(m.id);
@@ -220,19 +218,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         });
       }
 
-      const currentGig = await getGigForChannel(channelIdRef.current);
-      if (isMounted.current) {
-        const prevGig = getCached(gigCacheKey);
-        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) {
-          setGig(currentGig);
-        }
-      }
-    } catch (err) {
-      console.error('Sync error:', err);
-    } finally {
-      syncingRef.current = false;
-    }
-  };
       const currentGig = await getGigForChannel(channelIdRef.current);
       if (isMounted.current) {
         const prevGig = getCached(gigCacheKey);
