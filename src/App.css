@@ -4,7 +4,6 @@ html {
   height: 100%;
   overflow: hidden;
   background: #ffffff;
-  padding-top: env(safe-area-inset-top);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -61,10 +60,12 @@ input, textarea {
 .app-shell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .app-content {
