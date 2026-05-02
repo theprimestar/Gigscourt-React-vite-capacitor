@@ -772,8 +772,8 @@
 
 .message-photo {
   display: block;
-  width: 85%;
-  max-width: 320px;
+  width: auto;
+  max-width: 200px;
   border-radius: 14px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -782,6 +782,13 @@
 
 .message-photo:active {
   opacity: 0.85;
+}
+
+.message-photo-status {
+  font-size: 11px;
+  color: #8e8e93;
+  padding: 2px 14px 0;
+  align-self: flex-end;
 }
 
 .message-mine .message-photo {
@@ -1194,11 +1201,4 @@
 .review-submit-btn:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-.message-photo-status {
-  font-size: 11px;
-  color: #8e8e93;
-  padding: 2px 14px 0;
-  align-self: flex-end;
 }
