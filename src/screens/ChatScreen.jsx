@@ -117,6 +117,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const [unreadCount, setUnreadCount] = useState(0);
   const [showUnreadBanner, setShowUnreadBanner] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   const chatContainerRef = useRef(null);
   const channelRef = useRef(null);
@@ -134,6 +135,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const isMounted = useRef(true);
   const initRan = useRef(false);
   const syncingRef = useRef(false);
+  const isAtBottomRef = useRef(true);
+  const initialScrollDoneRef = useRef(false);
 
   useEffect(() => {
     if (gig !== undefined) setCached(gigCacheKey, gig);
@@ -172,6 +175,19 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       cleanupChannels();
     }
   }, [isVisible]);
+
+  // Auto-scroll when messages change and user is at bottom or just sent a message
+  useEffect(() => {
+    if (!chatContainerRef.current || !initialScrollDoneRef.current) return;
+    if (isAtBottomRef.current || shouldAutoScroll) {
+      requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+        setShouldAutoScroll(false);
+      });
+    }
+  }, [messages]);
 
   const scrollToMessage = (index) => {
     if (!chatContainerRef.current || index < 0) return;
@@ -215,11 +231,15 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
             ).length;
             setUnreadCount(count);
             setShowUnreadBanner(true);
-            setTimeout(() => scrollToMessage(firstUnread), 200);
+            initialScrollDoneRef.current = true;
+            setShouldAutoScroll(false);
+            requestAnimationFrame(() => scrollToMessage(firstUnread));
             return;
           }
         }
-        setTimeout(() => scrollToBottom(), 200);
+        initialScrollDoneRef.current = true;
+        setShouldAutoScroll(false);
+        requestAnimationFrame(() => scrollToBottom());
       }
     } catch (err) {
       // silent
@@ -274,6 +294,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           setCached(msgCacheKey, merged);
           return merged;
         });
+        
+        // Don't auto-scroll for background syncs
+        setShouldAutoScroll(false);
       }
 
       const currentGig = await getGigForChannel(channelIdRef.current);
@@ -372,15 +395,11 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       setMessages(prev => {
         const updated = [...prev, msg];
         setCached(msgCacheKey, updated);
-        const container = chatContainerRef.current;
-        if (container) {
-          const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-          if (isNearBottom || msg.sender_id === currentUserId) {
-            setTimeout(() => scrollToBottom(), 50);
-          } else {
-            setUnreadCount(c => c + 1);
-            setShowScrollBtn(true);
-          }
+        if (msg.sender_id === currentUserId || isAtBottomRef.current) {
+          setShouldAutoScroll(true);
+        } else {
+          setUnreadCount(c => c + 1);
+          setShowScrollBtn(true);
         }
         return updated;
       });
@@ -489,6 +508,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     const text = newMessage.trim();
     const tempId = 'temp-' + Date.now();
     setNewMessage('');
+    setShowUnreadBanner(false);
+    setShouldAutoScroll(true);
     if (typingChannelRef.current) {
       typingChannelRef.current.send({ type: 'broadcast', event: 'typing_stop', payload: {} });
     }
@@ -499,6 +520,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   const handleRetry = (msg) => {
     setMessages(prev => prev.filter(m => m.id !== msg.id));
     const tempId = 'temp-' + Date.now();
+    setShouldAutoScroll(true);
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: msg.text, image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'sending' }]);
     sendTextMessage(msg.text, tempId);
   };
@@ -507,6 +529,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     const file = e.target.files?.[0];
     if (!file || !currentUserId) return;
     const tempId = 'temp-photo-' + Date.now();
+    setShouldAutoScroll(true);
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
     if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -577,6 +600,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
 
   const uploadAudio = async (blob) => {
     const tempId = 'temp-audio-' + Date.now();
+    setShouldAutoScroll(true);
     setMessages(prev => [...prev, { id: tempId, channel_id: channelIdRef.current, sender_id: currentUserId, text: '', image_url: null, audio_url: null, created_at: new Date().toISOString(), is_read: false, status: 'uploading' }]);
 
     try {
@@ -826,7 +850,8 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         const container = chatContainerRef.current;
         if (container) {
           const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-          setShowScrollBtn(distanceFromBottom > 200);
+          isAtBottomRef.current = distanceFromBottom < 80;
+          setShowScrollBtn(distanceFromBottom > 150);
 
           if (firstUnreadIndex >= 0) {
             const unreadEl = container.querySelector(`[data-msg-index="${firstUnreadIndex}"]`);
@@ -849,6 +874,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           return (
             <React.Fragment key={msg.id}>
               {shouldShowDateSeparator(msg, prevMsg) && <div className="date-separator" data-date={formatDate(msg.created_at)}><span>{formatDate(msg.created_at)}</span></div>}
+              {i === firstUnreadIndex && showUnreadBanner && (
+                <UnreadBanner count={unreadCount} onDismiss={() => setShowUnreadBanner(false)} />
+              )}
               <div className={`message-row ${isMine ? 'message-mine' : 'message-theirs'}`} data-msg-index={i}>
                 {msg.image_url ? (
                   <img
@@ -889,19 +917,19 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
             </React.Fragment>
           );
         })}
-
-        {showUnreadBanner && <UnreadBanner count={unreadCount} onDismiss={() => setShowUnreadBanner(false)} />}
-        <ScrollToBottomButton
-          count={unreadCount}
-          visible={showScrollBtn}
-          onClick={() => {
-            scrollToBottom();
-            setUnreadCount(0);
-            setShowUnreadBanner(false);
-          }}
-        />
-        <div style={{ flexGrow: 1 }} />
       </div>
+
+      <ScrollToBottomButton
+        count={unreadCount}
+        visible={showScrollBtn}
+        onClick={() => {
+          scrollToBottom();
+          setUnreadCount(0);
+          setShowUnreadBanner(false);
+          setShowScrollBtn(false);
+          isAtBottomRef.current = true;
+        }}
+      />
 
       {fullScreenImage && <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}><button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button><img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} /></div>}
 
