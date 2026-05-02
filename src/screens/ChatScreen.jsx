@@ -197,13 +197,42 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         const newMsgs = serverMsgs.filter(m => !seenIds.current.has(m.id));
         if (newMsgs.length > 0) {
           newMsgs.forEach(m => seenIds.current.add(m.id));
-          setMessages(prev => {
-            const updated = [...prev, ...newMsgs];
-            setCached(msgCacheKey, updated);
-            return updated;
+        }
+
+        setMessages(prev => {
+          // Merge new messages
+          const existingIds = new Set(prev.map(m => m.id));
+          const toAdd = serverMsgs.filter(m => !existingIds.has(m.id));
+          
+          // Update is_read on existing messages
+          const serverMap = new Map(serverMsgs.map(m => [m.id, m]));
+          const updated = prev.map(m => {
+            const sm = serverMap.get(m.id);
+            if (sm && sm.is_read && !m.is_read) {
+              return { ...m, is_read: true };
+            }
+            return m;
           });
+
+          const merged = [...updated, ...toAdd];
+          setCached(msgCacheKey, merged);
+          return merged;
+        });
+      }
+
+      const currentGig = await getGigForChannel(channelIdRef.current);
+      if (isMounted.current) {
+        const prevGig = getCached(gigCacheKey);
+        if (JSON.stringify(currentGig) !== JSON.stringify(prevGig)) {
+          setGig(currentGig);
         }
       }
+    } catch (err) {
+      console.error('Sync error:', err);
+    } finally {
+      syncingRef.current = false;
+    }
+  };
       const currentGig = await getGigForChannel(channelIdRef.current);
       if (isMounted.current) {
         const prevGig = getCached(gigCacheKey);
