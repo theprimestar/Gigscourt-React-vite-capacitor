@@ -708,10 +708,20 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const handleGigButtonClick = () => {
-    if (!gig) handleRegisterGig();
-    else if (gig.status === 'pending_review' && currentUserId === gig.provider_id) handleCancelGig();
-    else if (gig.status === 'pending_review' && currentUserId === gig.client_id) setShowReviewForm(true);
-  };
+  console.log('handleGigButtonClick - gig:', gig, 'currentUserId:', currentUserId);
+  if (!gig) {
+    console.log('No gig - calling handleRegisterGig');
+    handleRegisterGig();
+  }
+  else if (gig.status === 'pending_review' && currentUserId === gig.provider_id) {
+    console.log('Provider cancelling gig');
+    handleCancelGig();
+  }
+  else if (gig.status === 'pending_review' && currentUserId === gig.client_id) {
+    console.log('Client opening review form');
+    setShowReviewForm(true);
+  }
+};
 
   const formatDate = (ts) => {
     if (!ts) return '';
