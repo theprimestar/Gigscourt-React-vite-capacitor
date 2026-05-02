@@ -742,6 +742,9 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
                     alt=""
                     className="message-photo"
                     onClick={() => {
+
+                      console.log('Photo tapped, msg.id:', msg.id, 'sender_id:', msg.sender_id, 'my id:', currentUserId);
+                      
                       setFullScreenImage(getPhotoUrl(msg.image_url, 'full'));
                       markMessageRead(msg, currentUserId, channelIdRef, channelRef);
                     }}
