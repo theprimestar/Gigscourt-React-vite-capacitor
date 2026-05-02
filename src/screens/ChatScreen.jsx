@@ -190,22 +190,25 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
   };
 
   const loadMessages = async (channelId, userId) => {
-    const { data: history } = await supabase.rpc('get_messages', {
-      p_channel_id: channelId,
-      p_user_id: userId,
-      p_limit: 50,
-      p_cursor: null,
-      p_cursor_id: null,
-    });
+  const { data: history } = await supabase.rpc('get_messages', {
+    p_channel_id: channelId,
+    p_user_id: userId,
+    p_limit: 50,
+    p_cursor: null,
+    p_cursor_id: null,
+  });
 
-    if (isMounted.current && history) {
-      const sorted = [...history].reverse();
-      sorted.forEach(m => seenIds.current.add(m.id));
-      setMessages(sorted);
-      setCached(msgCacheKey, sorted);
-      setTimeout(scrollToBottom, 100);
-    }
-  };
+  console.log('loadMessages - history:', history);
+
+  if (isMounted.current && history) {
+    const sorted = [...history].reverse();
+    console.log('loadMessages - sorted:', sorted);
+    sorted.forEach(m => seenIds.current.add(m.id));
+    setMessages(sorted);
+    setCached(msgCacheKey, sorted);
+    setTimeout(scrollToBottom, 100);
+  }
+};
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
