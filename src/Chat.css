@@ -776,7 +776,7 @@
   display: flex;
   align-items: center;
   padding: 4px 10px;
-  padding-bottom: max(2px, var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   gap: 6px;
   flex-shrink: 0;
   background: var(--color-bg);
@@ -839,7 +839,7 @@
   display: flex;
   align-items: center;
   padding: 4px var(--space-lg);
-  padding-bottom: max(2px, var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   padding-left: max(16px, var(--safe-left));
   padding-right: max(16px, var(--safe-right));
   gap: var(--space-md);
