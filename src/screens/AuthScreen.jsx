@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import Logo from '../Logo';
 import '../Auth.css';
 
 function AuthScreen({ onVerifyEmail }) {
@@ -61,49 +62,44 @@ function AuthScreen({ onVerifyEmail }) {
         if (error) throw error;
 
         if (data.user) {
-  if (!data.user.email_confirmed_at) {
-    navigatingRef.current = true;
-    onVerifyEmail(email.trim());
-  }
-          // Verified users auto-navigate via onAuthStateChange in App.jsx
+          if (!data.user.email_confirmed_at) {
+            navigatingRef.current = true;
+            onVerifyEmail(email.trim());
+          }
         }
       } else {
-  const { data, error } = await supabase.auth.signUp({
-    email: email.trim(),
-    password,
-  });
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
 
-  if (error) throw error;
+        if (error) throw error;
 
-  if (data.user && data.user.identities && data.user.identities.length === 0) {
-    setError('An account with this email already exists. Please log in instead.');
-    setLoading(false);
-    return;
-  }
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          setError('An account with this email already exists. Please log in instead.');
+          setLoading(false);
+          return;
+        }
 
-  if (data.user) {
-  navigatingRef.current = true;
-  onVerifyEmail(email.trim());
-}
-}
+        if (data.user) {
+          navigatingRef.current = true;
+          onVerifyEmail(email.trim());
+        }
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
-  if (!navigatingRef.current) {
-    setLoading(false);
-  }
-}
+      if (!navigatingRef.current) {
+        setLoading(false);
+      }
+    }
   };
 
   return (
     <div className="auth-screen">
       <div className="auth-header">
-        <div className="auth-logo">
-          <div className="auth-circle auth-circle-left"></div>
-          <div className="auth-circle auth-circle-right"></div>
-        </div>
-        <h1>GigsCourt</h1>
-        <p>Find local services near you</p>
+        <Logo />
+        <p className="auth-subtitle">Find local services near you</p>
       </div>
 
       <form onSubmit={handleSubmit} className="auth-form">
@@ -120,7 +116,7 @@ function AuthScreen({ onVerifyEmail }) {
             placeholder="you@example.com"
             required
             autoComplete="email"
-            className={error && error.includes('email') ? 'input-error' : ''}
+            className={`auth-input ${error && error.includes('email') ? 'input-error' : ''}`}
           />
         </div>
 
@@ -138,7 +134,7 @@ function AuthScreen({ onVerifyEmail }) {
             required
             minLength={6}
             autoComplete={isLogin ? 'current-password' : 'new-password'}
-            className={error && error.includes('Password') ? 'input-error' : ''}
+            className={`auth-input ${error && error.includes('Password') ? 'input-error' : ''}`}
           />
         </div>
 
@@ -149,7 +145,7 @@ function AuthScreen({ onVerifyEmail }) {
           </div>
         )}
 
-        <button type="submit" disabled={loading} className="auth-button">
+        <button type="submit" disabled={loading} className="auth-button pill-btn-primary">
           {loading ? (
             <span className="auth-button-loading">
               {isLogin ? 'Signing in' : 'Creating account'}
