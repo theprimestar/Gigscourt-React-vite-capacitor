@@ -424,10 +424,10 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       )}
 
       {selectedUser && ReactDOM.createPortal(
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bottom-sheet-handle" />
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setSelectedUser(null)}>
+          <div className="sheet" onClick={e => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <div className="sheet-avatar">
                 <div className={`sheet-avatar-ring ${selectedUser.isActive ? 'active' : ''}`} />
                 {selectedUser.profile_pic_url ? (
@@ -489,8 +489,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
               )}
 
               <div className="sheet-buttons">
-                <button className="pill-btn-primary sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
-                <button className="pill-btn-secondary sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
+                <button className="btn-primary sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+                <button className="btn-secondary sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
               </div>
             </div>
           </div>
