@@ -479,6 +479,16 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         document.getElementById('portal-root')
       )}
 
+      {!hasSearched && !loading && view === 'map' && ReactDOM.createPortal(
+  <div className="map-empty-overlay">
+    <div className="map-empty-card">
+      <p className="map-empty-title">Find providers near you</p>
+      <p className="map-empty-sub">Tap a service above or search</p>
+    </div>
+  </div>,
+  document.getElementById('portal-root')
+)}
+
       {showSuggestions && <div className="suggestions-overlay" onClick={() => setShowSuggestions(false)} />}
     </div>
   );
