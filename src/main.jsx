@@ -1,8 +1,8 @@
+import './global.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import 'leaflet/dist/leaflet.css';
-import './global.css';
 import './App.css';
 import './App2.css';
 
