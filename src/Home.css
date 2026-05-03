@@ -208,7 +208,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: var(--space-2xl) var(--space-md) var(--space-sm);
+  padding: var(--space-xl) var(--space-md) var(--space-xs);
   background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 70%, transparent 100%);
   color: #FFFFFF;
 }
@@ -219,7 +219,7 @@
   gap: 6px;
   font-size: var(--font-caption);
   font-weight: var(--weight-semibold);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .active-dot-card {
@@ -232,13 +232,13 @@
 
 .card-distance {
   font-size: var(--font-label);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .card-services {
   font-size: var(--font-label);
   text-transform: capitalize;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
