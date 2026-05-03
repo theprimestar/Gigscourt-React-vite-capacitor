@@ -730,3 +730,15 @@
 .scroll-to-top:active {
   transform: scale(0.95);
 }
+
+.search-suggestions-portal {
+  position: fixed;
+  top: calc(var(--safe-top) + 68px);
+  left: var(--space-lg);
+  right: var(--space-lg);
+  background: var(--color-surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 600;
+}
