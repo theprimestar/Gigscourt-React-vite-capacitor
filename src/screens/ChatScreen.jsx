@@ -54,6 +54,16 @@ const IconPause = () => (
     <rect x="5" y="3" width="5" height="18"/><rect x="14" y="3" width="5" height="18"/>
   </svg>
 );
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+const IconStar = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="36" height="36" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
 
 const markMessageRead = (msg, currentUserId, channelIdRef, channelRef) => {
   if (!msg.is_read && msg.sender_id !== currentUserId) {
@@ -176,7 +186,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
     }
   }, [isVisible]);
 
-  // Auto-scroll when messages change and user is at bottom or just sent a message
   useEffect(() => {
     if (!chatContainerRef.current || !initialScrollDoneRef.current) return;
     if (isAtBottomRef.current || shouldAutoScroll) {
@@ -295,7 +304,6 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
           return merged;
         });
         
-        // Don't auto-scroll for background syncs
         setShouldAutoScroll(false);
       }
 
@@ -829,12 +837,12 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         )}
       </div>
 
-      {error && <div className="chat-error-toast" onClick={() => setError(null)}><span>{error}</span><button>×</button></div>}
+      {error && <div className="chat-error-toast" onClick={() => setError(null)}><span>{error}</span><button><IconClose /></button></div>}
 
       {showBanner && bannerText && (
         <div className={`gig-banner ${!isBannerDismissible ? 'gig-banner-locked' : ''}`}>
           <div className="gig-banner-inner"><p>{bannerText}</p><p>{bannerText}</p><p>{bannerText}</p><p>{bannerText}</p></div>
-          {isBannerDismissible && <button onClick={handleDismissBanner} className="gig-banner-dismiss">×</button>}
+          {isBannerDismissible && <button onClick={handleDismissBanner} className="gig-banner-dismiss"><IconClose /></button>}
         </div>
       )}
 
@@ -931,7 +939,7 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
         }}
       />
 
-      {fullScreenImage && <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}><button className="fullscreen-close" onClick={() => setFullScreenImage(null)}>×</button><img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} /></div>}
+      {fullScreenImage && <div className="fullscreen-overlay" onClick={() => setFullScreenImage(null)}><button className="fullscreen-close" onClick={() => setFullScreenImage(null)}><IconClose /></button><img src={fullScreenImage} alt="" className="fullscreen-image" onClick={(e) => e.stopPropagation()} /></div>}
 
       {isRecording ? (
         <div className="recording-bar"><div className="recording-dot" /><span className="recording-time">0:{recordingTime < 10 ? '0' : ''}{recordingTime}</span><button onClick={cancelRecording} className="recording-cancel">Cancel</button><button onClick={stopRecording} className="recording-send"><IconSend /></button></div>
@@ -945,13 +953,27 @@ export default function ChatScreen({ chatId, otherUserId, otherUserName, onBack,
       )}
 
       {showReviewForm && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowReviewForm(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}><div className="bottom-sheet-handle" />
-            <div className="bottom-sheet-content">
-              <h2>Rate your experience</h2><p>How was your gig with {otherUser?.full_name || otherUserName || 'the provider'}?</p>
-              <div className="star-selector">{[1,2,3,4,5].map(s => <button key={s} className={`star-btn ${s <= reviewRating ? 'active' : ''}`} onClick={() => setReviewRating(s)}>{s <= reviewRating ? '★' : '☆'}</button>)}</div>
+        <div className="sheet-overlay" onClick={() => setShowReviewForm(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
+              <h2>Rate your experience</h2>
+              <p>How was your gig with {otherUser?.full_name || otherUserName || 'the provider'}?</p>
+              <div className="star-selector">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <button
+                    key={s}
+                    className={`star-btn ${s <= reviewRating ? 'active' : ''}`}
+                    onClick={() => setReviewRating(s)}
+                  >
+                    <IconStar filled={s <= reviewRating} />
+                  </button>
+                ))}
+              </div>
               <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder="Write your review (optional)..." className="review-textarea" rows={3} />
-              <button onClick={handleSubmitReview} disabled={reviewRating === 0 || submittingReview} className="review-submit-btn">{submittingReview ? 'Submitting...' : 'Submit Review'}</button>
+              <button onClick={handleSubmitReview} disabled={reviewRating === 0 || submittingReview} className="review-submit-btn btn-primary">
+                {submittingReview ? 'Submitting...' : 'Submit Review'}
+              </button>
             </div>
           </div>
         </div>
