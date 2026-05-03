@@ -3,39 +3,40 @@
    ============================================= */
 
 .onboarding-container {
-  height: 100vh;
-  height: 100dvh;
   position: fixed;
   inset: 0;
-  overflow: hidden;
-  touch-action: none;
-  background-color: var(--color-bg);
   display: flex;
   flex-direction: column;
+  background: var(--color-bg);
+  overflow: hidden;
+  touch-action: none;
 }
 
 /* --- Progress Dots --- */
 .onboarding-progress {
   display: flex;
   justify-content: center;
-  gap: var(--space-sm);
-  padding: calc(var(--space-lg) + var(--safe-top)) 0 var(--space-md);
+  gap: 6px;
+  padding: calc(var(--space-md) + var(--safe-top)) 0 var(--space-md);
   flex-shrink: 0;
 }
 
 .progress-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-full);
-  background-color: var(--color-border);
-  transition: background-color var(--duration-normal) var(--ease-out);
+  background: var(--color-text-primary);
+  opacity: 0.3;
+  transition: all var(--duration-normal) var(--ease-out);
 }
 
 .progress-dot.active {
-  background-color: var(--color-accent);
+  width: 20px;
+  border-radius: var(--radius-full);
+  opacity: 1;
 }
 
-/* --- Step Layouts --- */
+/* --- Steps --- */
 .onboarding-step {
   flex: 1;
   display: flex;
@@ -68,14 +69,14 @@
 
 /* --- Typography --- */
 .onboarding-heading {
-  font-size: var(--font-size-title);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--font-title);
+  font-weight: var(--weight-bold);
   color: var(--color-text-primary);
   text-align: center;
 }
 
 .onboarding-sub {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   text-align: center;
   margin-top: var(--space-xs);
@@ -83,8 +84,8 @@
 }
 
 .onboarding-label {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-medium);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-xs);
   display: block;
@@ -94,10 +95,10 @@
 .onboarding-input {
   width: 100%;
   padding: var(--space-md) var(--space-lg);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-body);
+  font-size: var(--font-body);
   color: var(--color-text-primary);
   margin-bottom: var(--space-md);
   transition: border-color var(--duration-fast) var(--ease-out);
@@ -111,10 +112,10 @@
 .onboarding-textarea {
   width: 100%;
   padding: var(--space-md) var(--space-lg);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-body);
+  font-size: var(--font-body);
   color: var(--color-text-primary);
   margin-bottom: var(--space-md);
   resize: none;
@@ -139,10 +140,10 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-md);
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   color: #FFFFFF;
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-medium);
   border-radius: var(--radius-full);
   cursor: pointer;
   text-transform: capitalize;
@@ -157,8 +158,8 @@
 }
 
 .service-category-label {
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-label);
+  font-weight: var(--weight-medium);
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -172,20 +173,18 @@
 }
 
 .chip {
-  display: inline-flex;
-  align-items: center;
   padding: var(--space-xs) var(--space-md);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
   transition: all var(--duration-fast) var(--ease-out);
 }
 
 .chip.active {
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   border-color: var(--color-accent);
   color: #FFFFFF;
 }
@@ -196,7 +195,7 @@
 }
 
 .custom-service-text {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-sm);
 }
@@ -213,21 +212,20 @@
 
 .add-btn {
   padding: var(--space-md) var(--space-lg);
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   color: #FFFFFF;
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body);
+  font-weight: var(--weight-semibold);
   border-radius: var(--radius-md);
   white-space: nowrap;
-  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .add-btn:active {
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .custom-note {
-  font-size: var(--font-size-label);
+  font-size: var(--font-label);
   color: var(--color-text-tertiary);
   margin-top: var(--space-xs);
 }
@@ -235,7 +233,7 @@
 /* --- Error --- */
 .onboarding-error {
   color: var(--color-destructive);
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   text-align: center;
   margin-top: var(--space-md);
 }
@@ -257,8 +255,8 @@
   flex-shrink: 0;
 }
 
-.onboarding-buttons .pill-btn-primary,
-.onboarding-buttons .pill-btn-secondary {
+.onboarding-buttons .btn-primary,
+.onboarding-buttons .btn-secondary {
   flex: 1;
 }
 
@@ -296,17 +294,17 @@
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-sm) var(--space-md);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border-radius: var(--radius-full);
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-label);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
   box-shadow: var(--shadow-md);
   z-index: 1000;
 }
 
 .map-address-hint {
-  font-size: var(--font-size-label);
+  font-size: var(--font-label);
   color: var(--color-text-tertiary);
   margin-bottom: var(--space-lg);
 }
@@ -331,7 +329,7 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 2px dashed var(--color-border);
   display: flex;
   align-items: center;
@@ -356,7 +354,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background-color: var(--color-overlay);
+  background: var(--color-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -365,20 +363,16 @@
 .avatar-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid rgba(255,255,255,0.3);
   border-top-color: #FFFFFF;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .upload-progress-bar {
   width: 120px;
   height: 4px;
-  background-color: var(--color-border);
+  background: var(--color-border);
   border-radius: var(--radius-full);
   overflow: hidden;
   margin-top: var(--space-md);
@@ -387,7 +381,7 @@
 .upload-progress-fill {
   width: 60%;
   height: 100%;
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   border-radius: var(--radius-full);
   animation: uploadPulse 1s var(--ease-in-out) infinite;
 }
@@ -399,10 +393,9 @@
 
 .add-photo-btn {
   margin-top: var(--space-md);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body);
+  font-weight: var(--weight-semibold);
   color: var(--color-accent);
-  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 .add-photo-btn:active {
@@ -438,9 +431,9 @@
   display: flex;
   gap: var(--space-md);
   padding: var(--space-lg);
-  background-color: var(--color-surface);
-  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   align-items: flex-start;
 }
 
@@ -449,7 +442,7 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -457,27 +450,28 @@
 }
 
 .walkthrough-card-title {
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body);
+  font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
   margin-bottom: var(--space-xs);
 }
 
 .walkthrough-card-text {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
-  line-height: var(--line-height-normal);
+  line-height: var(--leading-normal);
 }
 
 .walkthrough-footer-text {
-  font-size: var(--font-size-label);
+  font-size: var(--font-label);
   color: var(--color-text-tertiary);
   text-align: center;
   margin-top: var(--space-md);
   flex-shrink: 0;
 }
 
-.walkthrough .onboarding-buttons .pill-btn-primary {
+/* Step 4 button truncation fix */
+.walkthrough .onboarding-buttons .btn-primary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
