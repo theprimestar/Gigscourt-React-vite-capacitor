@@ -12,6 +12,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import AdminScreen from './screens/AdminScreen';
+import Logo from './Logo';
 import './App.css';
 import './SplashScreen.css';
 
@@ -246,11 +247,7 @@ function App() {
     return (
       <div className="splash-screen">
         <div className="splash-content">
-          <div className="splash-logo">
-            <div className="splash-circle splash-circle-left"></div>
-            <div className="splash-circle splash-circle-right"></div>
-          </div>
-          <span className="splash-text">GigsCourt</span>
+          <Logo />
         </div>
       </div>
     );
@@ -374,25 +371,19 @@ function App() {
             className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
             onClick={() => setActiveTab('home')}
           >
-            <span className="nav-icon">
-              <IconHome filled={activeTab === 'home'} />
-            </span>
-            <span className="nav-label">Home</span>
+            <IconHome filled={activeTab === 'home'} />
           </button>
           <button
             className={`nav-btn ${activeTab === 'search' ? 'active' : ''}`}
             onClick={() => setActiveTab('search')}
           >
-            <span className="nav-icon">
-              <IconSearch filled={activeTab === 'search'} />
-            </span>
-            <span className="nav-label">Search</span>
+            <IconSearch filled={activeTab === 'search'} />
           </button>
           <button
             className={`nav-btn ${activeTab === 'chats' ? 'active' : ''}`}
             onClick={() => setActiveTab('chats')}
           >
-            <span className="nav-icon" style={{ position: 'relative' }}>
+            <span className="nav-icon-wrapper">
               <IconChats filled={activeTab === 'chats'} />
               {unreadCount > 0 && (
                 <span className="nav-unread-badge">
@@ -400,26 +391,19 @@ function App() {
                 </span>
               )}
             </span>
-            <span className="nav-label">Chats</span>
           </button>
           <button
             className={`nav-btn ${activeTab === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveTab('profile')}
           >
-            <span className="nav-icon">
-              <IconProfile filled={activeTab === 'profile'} />
-            </span>
-            <span className="nav-label">Profile</span>
+            <IconProfile filled={activeTab === 'profile'} />
           </button>
           {isAdmin && (
             <button
               className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => setActiveTab('admin')}
             >
-              <span className="nav-icon">
-                <IconAdmin filled={activeTab === 'admin'} />
-              </span>
-              <span className="nav-label">Admin</span>
+              <IconAdmin filled={activeTab === 'admin'} />
             </button>
           )}
         </nav>
