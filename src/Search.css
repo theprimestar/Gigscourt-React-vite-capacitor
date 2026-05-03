@@ -730,3 +730,12 @@
 .scroll-to-top:active {
   transform: scale(0.95);
 }
+
+.leaflet-map-pane {
+  z-index: 1 !important;
+}
+
+.map-wrapper-map .map-empty-overlay {
+  z-index: 10;
+  position: relative;
+}
