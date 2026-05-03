@@ -3,26 +3,16 @@
    ============================================= */
 
 .splash-screen {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  height: 100dvh;
-  background-color: var(--color-bg);
-  position: fixed;
-  inset: 0;
+  background: var(--color-bg);
   overflow: hidden;
   touch-action: none;
 }
 
 .splash-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: splashPulse 2s var(--ease-in-out) infinite;
-}
-
-@keyframes splashPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.85; }
+  animation: breathe 2s var(--ease-in-out) infinite;
 }
