@@ -1,19 +1,17 @@
 /* =============================================
-   Auth Screen
+   Auth & Verify Screens
    ============================================= */
 
 .auth-screen {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  height: 100dvh;
   padding: var(--space-3xl) var(--space-2xl);
-  background-color: var(--color-bg);
+  background: var(--color-bg);
   overflow: hidden;
-  position: fixed;
-  inset: 0;
   touch-action: none;
 }
 
@@ -26,7 +24,7 @@
 }
 
 .auth-subtitle {
-  font-size: var(--font-size-body);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -47,18 +45,18 @@
 }
 
 .input-group label {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-medium);
   color: var(--color-text-secondary);
 }
 
 .auth-input {
   width: 100%;
   padding: var(--space-md) var(--space-lg);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-body);
+  font-size: var(--font-body);
   color: var(--color-text-primary);
   transition: border-color var(--duration-fast) var(--ease-out);
 }
@@ -78,7 +76,7 @@
   align-items: flex-start;
   gap: var(--space-sm);
   padding: var(--space-md);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-destructive);
   border-radius: var(--radius-md);
 }
@@ -89,18 +87,18 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  background-color: var(--color-destructive);
+  flex-shrink: 0;
+  background: var(--color-destructive);
   color: #FFFFFF;
   font-size: 12px;
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--weight-bold);
   border-radius: var(--radius-full);
-  flex-shrink: 0;
 }
 
 .auth-error-text {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-destructive);
-  line-height: var(--line-height-normal);
+  line-height: var(--leading-normal);
 }
 
 /* --- Button --- */
@@ -121,25 +119,24 @@
 }
 
 @keyframes dots {
-  0% { content: ''; }
-  25% { content: '.'; }
-  50% { content: '..'; }
-  75% { content: '...'; }
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
 }
 
 /* --- Toggle --- */
 .auth-toggle {
   text-align: center;
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   margin-top: var(--space-sm);
 }
 
 .toggle-button {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-semibold);
   color: var(--color-accent);
-  padding: 0;
 }
 
 .toggle-button:active {
@@ -147,19 +144,17 @@
 }
 
 /* =============================================
-   Verify Email Screen
+   Verify Email
    ============================================= */
 
 .verify-screen {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  height: 100dvh;
   padding: var(--space-2xl);
-  background-color: var(--color-bg);
-  position: fixed;
-  inset: 0;
+  background: var(--color-bg);
   overflow: hidden;
   touch-action: none;
 }
@@ -179,27 +174,27 @@
 }
 
 .verify-heading {
-  font-size: var(--font-size-title);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--font-title);
+  font-weight: var(--weight-bold);
   color: var(--color-text-primary);
   margin-bottom: var(--space-md);
 }
 
 .verify-description {
-  font-size: var(--font-size-body);
+  font-size: var(--font-body);
   color: var(--color-text-secondary);
 }
 
 .verify-email {
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body);
+  font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
   margin-bottom: var(--space-sm);
   word-break: break-all;
 }
 
 .verify-sub {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-2xl);
 }
@@ -216,10 +211,10 @@
   width: 36px;
   height: 48px;
   text-align: center;
-  font-size: var(--font-size-title);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-title);
+  font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
-  background-color: var(--color-surface);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   transition: border-color var(--duration-fast) var(--ease-out);
@@ -234,11 +229,11 @@
   border-color: var(--color-destructive);
 }
 
-/* --- Loading --- */
+/* --- Verify Loading --- */
 .verify-loading {
   width: 100%;
   height: 4px;
-  background-color: var(--color-border);
+  background: var(--color-border);
   border-radius: var(--radius-full);
   overflow: hidden;
   margin-bottom: var(--space-lg);
@@ -247,13 +242,13 @@
 .verify-progress {
   width: 40%;
   height: 100%;
-  background-color: var(--color-accent);
+  background: var(--color-accent);
   border-radius: var(--radius-full);
   animation: verifyProgress 1.2s var(--ease-in-out) infinite;
 }
 
 @keyframes verifyProgress {
-  0% { transform: translateX(-100%); }
+  0%   { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
 }
 
@@ -264,14 +259,14 @@
 }
 
 .resend-text {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   margin-bottom: var(--space-sm);
 }
 
 .resend-button {
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-body);
+  font-weight: var(--weight-semibold);
   color: var(--color-accent);
   transition: opacity var(--duration-fast) var(--ease-out);
 }
@@ -281,7 +276,7 @@
 }
 
 .resend-message {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-caption);
   color: var(--color-text-secondary);
   margin-top: var(--space-sm);
 }
