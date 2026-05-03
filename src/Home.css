@@ -10,6 +10,8 @@
   background-color: var(--color-bg);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
 /* --- Header --- */
