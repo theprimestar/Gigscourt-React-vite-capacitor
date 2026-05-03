@@ -13,7 +13,7 @@
 .logo-mark {
   width: 40px;
   height: 40px;
-  color: var(--color-accent);
+  color: var(--color-text-primary);
   transition: width var(--duration-normal) var(--ease-out),
               height var(--duration-normal) var(--ease-out),
               color var(--duration-normal) var(--ease-out);
