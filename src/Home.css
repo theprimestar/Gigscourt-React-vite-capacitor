@@ -467,15 +467,15 @@
 .sheet-services-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   margin-bottom: var(--space-md);
 }
 
 .sheet-service-chip {
-  padding: var(--space-xs) var(--space-md);
+  padding: 2px var(--space-sm);
   background: var(--color-bg);
   color: var(--color-text-primary);
-  font-size: var(--font-caption);
+  font-size: var(--font-label);
   border-radius: var(--radius-full);
   text-transform: capitalize;
 }
