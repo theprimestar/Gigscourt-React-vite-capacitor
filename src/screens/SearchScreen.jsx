@@ -335,14 +335,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
       <div className={`search-map-full ${view === 'map' ? 'view-visible' : 'view-hidden'}`}>
   <div className="map-wrapper-map">
     <div ref={mapContainer} className="search-map-full-inner" />
-    {!hasSearched && !loading && (
-      <div className="map-empty-overlay">
-        <div className="map-empty-card">
-          <p className="map-empty-title">Find providers near you</p>
-          <p className="map-empty-sub">Tap a service above or search</p>
-        </div>
-      </div>
-    )}
   </div>
   {loading && (<div className="search-map-loading"><div className="load-more-spinner" /></div>)}
   {hasSearched && !loading && providers.length === 0 && (
