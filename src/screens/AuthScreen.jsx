@@ -145,7 +145,7 @@ function AuthScreen({ onVerifyEmail }) {
           </div>
         )}
 
-        <button type="submit" disabled={loading} className="auth-button pill-btn-primary">
+        <button type="submit" disabled={loading} className="auth-button btn-primary">
           {loading ? (
             <span className="auth-button-loading">
               {isLogin ? 'Signing in' : 'Creating account'}
