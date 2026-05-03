@@ -12,7 +12,7 @@
 /* --- Floating Bar --- */
 .search-floating-bar {
   position: relative;
-  z-index: 20;
+  z-index: 600;
   padding: var(--safe-top) var(--space-lg) var(--space-sm);
   background: transparent !important;
   backdrop-filter: none !important;
