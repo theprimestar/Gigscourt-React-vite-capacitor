@@ -197,7 +197,7 @@ a { color: inherit; text-decoration: none; }
   border-radius: var(--radius-full);
   margin: var(--space-sm) auto var(--space-lg);
 }
-.sheet-body { padding: 0 var(--space-xl) var(--space-xl); }
+.sheet-body { padding: 0 var(--space-xl) var(--space-md); }
 
 /* ----- 11. Keyframes ----- */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
