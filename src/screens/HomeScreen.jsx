@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
+import Logo from '../Logo';
 import '../Home.css';
 
 const IconBell = () => (
@@ -24,6 +25,12 @@ const IconAvatar = () => (
 const IconMapPin = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+
+const IconStar = () => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
   </svg>
 );
 
@@ -288,11 +295,12 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   };
 
   const renderStars = (rating) => {
-  if (rating === 'New' || !rating) return null;
-  const num = parseFloat(rating);
-  const rounded = Math.round(num);
-  return '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
-};
+    if (rating === 'New' || !rating) return null;
+    const num = parseFloat(rating);
+    return Array.from({ length: 5 }, (_, i) => (
+      <IconStar key={i} />
+    )).slice(0, Math.round(num));
+  };
 
   const handleCardTap = (user) => setSelectedUser(user);
 
@@ -302,33 +310,35 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       className={isDiscover ? 'discover-card' : 'provider-card'}
       onClick={() => handleCardTap(user)}
     >
-      {user.profile_pic_url ? (
-        <img src={user.profile_pic_url} alt={user.full_name} />
-      ) : (
-        <div className="card-avatar-placeholder"><IconAvatar /></div>
-      )}
-      <div className={isDiscover ? 'discover-card-overlay' : 'provider-card-overlay'}>
-        <div className={isDiscover ? 'discover-card-name' : 'provider-card-name'}>
-          {user.isActive && <span className="active-dot-card" />}
-          {user.full_name}
-        </div>
-        {isDiscover ? (
-          <div className="discover-card-meta">
-            <span>{user.rating !== 'New' ? `★ ${user.rating}` : 'New'}</span>
-            <span>{user.gigsThisMonth || 0} gigs this month</span>
-            <span>{formatDistance(user.distance_meters)}</span>
-          </div>
+      <div className="card-image">
+        {user.profile_pic_url ? (
+          <img src={user.profile_pic_url} alt={user.full_name} />
         ) : (
-          <>
-            <div className="provider-card-distance">{formatDistance(user.distance_meters)}</div>
-            <div className="provider-card-services">
-              {user.services?.slice(0, 2).map(s => s.replace(/-/g, ' ')).join(', ') || 'No services'}
-            </div>
-            <div className="provider-card-rating">
-              {user.rating !== 'New' ? `★ ${user.rating} · ${user.gigsThisMonth || 0} gigs` : 'New'}
-            </div>
-          </>
+          <div className="card-avatar-placeholder"><IconAvatar /></div>
         )}
+      </div>
+      <div className="card-info">
+        <div className="card-name">
+          {user.isActive && <span className="active-dot-card" />}
+          <span>{user.full_name}</span>
+        </div>
+        <div className="card-distance">{formatDistance(user.distance_meters)}</div>
+        {user.services?.length > 0 && (
+          <div className="card-services">
+            {user.services.slice(0, 2).map(s => s.replace(/-/g, ' ')).join(', ')}
+          </div>
+        )}
+        <div className="card-rating-row">
+          {user.rating !== 'New' ? (
+            <>
+              <span className="card-stars">{renderStars(user.rating)}</span>
+              <span className="card-rating-num">{user.rating}</span>
+            </>
+          ) : (
+            <span className="card-rating-num">New</span>
+          )}
+          <span className="card-gigs">{user.gigsThisMonth || 0} gigs this month</span>
+        </div>
       </div>
     </div>
   );
@@ -336,16 +346,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   return (
     <div className="home-screen" ref={scrollContainerRef} onScroll={handleScroll}>
       <header className={`home-header ${scrolled ? 'scrolled' : ''}`}>
-        <div className="header-top-row">
-          <div className="header-brand">
-            <div className="header-logo">
-              <div className="header-logo-circle header-logo-circle-left" />
-              <div className="header-logo-circle header-logo-circle-right" />
-            </div>
-            <span className="header-title">GigsCourt</span>
-          </div>
-          <button className="header-notif-btn"><IconBell /></button>
-        </div>
+        <Logo />
+        <button className="header-notif-btn"><IconBell /></button>
       </header>
 
       {loading && firstLoad.current ? (
@@ -355,6 +357,9 @@ function HomeScreen({ onStartChat, onViewProfile }) {
             <div className="section-desc">Active and trusted providers close to you</div>
             <div className="discover-scroll">
               {[1, 2, 3].map(i => <div key={i} className="skeleton-discover-card" />)}
+            </div>
+            <div className="discover-dots">
+              {[1, 2, 3].map(i => <div key={i} className="discover-dot" />)}
             </div>
           </div>
           <div className="home-section">
@@ -367,12 +372,9 @@ function HomeScreen({ onStartChat, onViewProfile }) {
         </>
       ) : cards.length === 0 && topProviders.length === 0 ? (
         <div className="home-empty">
-          <div className="home-empty-logo">
-            <div className="empty-circle empty-circle-left" />
-            <div className="empty-circle empty-circle-right" />
-          </div>
-          <h3>No providers nearby yet</h3>
-          <p>You can be the first to offer your service in this area</p>
+          <Logo />
+          <h3 className="home-empty-title">No providers nearby yet</h3>
+          <p className="home-empty-sub">You can be the first to offer your service in this area</p>
         </div>
       ) : (
         <>
@@ -434,14 +436,18 @@ function HomeScreen({ onStartChat, onViewProfile }) {
                   <div className="sheet-avatar-placeholder"><IconAvatar /></div>
                 )}
               </div>
-              <h2>
+              <h2 className="sheet-name">
                 {selectedUser.full_name}
-                {selectedUser.isActive && <span className="active-dot-card" />}
+                {selectedUser.isActive && <span className="active-dot-inline" />}
               </h2>
 
               {selectedUser.rating !== 'New' ? (
                 <>
-                  <div className="sheet-stars">{renderStars(selectedUser.rating)}</div>
+                  <div className="sheet-stars">
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <IconStar key={i} />
+                    )).slice(0, Math.round(parseFloat(selectedUser.rating)))}
+                  </div>
                   <div className="sheet-rating-count">
                     {selectedUser.rating} · {selectedUser.review_count || 0} review{selectedUser.review_count !== 1 ? 's' : ''}
                   </div>
@@ -470,7 +476,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
               {selectedUser.workspace_address && (
                 <div className="sheet-address">
                   <IconMapPin />
-                  {selectedUser.workspace_address}
+                  <span>{selectedUser.workspace_address}</span>
                 </div>
               )}
 
@@ -483,8 +489,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
               )}
 
               <div className="sheet-buttons">
-                <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
-                <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
+                <button className="pill-btn-primary sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+                <button className="pill-btn-secondary sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
               </div>
             </div>
           </div>
