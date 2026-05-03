@@ -159,12 +159,11 @@ function StepNameServices({ onNext }) {
           </div>
           <p className="custom-note">Your request will be reviewed by our team.</p>
         </div>
-
-        {error && <p className="onboarding-error">{error}</p>}
       </div>
 
       <div className="onboarding-step-footer">
         <button onClick={handleNext} className="pill-btn-primary onboarding-btn-full">Continue</button>
+        {error && <p className="onboarding-error">{error}</p>}
       </div>
     </div>
   );
@@ -204,14 +203,10 @@ function StepLocation({ onNext, onBack }) {
     if (lat === null || lng === null || !mapContainer.current || map.current) return;
     setTimeout(() => {
       if (!mapContainer.current) return;
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       map.current = L.map(mapContainer.current, { center: [lat, lng], zoom: 16, zoomControl: false, attributionControl: false });
-      const tileUrl = isDark
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-      L.tileLayer(tileUrl, { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
       const markerColor = window.matchMedia('(prefers-color-scheme: dark)').matches ? '#5070F0' : '#3B5FE3';
-const markerIcon = L.divIcon({ html: `<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="${markerColor}" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>`, className: '', iconSize: [32, 32], iconAnchor: [16, 32] });
+      const markerIcon = L.divIcon({ html: `<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="${markerColor}" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>`, className: '', iconSize: [32, 32], iconAnchor: [16, 32] });
       marker.current = L.marker([lat, lng], { icon: markerIcon }).addTo(map.current);
       map.current.on('move', () => { const c = map.current.getCenter(); marker.current.setLatLng([c.lat, c.lng]); });
       map.current.on('moveend', () => { const c = map.current.getCenter(); setLat(c.lat); setLng(c.lng); reverseGeocode(c.lat, c.lng); });
@@ -244,8 +239,10 @@ const markerIcon = L.divIcon({ html: `<div style="font-size:32px;filter:drop-sha
       <h2 className="onboarding-heading">Where do you work?</h2>
       <p className="onboarding-sub">Set your workspace location so clients can find you.</p>
 
-      <div className="map-container">
-        {loading ? <div className="skeleton skeleton-map" /> : <div ref={mapContainer} className="map-inner" />}
+      <div className="map-wrapper">
+        <div className="map-container">
+          {loading ? <div className="skeleton skeleton-map" /> : <div ref={mapContainer} className="map-inner" />}
+        </div>
         {!loading && (
           <button onClick={() => { navigator.geolocation.getCurrentPosition(pos => { map.current.setView([pos.coords.latitude, pos.coords.longitude], 16); setLat(pos.coords.latitude); setLng(pos.coords.longitude); reverseGeocode(pos.coords.latitude, pos.coords.longitude); }); }} className="map-refresh-btn">
             <IconLocationRefresh /> My Location
