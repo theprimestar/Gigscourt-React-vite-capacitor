@@ -8,7 +8,7 @@
   justify-content: center;
   height: 100vh;
   height: 100dvh;
-  background-color: #000000;
+  background-color: var(--color-bg);
 }
 
 .splash-content {
