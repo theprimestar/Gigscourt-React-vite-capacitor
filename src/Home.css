@@ -22,8 +22,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-md) var(--space-lg);
-  padding-top: calc(var(--space-md) + var(--safe-top));
+  padding: var(--safe-top) var(--space-sm) var(--space-sm);
   background-color: transparent;
   transition: background-color var(--duration-normal) var(--ease-out),
               box-shadow var(--duration-normal) var(--ease-out),
@@ -33,12 +32,8 @@
 .home-header.scrolled {
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  padding-top: calc(var(--space-sm) + var(--safe-top));
-  padding-bottom: var(--space-sm);
-}
-
-.home-header .logo {
-  transition: all var(--duration-normal) var(--ease-out);
+  padding-top: var(--safe-top);
+  padding-bottom: var(--space-xs);
 }
 
 /* Unscrolled: stacked, left-aligned */
@@ -58,21 +53,20 @@
 }
 
 .header-notif-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
   color: var(--color-text-primary);
-  transition: color var(--duration-fast) var(--ease-out),
-              width var(--duration-normal) var(--ease-out),
-              height var(--duration-normal) var(--ease-out);
+  transition: color var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
 }
 
 .home-header.scrolled .header-notif-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
 }
 
 .header-notif-btn:active {
@@ -81,7 +75,7 @@
 
 /* --- Sections --- */
 .home-section {
-  padding: 0 var(--space-sm);
+  padding: 0 var(--space-xs);
   margin-bottom: var(--space-2xl);
 }
 
@@ -97,40 +91,33 @@
   font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
   padding: 0 var(--space-sm);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 /* --- Discover Cards (Horizontal Scroll) --- */
 .discover-scroll {
   display: flex;
-  gap: var(--space-sm);
+  gap: 6px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  padding: 0 var(--space-sm);
-  padding-bottom: var(--space-sm);
+  padding: 0 var(--space-xs);
 }
 
 .discover-card {
   flex-shrink: 0;
   width: 264px;
+  height: 180px;
   scroll-snap-align: start;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
+  position: relative;
   cursor: pointer;
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.discover-card:active {
-  opacity: 0.9;
 }
 
 .discover-card .card-image {
   width: 100%;
-  height: 200px;
-  overflow: hidden;
+  height: 100%;
 }
 
 .discover-card .card-image img {
@@ -158,7 +145,7 @@
 .discover-dots {
   display: flex;
   justify-content: center;
-  gap: var(--space-xs);
+  gap: 4px;
   padding-top: var(--space-md);
 }
 
@@ -182,27 +169,21 @@
 .providers-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm);
-  padding: 0 var(--space-sm);
+  gap: 6px;
+  padding: 0 var(--space-xs);
 }
 
 .provider-card {
+  position: relative;
+  height: 200px;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
   cursor: pointer;
-  transition: opacity var(--duration-fast) var(--ease-out);
-}
-
-.provider-card:active {
-  opacity: 0.9;
 }
 
 .provider-card .card-image {
   width: 100%;
-  height: 160px;
-  overflow: hidden;
+  height: 100%;
 }
 
 .provider-card .card-image img {
@@ -226,19 +207,24 @@
   height: 40px;
 }
 
-/* --- Card Info --- */
+/* --- Card Info Overlay (both card types) --- */
 .card-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   padding: var(--space-md);
+  color: #FFFFFF;
 }
 
 .card-name {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: 6px;
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-xs);
+  font-weight: var(--font-weight-bold);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  margin-bottom: 2px;
 }
 
 .active-dot-card {
@@ -247,19 +233,20 @@
   border-radius: var(--radius-full);
   background-color: var(--color-success);
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .card-distance {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-label);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  margin-bottom: 2px;
 }
 
 .card-services {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
+  font-size: var(--font-size-label);
   text-transform: capitalize;
-  margin-bottom: var(--space-sm);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -268,8 +255,7 @@
 .card-rating-row {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .card-stars {
@@ -281,12 +267,12 @@
 .card-rating-num {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .card-gigs {
   font-size: var(--font-size-label);
-  color: var(--color-text-secondary);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   margin-left: auto;
 }
 
@@ -321,10 +307,8 @@
 .skeleton-discover-card {
   flex-shrink: 0;
   width: 264px;
-  height: 260px;
+  height: 180px;
   border-radius: var(--radius-lg);
-  background-color: var(--color-skeleton);
-  animation: shimmer 1.5s infinite;
   background: linear-gradient(
     90deg,
     var(--color-skeleton) 25%,
@@ -332,14 +316,12 @@
     var(--color-skeleton) 75%
   );
   background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
 .skeleton-grid-card {
-  width: 100%;
-  height: 220px;
+  height: 200px;
   border-radius: var(--radius-lg);
-  background-color: var(--color-skeleton);
-  animation: shimmer 1.5s infinite;
   background: linear-gradient(
     90deg,
     var(--color-skeleton) 25%,
@@ -347,6 +329,7 @@
     var(--color-skeleton) 75%
   );
   background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
 /* --- Loading More --- */
