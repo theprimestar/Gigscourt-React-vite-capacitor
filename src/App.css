@@ -16,10 +16,15 @@
   flex: 1;
   overflow: hidden;
   position: relative;
+  padding-bottom: calc(56px + var(--safe-bottom));
 }
 
 /* --- Bottom Navigation --- */
 .bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -28,7 +33,11 @@
   padding-bottom: calc(var(--space-sm) + var(--safe-bottom));
   transition: transform var(--duration-slow) var(--ease-out),
               background-color var(--duration-normal) var(--ease-out);
-  z-index: 100;
+  z-index: 200;
+}
+
+.bottom-nav.hidden {
+  transform: translateY(100%);
 }
 
 .bottom-nav.hidden {
