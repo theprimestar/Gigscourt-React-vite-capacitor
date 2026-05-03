@@ -46,6 +46,18 @@ const IconArrowUp = () => (
   </svg>
 );
 
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconStar = () => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="none">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
+
 function SearchScreen({ onStartChat, onViewProfile }) {
   const [view, setView] = useState('map');
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,7 +108,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20,
       }).addTo(map.current);
       const vIcon = L.divIcon({
-        html: '<div style="width:14px;height:14px;background:#007aff;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,122,255,0.4);"></div>',
+        html: '<div style="width:14px;height:14px;background:#3B5FE3;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(59,95,227,0.4);"></div>',
         className: '', iconSize: [14, 14], iconAnchor: [7, 7],
       });
       viewerMarker.current = L.marker([viewerLat, viewerLng], { icon: vIcon }).addTo(map.current);
@@ -111,7 +123,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
     }
   }, [viewerLat, viewerLng]);
 
-  // Map resize observer — fires when container gets real dimensions
   useEffect(() => {
     if (!mapContainer.current || !map.current) return;
     if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
@@ -130,7 +141,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
     };
   }, [view, map.current]);
 
-  // Also invalidate when view changes to map
   useEffect(() => {
     if (view === 'map' && map.current) {
       setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 100);
@@ -200,7 +210,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
 
     providers.forEach(provider => {
       const markerIcon = L.divIcon({
-        html: `<div style="width:42px;height:42px;background:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 10px rgba(0,0,0,0.15);border:${provider.isActive ? '2px solid #34c759' : '2px solid #007aff'};overflow:hidden;">${provider.profile_pic_url ? `<img src="${provider.profile_pic_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#8e8e93" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>'}</div>`,
+        html: `<div style="width:42px;height:42px;background:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 2px 10px rgba(0,0,0,0.15);border:${provider.isActive ? '2px solid #34c759' : '2px solid #3B5FE3'};overflow:hidden;">${provider.profile_pic_url ? `<img src="${provider.profile_pic_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#8e8e93" stroke-width="1.2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>'}</div>`,
         className: '', iconSize: [42, 42], iconAnchor: [21, 21],
       });
       const marker = L.marker([provider.workspace_lat, provider.workspace_lng], { icon: markerIcon }).addTo(map.current);
@@ -225,8 +235,9 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   const renderStars = (rating) => {
     if (rating === 'New' || !rating) return null;
     const num = parseFloat(rating);
-    const rounded = Math.round(num);
-    return '★'.repeat(rounded) + '☆'.repeat(5 - rounded);
+    return Array.from({ length: 5 }, (_, i) => (
+      <IconStar key={i} />
+    )).slice(0, Math.round(num));
   };
 
   const handleListScroll = () => {
@@ -273,7 +284,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
             className="search-input-field"
           />
           {searchTerm && (
-            <button className="search-clear" onClick={() => { setSearchTerm(''); setProviders([]); setActiveService(null); setHasSearched(false); }}>✕</button>
+            <button className="search-clear" onClick={() => { setSearchTerm(''); setProviders([]); setActiveService(null); setHasSearched(false); }}><IconClose /></button>
           )}
         </div>
 
@@ -363,17 +374,25 @@ function SearchScreen({ onStartChat, onViewProfile }) {
             ) : (
               <div className="card-avatar-placeholder"><IconAvatar /></div>
             )}
-            <div className="search-card-overlay">
-              <div className="provider-card-name">
+            <div className="card-info">
+              <div className="card-name">
                 {provider.isActive && <span className="active-dot-card" />}
-                {provider.full_name}
+                <span className="card-name-text">{provider.full_name}</span>
               </div>
-              <div className="provider-card-distance">{formatDistance(provider.distance_meters)}</div>
-              <div className="provider-card-services">
+              <div className="card-distance">{formatDistance(provider.distance_meters)}</div>
+              <div className="card-services">
                 {provider.services?.slice(0, 2).map(s => s.replace(/-/g, ' ')).join(', ') || 'No services'}
               </div>
-              <div className="provider-card-rating">
-                {provider.rating !== 'New' ? `★ ${provider.rating} · ${provider.gigsThisMonth || 0} gigs` : 'New'}
+              <div className="card-rating-row">
+                {provider.rating !== 'New' ? (
+                  <>
+                    <span className="card-stars">{renderStars(provider.rating)}</span>
+                    <span className="card-rating-num">{provider.rating}</span>
+                  </>
+                ) : (
+                  <span className="card-rating-num">New</span>
+                )}
+                <span className="card-gigs">{provider.gigsThisMonth || 0} gigs this month</span>
               </div>
             </div>
           </div>
@@ -384,10 +403,10 @@ function SearchScreen({ onStartChat, onViewProfile }) {
       </div>
 
       {selectedUser && ReactDOM.createPortal(
-        <div className="bottom-sheet-overlay" onClick={() => setSelectedUser(null)}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="bottom-sheet-handle" />
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setSelectedUser(null)}>
+          <div className="sheet" onClick={e => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <div className="sheet-avatar">
                 <div className={`sheet-avatar-ring ${selectedUser.isActive ? 'active' : ''}`} />
                 {selectedUser.profile_pic_url ? (
@@ -396,15 +415,26 @@ function SearchScreen({ onStartChat, onViewProfile }) {
                   <div className="sheet-avatar-placeholder"><IconAvatar /></div>
                 )}
               </div>
-              <h2>{selectedUser.full_name} {selectedUser.isActive && <span className="active-dot-card" />}</h2>
+              <h2 className="sheet-name">
+                {selectedUser.full_name}
+                {selectedUser.isActive && <span className="active-dot-inline" />}
+              </h2>
+
               {selectedUser.rating !== 'New' ? (
                 <>
-                  <div className="sheet-stars">{renderStars(selectedUser.rating)}</div>
-                  <div className="sheet-rating-count">{selectedUser.rating} · {selectedUser.review_count || 0} review{selectedUser.review_count !== 1 ? 's' : ''}</div>
+                  <div className="sheet-stars">
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <IconStar key={i} />
+                    )).slice(0, Math.round(parseFloat(selectedUser.rating)))}
+                  </div>
+                  <div className="sheet-rating-count">
+                    {selectedUser.rating} · {selectedUser.review_count || 0} review{selectedUser.review_count !== 1 ? 's' : ''}
+                  </div>
                 </>
               ) : (
                 <div className="sheet-no-rating">No ratings yet</div>
               )}
+
               <div className="sheet-stats-row">
                 <div className="sheet-stat">
                   <div className="sheet-stat-value">{selectedUser.gigsThisMonth || 0}</div>
@@ -419,18 +449,27 @@ function SearchScreen({ onStartChat, onViewProfile }) {
                   <div className="sheet-stat-label">Joined</div>
                 </div>
               </div>
+
               <div className="sheet-distance-badge">{formatDistance(selectedUser.distance_meters)}</div>
+
               {selectedUser.workspace_address && (
-                <div className="sheet-address"><IconMapPin />{selectedUser.workspace_address}</div>
-              )}
-              {selectedUser.services?.length > 0 && (
-                <div className="sheet-services-chips">
-                  {selectedUser.services.map(s => <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>)}
+                <div className="sheet-address">
+                  <IconMapPin />
+                  <span>{selectedUser.workspace_address}</span>
                 </div>
               )}
+
+              {selectedUser.services?.length > 0 && (
+                <div className="sheet-services-chips">
+                  {selectedUser.services.map(s => (
+                    <span key={s} className="sheet-service-chip">{s.replace(/-/g, ' ')}</span>
+                  ))}
+                </div>
+              )}
+
               <div className="sheet-buttons">
-                <button className="sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
-                <button className="sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
+                <button className="btn-primary sheet-message-btn" onClick={() => { onStartChat?.(selectedUser); setSelectedUser(null); }}>Message</button>
+                <button className="btn-secondary sheet-view-profile-btn" onClick={() => { onViewProfile?.(selectedUser); setSelectedUser(null); }}>View Profile</button>
               </div>
             </div>
           </div>
