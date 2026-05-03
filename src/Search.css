@@ -11,8 +11,8 @@
 
 /* --- Floating Bar --- */
 .search-floating-bar {
-  position: relative;
-  z-index: 600;
+  position: static;
+  z-index: auto;
   padding: var(--safe-top) var(--space-lg) var(--space-sm);
   background: transparent !important;
   backdrop-filter: none !important;
