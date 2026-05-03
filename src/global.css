@@ -1,11 +1,9 @@
 /* =============================================
    GigsCourt — Global Design System
-   2026 Premium Native · Mobile-First
    ============================================= */
 
-/* ----- 1. CSS Custom Properties (Tokens) ----- */
+/* ----- 1. Design Tokens ----- */
 :root {
-  /* Colors — Light */
   --color-bg: #F7F6F4;
   --color-surface: #FFFFFF;
   --color-accent: #3B5FE3;
@@ -17,10 +15,9 @@
   --color-destructive: #FF3B30;
   --color-success: #34C759;
   --color-star: #FFB800;
-  --color-skeleton: #E5E5EA;
+  --color-skeleton: #E8E8ED;
   --color-overlay: rgba(0, 0, 0, 0.4);
 
-  /* Spacing */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
@@ -29,34 +26,30 @@
   --space-2xl: 24px;
   --space-3xl: 32px;
 
-  /* Radii */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-full: 999px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08);
 
-  /* Typography */
   --font-stack: -apple-system, 'SF Pro Display', 'Inter', 'Roboto', sans-serif;
-  --font-size-display: 36px;
-  --font-size-headline: 28px;
-  --font-size-title: 20px;
-  --font-size-body: 16px;
-  --font-size-caption: 14px;
-  --font-size-label: 12px;
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --line-height-tight: 1.2;
-  --line-height-normal: 1.5;
+  --font-display: 36px;
+  --font-headline: 28px;
+  --font-title: 20px;
+  --font-body: 16px;
+  --font-caption: 14px;
+  --font-label: 12px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
 
-  /* Animation */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -64,7 +57,6 @@
   --duration-normal: 250ms;
   --duration-slow: 350ms;
 
-  /* Safe Areas */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
@@ -76,7 +68,6 @@
   :root {
     --color-bg: #000000;
     --color-surface: #1C1C1E;
-    --color-accent: #3B5FE3;
     --color-accent-hover: #5070F0;
     --color-text-primary: #F5F5F7;
     --color-text-secondary: #98989D;
@@ -84,287 +75,160 @@
     --color-border: #2C2C2E;
     --color-destructive: #FF453A;
     --color-success: #30D158;
-    --color-star: #FFB800;
     --color-skeleton: #2C2C2E;
     --color-overlay: rgba(0, 0, 0, 0.6);
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
-    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.3);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,0.4);
   }
 }
 
-/* ----- 3. CSS Reset ----- */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent;
-  text-rendering: optimizeLegibility;
-}
-
+/* ----- 3. Reset ----- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 body {
   font-family: var(--font-stack);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-normal);
+  font-size: var(--font-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-normal);
   color: var(--color-text-primary);
-  background-color: var(--color-bg);
+  background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow: hidden;
   overscroll-behavior: none;
-  padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
   transition: color var(--duration-normal) var(--ease-out),
-              background-color var(--duration-normal) var(--ease-out);
+              background var(--duration-normal) var(--ease-out);
 }
+img { display: block; max-width: 100%; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
 
-img {
-  display: block;
-  max-width: 100%;
-}
+/* ----- 4. Scrollbar ----- */
+::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-}
+/* ----- 5. Typography ----- */
+.text-display { font-size: var(--font-display); font-weight: var(--weight-bold); line-height: var(--leading-tight); letter-spacing: -0.02em; }
+.text-headline { font-size: var(--font-headline); font-weight: var(--weight-bold); line-height: var(--leading-tight); }
+.text-title { font-size: var(--font-title); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+.text-body { font-size: var(--font-body); font-weight: var(--weight-regular); line-height: var(--leading-normal); }
+.text-caption { font-size: var(--font-caption); font-weight: var(--weight-regular); color: var(--color-text-secondary); }
+.text-label { font-size: var(--font-label); font-weight: var(--weight-medium); color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 
-input,
-textarea,
-select {
-  font-family: inherit;
-  font-size: inherit;
-}
+/* ----- 6. Surfaces ----- */
+.surface { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.surface-inset { background: var(--color-bg); border-radius: var(--radius-md); }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* ----- 4. Typography Utility Classes ----- */
-.text-display {
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
-  letter-spacing: -0.02em;
-}
-
-.text-headline {
-  font-size: var(--font-size-headline);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
-  letter-spacing: -0.01em;
-}
-
-.text-title {
-  font-size: var(--font-size-title);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-}
-
-.text-body {
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-normal);
-}
-
-.text-caption {
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-normal);
-  color: var(--color-text-secondary);
-}
-
-.text-label {
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-normal);
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* ----- 5. Surface Utility Classes ----- */
-.surface-card {
-  background-color: var(--color-surface);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  transition: background-color var(--duration-normal) var(--ease-out),
-              border-color var(--duration-normal) var(--ease-out);
-}
-
-.surface-sheet {
-  background-color: var(--color-surface);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  transition: background-color var(--duration-normal) var(--ease-out);
-}
-
-.surface-field {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-primary);
-  transition: border-color var(--duration-fast) var(--ease-out);
-}
-
-.surface-field:focus {
-  outline: none;
-  border-color: var(--color-accent);
-}
-
-/* ----- 6. Interactive Utility Classes ----- */
-.pill-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
+/* ----- 7. Buttons ----- */
+.btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
   padding: var(--space-md) var(--space-2xl);
-  background-color: var(--color-accent);
-  color: #FFFFFF;
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-body);
+  background: var(--color-accent); color: #FFFFFF;
+  font-weight: var(--weight-semibold); font-size: var(--font-body);
   border-radius: var(--radius-full);
-  transition: background-color var(--duration-fast) var(--ease-out),
+  transition: opacity var(--duration-fast) var(--ease-out),
               transform var(--duration-fast) var(--ease-out);
 }
+.btn-primary:active { opacity: 0.85; transform: scale(0.97); }
+.btn-primary:disabled { opacity: 0.4; transform: none; }
 
-.pill-btn-primary:active {
-  background-color: var(--color-accent-hover);
-  transform: scale(0.97);
-}
-
-.pill-btn-primary:disabled {
-  opacity: 0.5;
-  transform: none;
-}
-
-.pill-btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
+.btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm);
   padding: var(--space-md) var(--space-2xl);
-  background-color: transparent;
-  color: var(--color-accent);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-body);
-  border-radius: var(--radius-full);
-  border: 1.5px solid var(--color-border);
+  background: transparent; color: var(--color-accent);
+  font-weight: var(--weight-semibold); font-size: var(--font-body);
+  border-radius: var(--radius-full); border: 1.5px solid var(--color-border);
   transition: border-color var(--duration-fast) var(--ease-out),
               transform var(--duration-fast) var(--ease-out);
 }
+.btn-secondary:active { border-color: var(--color-accent); transform: scale(0.97); }
 
-.pill-btn-secondary:active {
-  border-color: var(--color-accent);
-  transform: scale(0.97);
-}
-
-.pill-chip {
-  display: inline-flex;
-  align-items: center;
+/* ----- 8. Chips ----- */
+.chip {
+  display: inline-flex; align-items: center;
   padding: var(--space-xs) var(--space-md);
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface); border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-caption); font-weight: var(--weight-medium);
   color: var(--color-text-primary);
-  transition: background-color var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
+  transition: all var(--duration-fast) var(--ease-out);
 }
+.chip.active { background: var(--color-accent); border-color: var(--color-accent); color: #FFFFFF; }
 
-.pill-chip:active,
-.pill-chip.active {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #FFFFFF;
+/* ----- 9. Inputs ----- */
+.input {
+  width: 100%; padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-body); color: var(--color-text-primary);
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
+.input:focus { outline: none; border-color: var(--color-accent); }
+.input.error { border-color: var(--color-destructive); }
+.textarea {
+  width: 100%; padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); resize: none;
+  font-size: var(--font-body); color: var(--color-text-primary);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.textarea:focus { outline: none; border-color: var(--color-accent); }
 
-/* ----- 7. Bottom Sheet ----- */
-.bottom-sheet-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: var(--color-overlay);
-  z-index: 1000;
-  display: flex;
-  align-items: flex-end;
+/* ----- 10. Bottom Sheet ----- */
+.sheet-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: var(--color-overlay);
+  display: flex; align-items: flex-end;
   animation: fadeIn var(--duration-normal) var(--ease-out);
 }
-
-.bottom-sheet {
-  width: 100%;
-  max-height: 85vh;
-  background-color: var(--color-surface);
+.sheet {
+  width: 100%; max-height: 85vh;
+  background: var(--color-surface);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   overflow-y: auto;
   animation: slideUp var(--duration-slow) var(--ease-spring);
   padding-bottom: var(--safe-bottom);
 }
-
-.bottom-sheet-handle {
-  width: 36px;
-  height: 5px;
-  background-color: var(--color-border);
+.sheet-handle {
+  width: 36px; height: 5px;
+  background: var(--color-border);
   border-radius: var(--radius-full);
   margin: var(--space-sm) auto var(--space-lg);
 }
+.sheet-body { padding: 0 var(--space-xl) var(--space-xl); }
 
-.bottom-sheet-content {
-  padding: 0 var(--space-xl) var(--space-xl);
-}
-
-/* ----- 8. Keyframes ----- */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
+/* ----- 11. Keyframes ----- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* ----- 9. Skeleton Placeholder ----- */
+/* ----- 12. Skeleton ----- */
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-skeleton) 25%,
-    transparent 50%,
-    var(--color-skeleton) 75%
-  );
+  background: linear-gradient(90deg, var(--color-skeleton) 25%, var(--color-border) 50%, var(--color-skeleton) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-md);
 }
 
-/* ----- 10. Scrollbar ----- */
-::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+/* ----- 13. Utility ----- */
+.fixed-screen {
+  position: fixed; inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  background: var(--color-bg);
 }
-
-* {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+.scroll-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  background: var(--color-bg);
 }
