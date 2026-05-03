@@ -4,6 +4,7 @@ import { imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
 import L from 'leaflet';
 import 'leaflet-rotate';
+import Logo from '../Logo';
 import '../Onboarding.css';
 
 // SVG Icons
@@ -46,6 +47,12 @@ const IconStar = () => (
 const IconLocationRefresh = () => (
   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+  </svg>
+);
+
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
 
@@ -95,62 +102,70 @@ function StepNameServices({ onNext }) {
 
   return (
     <div className="onboarding-step">
-      <h2>Tell us about yourself</h2>
-      <p className="step-sub">This helps clients find you</p>
+      <div className="onboarding-step-scroll">
+        <h2 className="onboarding-heading">Tell us about yourself</h2>
+        <p className="onboarding-sub">This helps clients find you</p>
 
-      <label>Full Name / Business Name</label>
-      <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. John Doe or JD Barbing" className="onboarding-input" />
+        <label className="onboarding-label">Full Name / Business Name</label>
+        <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. John Doe or JD Barbing" className="onboarding-input" />
 
-      <label>What services do you offer?</label>
-      <input type="text" value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} placeholder="Search services..." className="onboarding-input" style={{ marginBottom: 10 }} />
+        <label className="onboarding-label">What services do you offer?</label>
+        <input type="text" value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} placeholder="Search services..." className="onboarding-input" />
 
-      {selectedServices.length > 0 && (
-        <div className="selected-tags">
-          {selectedServices.map(slug => (
-            <span key={slug} className="tag" onClick={() => toggleService(slug)}>{slug.replace(/-/g, ' ')} ✕</span>
-          ))}
-        </div>
-      )}
+        {selectedServices.length > 0 && (
+          <div className="selected-tags">
+            {selectedServices.map(slug => (
+              <span key={slug} className="selected-tag" onClick={() => toggleService(slug)}>
+                {slug.replace(/-/g, ' ')}
+                <IconClose />
+              </span>
+            ))}
+          </div>
+        )}
 
-      <div className="services-list">
-        {loading ? (
-          Object.keys(groupedServices).length === 0 ? (
-            <div>
-              {['Category', 'Category'].map((_, ci) => (
-                <div key={ci} className="service-category">
-                  <h4><span className="skeleton-chip skeleton-chip-narrow" style={{ height: 14, width: 60 }}></span></h4>
-                  <div className="service-chips">
-                    {[1,2,3,4].map(i => <span key={i} className="skeleton-chip" style={{ width: [80,100,70,90][i-1] }}></span>)}
+        <div className="services-list">
+          {loading ? (
+            Object.keys(groupedServices).length === 0 ? (
+              <div>
+                {['Category', 'Category'].map((_, ci) => (
+                  <div key={ci} className="service-category">
+                    <h4 className="service-category-label"><span className="skeleton skeleton-chip-narrow" style={{ height: 14, width: 60 }} /></h4>
+                    <div className="service-chips">
+                      {[1,2,3,4].map(i => <span key={i} className="skeleton" style={{ width: [80,100,70,90][i-1], height: 32, borderRadius: 'var(--radius-full)' }} />)}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : null
-        ) : (
-          Object.keys(groupedServices).map(category => (
-            <div key={category} className="service-category">
-              <h4>{category}</h4>
-              <div className="service-chips">
-                {groupedServices[category].map(s => (
-                  <button key={s.id} className={`chip ${selectedServices.includes(s.slug) ? 'chip-selected' : ''}`} onClick={() => toggleService(s.slug)}>{s.name}</button>
                 ))}
               </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="custom-service">
-        <p>Can't find your service?</p>
-        <div className="custom-row">
-          <input type="text" value={customService} onChange={e => setCustomService(e.target.value)} placeholder="Type your service..." className="onboarding-input" />
-          <button onClick={requestCustomService} className="add-btn">Add</button>
+            ) : null
+          ) : (
+            Object.keys(groupedServices).map(category => (
+              <div key={category} className="service-category">
+                <h4 className="service-category-label">{category}</h4>
+                <div className="service-chips">
+                  {groupedServices[category].map(s => (
+                    <button key={s.id} className={`chip ${selectedServices.includes(s.slug) ? 'active' : ''}`} onClick={() => toggleService(s.slug)}>{s.name}</button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-        <p className="custom-note">Your request will be reviewed by our team.</p>
+
+        <div className="custom-service">
+          <p className="custom-service-text">Can't find your service?</p>
+          <div className="custom-row">
+            <input type="text" value={customService} onChange={e => setCustomService(e.target.value)} placeholder="Type your service..." className="onboarding-input" />
+            <button onClick={requestCustomService} className="add-btn">Add</button>
+          </div>
+          <p className="custom-note">Your request will be reviewed by our team.</p>
+        </div>
+
+        {error && <p className="onboarding-error">{error}</p>}
       </div>
 
-      {error && <p className="onboarding-error">{error}</p>}
-      <button onClick={handleNext} className="onboarding-btn">Continue</button>
+      <div className="onboarding-step-footer">
+        <button onClick={handleNext} className="pill-btn-primary onboarding-btn-full">Continue</button>
+      </div>
     </div>
   );
 }
@@ -189,9 +204,16 @@ function StepLocation({ onNext, onBack }) {
     if (lat === null || lng === null || !mapContainer.current || map.current) return;
     setTimeout(() => {
       if (!mapContainer.current) return;
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       map.current = L.map(mapContainer.current, { center: [lat, lng], zoom: 16, zoomControl: false, attributionControl: false });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
-      const markerIcon = L.divIcon({ html: '<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="#1a3a8a" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>', className: '', iconSize: [32, 32], iconAnchor: [16, 32] });
+      const tileUrl = isDark
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      L.tileLayer(tileUrl, { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map.current);
+      const markerIcon = L.divIcon({
+        html: `<div style="font-size:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));transform:translate(-50%,-100%);"><svg viewBox="0 0 24 24" width="32" height="32" fill="var(--color-accent)" stroke="white" stroke-width="1"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg></div>`,
+        className: '', iconSize: [32, 32], iconAnchor: [16, 32]
+      });
       marker.current = L.marker([lat, lng], { icon: markerIcon }).addTo(map.current);
       map.current.on('move', () => { const c = map.current.getCenter(); marker.current.setLatLng([c.lat, c.lng]); });
       map.current.on('moveend', () => { const c = map.current.getCenter(); setLat(c.lat); setLng(c.lng); reverseGeocode(c.lat, c.lng); });
@@ -208,24 +230,24 @@ function StepLocation({ onNext, onBack }) {
 
   if (geoError) {
     return (
-      <div className="onboarding-step" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-        <h2>Location Required</h2>
-        <p className="step-sub">GigsCourt needs your location to show nearby services. Please enable location access in your device settings.</p>
-        <button onClick={() => { setGeoError(false); setLoading(true); getCurrentLocation(); }} className="onboarding-btn" style={{ width: 'auto', paddingLeft: 24, paddingRight: 24 }}>Try Again</button>
-        <button onClick={onBack} className="onboarding-btn secondary" style={{ width: 'auto', paddingLeft: 24, paddingRight: 24, marginTop: 8 }}>Back</button>
+      <div className="onboarding-step onboarding-step-fixed">
+        <h2 className="onboarding-heading">Location Required</h2>
+        <p className="onboarding-sub">GigsCourt needs your location to show nearby services. Please enable location access in your device settings.</p>
+        <div className="onboarding-buttons">
+          <button onClick={() => { setGeoError(false); setLoading(true); getCurrentLocation(); }} className="pill-btn-primary">Try Again</button>
+          <button onClick={onBack} className="pill-btn-secondary">Back</button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="onboarding-step" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div>
-        <h2>Where do you work?</h2>
-        <p className="step-sub">Set your workspace location so clients can find you.</p>
-      </div>
+    <div className="onboarding-step onboarding-step-map">
+      <h2 className="onboarding-heading">Where do you work?</h2>
+      <p className="onboarding-sub">Set your workspace location so clients can find you.</p>
 
       <div className="map-container">
-        {loading ? <div className="skeleton-map"></div> : <div ref={mapContainer} style={{ width: '100%', height: '100%', zIndex: 1 }} />}
+        {loading ? <div className="skeleton skeleton-map" /> : <div ref={mapContainer} className="map-inner" />}
         {!loading && (
           <button onClick={() => { navigator.geolocation.getCurrentPosition(pos => { map.current.setView([pos.coords.latitude, pos.coords.longitude], 16); setLat(pos.coords.latitude); setLng(pos.coords.longitude); reverseGeocode(pos.coords.latitude, pos.coords.longitude); }); }} className="map-refresh-btn">
             <IconLocationRefresh /> My Location
@@ -233,15 +255,15 @@ function StepLocation({ onNext, onBack }) {
         )}
       </div>
 
-      <label>Workspace Address</label>
+      <label className="onboarding-label">Workspace Address</label>
       <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder="Your workspace address" className="onboarding-input" />
       <p className="map-address-hint">You can edit this to your preferred address</p>
 
       {error && <p className="onboarding-error">{error}</p>}
 
       <div className="onboarding-buttons">
-        <button onClick={onBack} className="onboarding-btn secondary">Back</button>
-        <button onClick={handleNext} className="onboarding-btn">Continue</button>
+        <button onClick={onBack} className="pill-btn-secondary">Back</button>
+        <button onClick={handleNext} className="pill-btn-primary">Continue</button>
       </div>
     </div>
   );
@@ -288,51 +310,57 @@ function StepPhotoBio({ onNext, onBack }) {
   };
 
   return (
-    <div className="onboarding-step">
-      <h2>Your profile</h2>
-      <p className="step-sub">Let clients know who you are</p>
+    <div className="onboarding-step onboarding-step-fixed">
+      <h2 className="onboarding-heading">Your profile</h2>
+      <p className="onboarding-sub">Let clients know who you are</p>
 
-      <label>Profile Picture</label>
+      <label className="onboarding-label">Profile Picture</label>
       <div className="profile-pic-section">
-        <div className="avatar-wrapper">
+        <div className="avatar-wrapper" onClick={() => !profilePic && fileInputRef.current?.click()}>
           <div className={`avatar-circle ${profilePic ? 'has-photo' : ''}`}>
             {profilePic ? <img src={profilePic} alt="" /> : <IconAvatar />}
-            {profilePic && (
-              <button className="remove-pic-btn" onClick={() => setProfilePic(null)}>✕</button>
-            )}
-            {uploading && (
-              <div className="avatar-uploading"><div className="upload-pulse"></div></div>
-            )}
           </div>
+          {uploading && (
+            <div className="avatar-uploading"><div className="avatar-spinner" /></div>
+          )}
         </div>
-        {uploading ? (
-  <div className="upload-progress-bar-small" style={{ margin: '0 auto' }}><div className="upload-progress-fill-small"></div></div>
-) : profilePic ? (
-          <button className="add-photo-btn" style={{ color: '#ff3b30' }} onClick={() => setProfilePic(null)}>Remove Photo</button>
-        ) : (
-          <button className="add-photo-btn" onClick={() => fileInputRef.current?.click()}>Add Photo +</button>
+        {uploading && (
+          <div className="upload-progress-bar">
+            <div className="upload-progress-fill" />
+          </div>
+        )}
+        {!uploading && (
+          profilePic ? (
+            <button className="add-photo-btn remove-photo-btn" onClick={() => setProfilePic(null)}>Remove Photo</button>
+          ) : (
+            <button className="add-photo-btn" onClick={() => fileInputRef.current?.click()}>Add Photo</button>
+          )
         )}
         <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
       </div>
 
-      <label>Tell us about yourself</label>
-      <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Describe your experience, skills, and what clients can expect..." className="onboarding-textarea" rows={4} />
+      <label className="onboarding-label">Tell us about yourself</label>
+      <textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Describe your experience, skills, and what clients can expect..." className="onboarding-textarea" rows={3} />
 
-      <label>Phone Number</label>
+      <label className="onboarding-label">Phone Number</label>
       <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234 800 000 0000" className="onboarding-input" />
 
       {error && <p className="onboarding-error">{error}</p>}
 
       <div className="onboarding-buttons">
-        <button onClick={onBack} className="onboarding-btn secondary">Back</button>
-        {profilePic ? <button onClick={handleNext} className="onboarding-btn">Continue</button> : <button onClick={handleSkip} className="onboarding-btn secondary">Skip Photo</button>}
+        <button onClick={onBack} className="pill-btn-secondary">Back</button>
+        {profilePic ? (
+          <button onClick={handleNext} className="pill-btn-primary">Continue</button>
+        ) : (
+          <button onClick={handleSkip} className="pill-btn-secondary">Skip Photo</button>
+        )}
       </div>
     </div>
   );
 }
 
 // Step 4: Walkthrough
-function StepWalkthrough({ onFinish }) {
+function StepWalkthrough({ onFinish, onBack }) {
   const [saving, setSaving] = useState(false);
 
   const handleFinish = () => {
@@ -341,58 +369,51 @@ function StepWalkthrough({ onFinish }) {
   };
 
   return (
-    <div className="onboarding-step walkthrough">
+    <div className="onboarding-step onboarding-step-fixed walkthrough">
       <div className="walkthrough-header">
-        <div className="walkthrough-logo">
-          <div className="wl-circle wl-circle-left"></div>
-          <div className="wl-circle wl-circle-right"></div>
-        </div>
-        <h2>Welcome to GigsCourt</h2>
-        <p className="step-sub">Your local service marketplace</p>
+        <Logo />
+        <h2 className="onboarding-heading">Welcome to GigsCourt</h2>
+        <p className="onboarding-sub">Your local service marketplace</p>
       </div>
 
       <div className="walkthrough-cards">
         <div className="walkthrough-card">
-          <div className="walkthrough-icon"><IconMapPin /></div>
+          <div className="walkthrough-card-icon"><IconMapPin /></div>
           <div>
-            <h4>Find Services Nearby</h4>
-            <p>Browse providers by distance. See their ratings, completed gigs, and active status before you reach out.</p>
+            <h4 className="walkthrough-card-title">Find Services Nearby</h4>
+            <p className="walkthrough-card-text">Browse providers by distance. See their ratings, completed gigs, and active status before you reach out.</p>
           </div>
         </div>
         <div className="walkthrough-card">
-          <div className="walkthrough-icon"><IconMessage /></div>
+          <div className="walkthrough-card-icon"><IconMessage /></div>
           <div>
-            <h4>Chat and Connect</h4>
-            <p>Message providers directly. Discuss your needs, ask questions, and agree on details before booking.</p>
+            <h4 className="walkthrough-card-title">Chat and Connect</h4>
+            <p className="walkthrough-card-text">Message providers directly. Discuss your needs, ask questions, and agree on details before booking.</p>
           </div>
         </div>
         <div className="walkthrough-card">
-          <div className="walkthrough-icon"><IconCheck /></div>
+          <div className="walkthrough-card-icon"><IconCheck /></div>
           <div>
-            <h4>Register Gigs, Build Trust</h4>
-            <p>After working with someone, register your gig. It builds your reputation and helps others find trusted providers.</p>
+            <h4 className="walkthrough-card-title">Register Gigs, Build Trust</h4>
+            <p className="walkthrough-card-text">After working with someone, register your gig. It builds your reputation and helps others find trusted providers.</p>
           </div>
         </div>
         <div className="walkthrough-card">
-          <div className="walkthrough-icon"><IconStar /></div>
+          <div className="walkthrough-card-icon"><IconStar /></div>
           <div>
-            <h4>Your Reputation Grows</h4>
-            <p>Every completed gig earns you a review. Reviews help you rank higher in search results. Each review costs 1 credit — you start with 5 free. Top up anytime to keep growing.</p>
+            <h4 className="walkthrough-card-title">Your Reputation Grows</h4>
+            <p className="walkthrough-card-text">Every completed gig earns you a review. Reviews help you rank higher in search results. Each review costs 1 credit — you start with 5 free. Top up anytime to keep growing.</p>
           </div>
         </div>
       </div>
 
-      <button onClick={handleFinish} disabled={saving} className="onboarding-btn finish-btn">
-        {saving ? (
-          <span className="auth-button-loading">
-            Creating your account
-            <span className="loading-dots"></span>
-          </span>
-        ) : 'Get Started'}
-      </button>
-      <div className="walkthrough-footer">
-        <p>You can update your profile anytime from Settings</p>
+      <div className="onboarding-buttons">
+        <button onClick={onBack} className="pill-btn-secondary">Back</button>
+        <button onClick={handleFinish} disabled={saving} className="pill-btn-primary">
+          {saving ? 'Creating your account...' : 'Get Started'}
+        </button>
       </div>
+      <p className="walkthrough-footer-text">You can update your profile anytime from Settings</p>
     </div>
   );
 }
@@ -432,7 +453,7 @@ function Onboarding({ onComplete }) {
       {step === 1 && <StepNameServices onNext={handleNext} />}
       {step === 2 && <StepLocation onNext={handleNext} onBack={handleBack} />}
       {step === 3 && <StepPhotoBio onNext={handleNext} onBack={handleBack} />}
-      {step === 4 && <StepWalkthrough onFinish={() => saveProfile(data)} />}
+      {step === 4 && <StepWalkthrough onFinish={() => saveProfile(data)} onBack={handleBack} />}
     </div>
   );
 }
