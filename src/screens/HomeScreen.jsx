@@ -319,8 +319,8 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       </div>
       <div className="card-info">
         <div className="card-name">
-  <span>{user.full_name}</span>
   {user.isActive && <span className="active-dot-card" />}
+  <span className="card-name-text">{user.full_name}</span>
 </div>
         <div className="card-distance">{formatDistance(user.distance_meters)}</div>
         {user.services?.length > 0 && (
