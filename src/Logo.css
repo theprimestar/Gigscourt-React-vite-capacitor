@@ -41,7 +41,7 @@
 
 .splash-screen .logo-text {
   font-size: var(--font-size-display);
-  color: #FFFFFF;
+  color: var(--color-text-primary);
 }
 
 /* --- Home Header: Unscrolled (default behavior, stacked) --- */
