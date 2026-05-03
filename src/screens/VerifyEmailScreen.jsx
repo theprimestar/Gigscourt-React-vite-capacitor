@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import '../Auth.css';
 
+const IconMail = () => (
+  <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="M22 4L12 13 2 4" />
+  </svg>
+);
+
 function VerifyEmailScreen({ email, onVerified }) {
   const [code, setCode] = useState(['', '', '', '', '', '', '', '']);
   const [error, setError] = useState('');
@@ -133,9 +140,11 @@ function VerifyEmailScreen({ email, onVerified }) {
   return (
     <div className="verify-screen">
       <div className="verify-card">
-        <div className="verify-icon">✉</div>
-        <h2>Verify Your Email</h2>
-        <p>We sent an 8-digit code to</p>
+        <div className="verify-icon">
+          <IconMail />
+        </div>
+        <h2 className="verify-heading">Verify Your Email</h2>
+        <p className="verify-description">We sent an 8-digit code to</p>
         <p className="verify-email">{userEmail || 'your email'}</p>
         <p className="verify-sub">Enter the code below to continue.</p>
 
@@ -158,12 +167,12 @@ function VerifyEmailScreen({ email, onVerified }) {
 
         {loading && (
           <div className="verify-loading">
-            <div className="verify-progress"></div>
+            <div className="verify-progress" />
           </div>
         )}
 
         {error && (
-          <div className="auth-error-card" style={{ marginBottom: 0 }}>
+          <div className="auth-error-card">
             <span className="auth-error-icon">!</span>
             <p className="auth-error-text">{error}</p>
           </div>
