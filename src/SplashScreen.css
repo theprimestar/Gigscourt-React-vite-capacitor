@@ -9,6 +9,10 @@
   height: 100vh;
   height: 100dvh;
   background-color: var(--color-bg);
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
 }
 
 .splash-content {
