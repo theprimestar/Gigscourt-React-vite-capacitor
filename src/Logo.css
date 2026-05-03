@@ -1,0 +1,84 @@
+/* =============================================
+   Logo — One Component, Context-Driven
+   ============================================= */
+
+/* --- Base (default: medium, stacked, centered) --- */
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  color: var(--color-accent);
+  transition: width var(--duration-normal) var(--ease-out),
+              height var(--duration-normal) var(--ease-out),
+              color var(--duration-normal) var(--ease-out);
+}
+
+.logo-text {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  transition: font-size var(--duration-normal) var(--ease-out),
+              color var(--duration-normal) var(--ease-out);
+}
+
+/* --- Splash Screen --- */
+.splash-screen .logo {
+  gap: var(--space-lg);
+}
+
+.splash-screen .logo-mark {
+  width: 80px;
+  height: 80px;
+  color: #FFFFFF;
+}
+
+.splash-screen .logo-text {
+  font-size: var(--font-size-display);
+  color: #FFFFFF;
+}
+
+/* --- Home Header: Unscrolled (default behavior, stacked) --- */
+.home-header .logo-mark {
+  width: 32px;
+  height: 32px;
+}
+
+.home-header .logo-text {
+  font-size: var(--font-size-body);
+}
+
+/* --- Home Header: Scrolled (compact, side-by-side) --- */
+.home-header.scrolled .logo {
+  flex-direction: row;
+  gap: var(--space-xs);
+}
+
+.home-header.scrolled .logo-mark {
+  width: 24px;
+  height: 24px;
+}
+
+.home-header.scrolled .logo-text {
+  font-size: var(--font-size-body);
+}
+
+/* --- Empty State (mark only) --- */
+.home-empty .logo-text {
+  display: none;
+}
+
+.home-empty .logo-mark {
+  width: 48px;
+  height: 48px;
+  color: var(--color-text-tertiary);
+}
+
+/* --- Auth & Onboarding (default medium stacked, same as base) --- */
+/* No overrides needed — base handles it */
