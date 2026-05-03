@@ -88,7 +88,7 @@
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  z-index: 30;
+  z-index: 600;
   margin-top: var(--space-xs);
 }
 
@@ -123,7 +123,7 @@
 .suggestions-overlay {
   position: fixed;
   inset: 0;
-  z-index: 15;
+  z-index: 550;
 }
 
 /* --- Chips --- */
