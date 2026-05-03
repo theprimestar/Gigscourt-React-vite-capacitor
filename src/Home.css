@@ -334,7 +334,7 @@
   position: relative;
   width: 80px;
   height: 80px;
-  margin: 0 auto var(--space-lg);
+  margin: 0 auto var(--space-md);
 }
 
 .sheet-avatar-ring {
@@ -372,7 +372,7 @@
 }
 
 .sheet-name {
-  font-size: var(--font-title);
+  font-size: var(--font-body);
   font-weight: var(--weight-bold);
   color: var(--color-text-primary);
   text-align: center;
@@ -380,7 +380,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  margin-bottom: var(--space-xs);
 }
 
 .active-dot-inline {
@@ -396,28 +396,28 @@
   justify-content: center;
   gap: 2px;
   color: var(--color-star);
-  margin-bottom: var(--space-xs);
+  margin-bottom: 2px;
 }
 
 .sheet-rating-count {
   font-size: var(--font-caption);
   color: var(--color-text-secondary);
   text-align: center;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 .sheet-no-rating {
   font-size: var(--font-caption);
   color: var(--color-text-tertiary);
   text-align: center;
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 .sheet-stats-row {
   display: flex;
   justify-content: center;
-  gap: var(--space-2xl);
-  margin-bottom: var(--space-lg);
+  gap: var(--space-xl);
+  margin-bottom: var(--space-md);
 }
 
 .sheet-stat {
@@ -425,7 +425,7 @@
 }
 
 .sheet-stat-value {
-  font-size: var(--font-title);
+  font-size: var(--font-headline);
   font-weight: var(--weight-bold);
   color: var(--color-text-primary);
 }
@@ -433,7 +433,7 @@
 .sheet-stat-label {
   font-size: var(--font-label);
   color: var(--color-text-secondary);
-  margin-top: var(--space-xs);
+  margin-top: 2px;
 }
 
 .sheet-distance-badge {
@@ -443,7 +443,7 @@
   color: var(--color-text-secondary);
   font-size: var(--font-caption);
   border-radius: var(--radius-full);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
   text-align: center;
   width: 100%;
 }
@@ -454,7 +454,7 @@
   gap: var(--space-sm);
   font-size: var(--font-caption);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-lg);
+  margin-bottom: var(--space-md);
 }
 
 .sheet-address svg {
@@ -468,7 +468,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-lg);
 }
 
 .sheet-service-chip {
@@ -485,9 +485,11 @@
   gap: var(--space-md);
 }
 
-.sheet-message-btn,
-.sheet-view-profile-btn {
+.sheet-buttons .btn-primary,
+.sheet-buttons .btn-secondary {
   flex: 1;
+  padding-top: var(--space-sm);
+  padding-bottom: var(--space-sm);
 }
 
 /* --- Scroll To Top --- */
