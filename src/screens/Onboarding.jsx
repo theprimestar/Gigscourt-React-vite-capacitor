@@ -162,7 +162,7 @@ function StepNameServices({ onNext }) {
       </div>
 
       <div className="onboarding-step-footer">
-        <button onClick={handleNext} className="pill-btn-primary onboarding-btn-full">Continue</button>
+        <button onClick={handleNext} className="btn-primary onboarding-btn-full">Continue</button>
         {error && <p className="onboarding-error">{error}</p>}
       </div>
     </div>
@@ -227,8 +227,8 @@ function StepLocation({ onNext, onBack }) {
         <h2 className="onboarding-heading">Location Required</h2>
         <p className="onboarding-sub">GigsCourt needs your location to show nearby services. Please enable location access in your device settings.</p>
         <div className="onboarding-buttons">
-          <button onClick={() => { setGeoError(false); setLoading(true); getCurrentLocation(); }} className="pill-btn-primary">Try Again</button>
-          <button onClick={onBack} className="pill-btn-secondary">Back</button>
+          <button onClick={() => { setGeoError(false); setLoading(true); getCurrentLocation(); }} className="btn-primary">Try Again</button>
+          <button onClick={onBack} className="btn-secondary">Back</button>
         </div>
       </div>
     );
@@ -257,8 +257,8 @@ function StepLocation({ onNext, onBack }) {
       {error && <p className="onboarding-error">{error}</p>}
 
       <div className="onboarding-buttons">
-        <button onClick={onBack} className="pill-btn-secondary">Back</button>
-        <button onClick={handleNext} className="pill-btn-primary">Continue</button>
+        <button onClick={onBack} className="btn-secondary">Back</button>
+        <button onClick={handleNext} className="btn-primary">Continue</button>
       </div>
     </div>
   );
@@ -343,11 +343,11 @@ function StepPhotoBio({ onNext, onBack }) {
       {error && <p className="onboarding-error">{error}</p>}
 
       <div className="onboarding-buttons">
-        <button onClick={onBack} className="pill-btn-secondary">Back</button>
+        <button onClick={onBack} className="btn-secondary">Back</button>
         {profilePic ? (
-          <button onClick={handleNext} className="pill-btn-primary">Continue</button>
+          <button onClick={handleNext} className="btn-primary">Continue</button>
         ) : (
-          <button onClick={handleSkip} className="pill-btn-secondary">Skip Photo</button>
+          <button onClick={handleSkip} className="btn-secondary">Skip Photo</button>
         )}
       </div>
     </div>
@@ -403,8 +403,8 @@ function StepWalkthrough({ onFinish, onBack }) {
       </div>
 
       <div className="onboarding-buttons">
-        <button onClick={onBack} className="pill-btn-secondary">Back</button>
-        <button onClick={handleFinish} disabled={saving} className="pill-btn-primary">
+        <button onClick={onBack} className="btn-secondary">Back</button>
+        <button onClick={handleFinish} disabled={saving} className="btn-primary">
           {saving ? 'Creating your account...' : 'Get Started'}
         </button>
       </div>
