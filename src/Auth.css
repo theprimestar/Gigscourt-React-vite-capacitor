@@ -12,6 +12,9 @@
   padding: var(--space-3xl) var(--space-2xl);
   background-color: var(--color-bg);
   overflow: hidden;
+  position: fixed;
+  inset: 0;
+  touch-action: none;
 }
 
 .auth-header {
