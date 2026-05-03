@@ -476,3 +476,10 @@
   margin-top: var(--space-md);
   flex-shrink: 0;
 }
+
+.walkthrough .onboarding-buttons .pill-btn-primary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
