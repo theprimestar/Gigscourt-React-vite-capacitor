@@ -9,6 +9,7 @@
   height: 100dvh;
   background-color: var(--color-bg);
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .app-content {
