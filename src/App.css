@@ -1,43 +1,20 @@
 /* =============================================
-   App Shell & Bottom Navigation
+   App — Bottom Navigation
    ============================================= */
 
-.app-shell {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  background-color: var(--color-bg);
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
-.app-content {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  padding-bottom: calc(56px + var(--safe-bottom));
-}
-
-/* --- Bottom Navigation --- */
 .bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: 200;
   display: flex;
   justify-content: space-around;
   align-items: center;
-  background-color: var(--color-bg);
+  background: var(--color-bg);
   padding: var(--space-sm) var(--space-md);
   padding-bottom: calc(var(--space-sm) + var(--safe-bottom));
-  transition: transform var(--duration-slow) var(--ease-out),
-              background-color var(--duration-normal) var(--ease-out);
-  z-index: 200;
-}
-
-.bottom-nav.hidden {
-  transform: translateY(100%);
+  transition: transform var(--duration-slow) var(--ease-out);
 }
 
 .bottom-nav.hidden {
@@ -46,15 +23,12 @@
 
 .nav-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-xs);
-  padding: var(--space-sm);
+  width: 48px;
+  height: 48px;
   color: var(--color-text-tertiary);
   transition: color var(--duration-fast) var(--ease-out);
-  min-width: 48px;
-  min-height: 48px;
 }
 
 .nav-btn.active {
@@ -64,24 +38,21 @@
 .nav-icon-wrapper {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.nav-unread-badge {
+.nav-badge {
   position: absolute;
   top: -6px;
   right: -10px;
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background-color: var(--color-destructive);
+  background: var(--color-destructive);
   color: #FFFFFF;
   font-size: 11px;
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--weight-bold);
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
 }
