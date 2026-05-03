@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
 }
 
 .logo-mark {
@@ -21,9 +21,9 @@
 
 .logo-text {
   font-size: var(--font-size-title);
-  font-weight: var(--font-weight-bold);
+  font-weight: 800;
   color: var(--color-text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   transition: font-size var(--duration-normal) var(--ease-out),
               color var(--duration-normal) var(--ease-out);
 }
