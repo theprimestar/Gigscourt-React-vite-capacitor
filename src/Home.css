@@ -460,6 +460,8 @@
 .sheet-address svg {
   flex-shrink: 0;
   color: var(--color-accent);
+  width: 16px;
+  height: 16px;
 }
 
 .sheet-services-chips {
