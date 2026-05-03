@@ -28,14 +28,14 @@
 }
 
 .home-header.scrolled {
-  background: var(--color-surface);
+  background: var(--color-bg);
   padding-top: calc(var(--safe-top) + 2px);
   padding-bottom: 2px;
 }
 
 .home-header:not(.scrolled) .logo {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .home-header.scrolled .logo {
@@ -208,8 +208,8 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: var(--space-xl) var(--space-md) var(--space-md);
-  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
+  padding: var(--space-2xl) var(--space-md) var(--space-sm);
+  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 70%, transparent 100%);
   color: #FFFFFF;
 }
 
@@ -217,8 +217,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--font-body);
-  font-weight: var(--weight-bold);
+  font-size: var(--font-caption);
+  font-weight: var(--weight-semibold);
   margin-bottom: 2px;
 }
 
@@ -264,6 +264,7 @@
 
 .card-gigs {
   font-size: var(--font-label);
+  color: #FFFFFF;
 }
 
 /* --- Empty State --- */
