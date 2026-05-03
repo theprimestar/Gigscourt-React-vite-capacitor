@@ -288,17 +288,6 @@ function SearchScreen({ onStartChat, onViewProfile }) {
           )}
         </div>
 
-        {showSuggestions && searchTerm && filteredSuggestions.length > 0 && (
-          <div className="search-suggestions">
-            {filteredSuggestions.map(s => (
-              <div key={s.id} className="suggestion-item" onClick={() => { setSearchTerm(s.name); handleSearch(s.name); }}>
-                <span className="suggestion-name">{s.name}</span>
-                <span className="suggestion-category">{s.category}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
         <div className={`chips-slider-container ${showChipsSlider ? 'visible' : ''}`}>
           <div className="chips-scroll">
             {POPULAR_SERVICES.map(slug => (
@@ -471,6 +460,21 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         document.getElementById('portal-root')
       )}
 
+      {showSuggestions && searchTerm && filteredSuggestions.length > 0 && ReactDOM.createPortal(
+        <>
+          <div className="suggestions-overlay" onClick={() => setShowSuggestions(false)} />
+          <div className="search-suggestions-portal">
+            {filteredSuggestions.map(s => (
+              <div key={s.id} className="suggestion-item" onClick={() => { setSearchTerm(s.name); handleSearch(s.name); }}>
+                <span className="suggestion-name">{s.name}</span>
+                <span className="suggestion-category">{s.category}</span>
+              </div>
+            ))}
+          </div>
+        </>,
+        document.getElementById('portal-root')
+      )}
+
       {!hasSearched && !loading && view === 'map' && ReactDOM.createPortal(
   <div className="map-empty-overlay">
     <div className="map-empty-card">
@@ -481,7 +485,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   document.getElementById('portal-root')
 )}
 
-      {showSuggestions && <div className="suggestions-overlay" onClick={() => setShowSuggestions(false)} />}
+  
     </div>
   );
 }
