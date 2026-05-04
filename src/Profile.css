@@ -778,9 +778,9 @@
   color: var(--color-accent);
 }
 
-.photo-grid-item:first-child { border-top-left-radius: 6px; }
-.photo-grid-item:nth-child(3) { border-top-right-radius: 6px; }
+.photo-grid-item:first-child { border-top-left-radius: 12px; }
+.photo-grid-item:nth-child(3) { border-top-right-radius: 12px; }
 .photo-grid-item:nth-last-child(3):nth-child(3n+1),
 .photo-grid-item:nth-last-child(2):nth-child(3n+1),
-.photo-grid-item:last-child:nth-child(3n+1) { border-bottom-left-radius: 6px; }
-.photo-grid-item:last-child:nth-child(3n) { border-bottom-right-radius: 6px; }
+.photo-grid-item:last-child:nth-child(3n+1) { border-bottom-left-radius: 12px; }
+.photo-grid-item:last-child:nth-child(3n) { border-bottom-right-radius: 12px; }
