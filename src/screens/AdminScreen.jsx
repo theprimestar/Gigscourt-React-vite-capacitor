@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import '../AdminScreen.css';
+import '../Admin.css';
 
 function AdminScreen({ isVisible }) {
   const [stats, setStats] = useState({
