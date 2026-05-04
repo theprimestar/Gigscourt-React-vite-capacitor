@@ -10,19 +10,14 @@
   right: 0;
   z-index: 900;
 
-  height: calc(50px + var(--safe-bottom));
-  padding: 0 var(--space-lg) var(--safe-bottom);
+  height: 44px;
 
   display: flex;
   align-items: center;
   justify-content: space-around;
 
-  /* Solid surface — no float, no gap */
   background: var(--color-surface);
   border-top: 0.5px solid var(--color-border);
-
-  transition: background var(--duration-normal) var(--ease-out),
-              border-color var(--duration-normal) var(--ease-out);
 }
 
 /* ----- Visibility States ----- */
