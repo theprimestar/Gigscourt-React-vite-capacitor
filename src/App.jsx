@@ -76,18 +76,21 @@ function App() {
       return;
     }
 
+    const scrollContainer = document.querySelector('.scroll-screen');
+    if (!scrollContainer) return;
+
     const handleScroll = () => {
-      const currentY = window.scrollY || document.querySelector('.home-screen')?.scrollTop || 0;
+      const currentY = scrollContainer.scrollTop;
       if (currentY > lastScrollY.current && currentY > 80) {
         setNavVisible(false);
-      } else {
+      } else if (currentY < lastScrollY.current) {
         setNavVisible(true);
       }
       lastScrollY.current = currentY;
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
   }, [activeTab]);
 
   const initApp = async () => {
