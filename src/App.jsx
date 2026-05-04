@@ -224,6 +224,7 @@ function App() {
 
   const currentDeepScreen = navStack.length > 0 ? navStack[navStack.length - 1] : null;
   const showBottomNav = screen === 'app' && navStack.length === 0;
+  const hasDeepScreen = navStack.length > 0;
 
   if (screen === 'splash') {
     return (
@@ -266,60 +267,65 @@ function App() {
 
   return (
     <>
-      {!currentDeepScreen && activeTab === 'home' && (
+      {/* Main tab screens — always mounted, hidden when not active or deep screen open */}
+      <div style={{ display: activeTab === 'home' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <HomeScreen
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
         />
-      )}
-      {!currentDeepScreen && activeTab === 'search' && (
+      </div>
+      <div style={{ display: activeTab === 'search' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <SearchScreen
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
         />
-      )}
-      {!currentDeepScreen && activeTab === 'chats' && (
+      </div>
+      <div style={{ display: activeTab === 'chats' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <ChatListScreen
-          isVisible={activeTab === 'chats' && !currentDeepScreen}
+          isVisible={activeTab === 'chats' && !hasDeepScreen}
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name, chatId: user.chatId || null })}
           onUnreadUpdate={checkUnreadBadge}
         />
-      )}
-      {!currentDeepScreen && activeTab === 'profile' && (
+      </div>
+      <div style={{ display: activeTab === 'profile' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <ProfileScreen
           isOwn={true}
-          isVisible={activeTab === 'profile' && !currentDeepScreen}
+          isVisible={activeTab === 'profile' && !hasDeepScreen}
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           onEditProfile={() => navigateTo('editProfile')}
           onOpenSettings={() => navigateTo('settings')}
         />
-      )}
-      {isAdmin && !currentDeepScreen && activeTab === 'admin' && (
-        <AdminScreen isVisible={activeTab === 'admin' && !currentDeepScreen} />
+      </div>
+      {isAdmin && (
+        <div style={{ display: activeTab === 'admin' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
+          <AdminScreen isVisible={activeTab === 'admin' && !hasDeepScreen} />
+        </div>
       )}
 
-      {currentDeepScreen?.screen === 'chat' && (
+      {/* Deep screens — also kept mounted, hidden when not the active deep screen */}
+      <div style={{ display: currentDeepScreen?.screen === 'chat' ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <ChatScreen
-          chatId={currentDeepScreen.chatId || null}
-          otherUserId={currentDeepScreen.userId}
-          otherUserName={currentDeepScreen.userName}
+          chatId={currentDeepScreen?.chatId || null}
+          otherUserId={currentDeepScreen?.userId || null}
+          otherUserName={currentDeepScreen?.userName || ''}
           onBack={goBack}
           onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
           isVisible={currentDeepScreen?.screen === 'chat'}
         />
-      )}
-      {currentDeepScreen?.screen === 'profile' && (
+      </div>
+      <div style={{ display: currentDeepScreen?.screen === 'profile' ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <ProfileScreen
-          userId={currentDeepScreen.userId}
+          userId={currentDeepScreen?.userId || null}
           isOwn={false}
           onBack={goBack}
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
+          isVisible={currentDeepScreen?.screen === 'profile'}
         />
-      )}
-      {currentDeepScreen?.screen === 'editProfile' && (
+      </div>
+      <div style={{ display: currentDeepScreen?.screen === 'editProfile' ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <EditProfileScreen onBack={goBack} />
-      )}
-      {currentDeepScreen?.screen === 'settings' && (
+      </div>
+      <div style={{ display: currentDeepScreen?.screen === 'settings' ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <SettingsScreen
           onBack={goBack}
           onLogout={async () => {
@@ -328,7 +334,7 @@ function App() {
             setScreen('auth');
           }}
         />
-      )}
+      </div>
 
       {showBottomNav && (
         <nav className={`bottom-nav ${navVisible ? 'visible' : 'hidden'}`}>
