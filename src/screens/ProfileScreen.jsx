@@ -5,6 +5,29 @@ import { IMAGEKIT_AUTH_URL } from '../lib/config';
 import { getUserReviews, getRecentChats, getGigHistory } from '../gigSystem';
 import '../Profile.css';
 
+const CACHE_KEY_OWN_PROFILE = 'gigscourt_own_profile';
+const CACHE_KEY_PROFILE_PREFIX = 'gigscourt_profile_';
+const CACHE_KEY_REVIEWS_PREFIX = 'gigscourt_reviews_';
+const CACHE_KEY_GIG_HISTORY_PREFIX = 'gigscourt_gighistory_';
+
+function getCached(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function setCached(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function clearCached(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+
+function getPhotoUrl(url, size) {
+  if (!url) return '';
+  const base = url.split('?')[0];
+  if (size === 'thumb') return base + '?tr=f-webp,fo-auto,w-300,q-75';
+  if (size === 'gallery') return base + '?tr=f-webp,fo-auto,w-1200,q-85';
+  return base;
+}
+
 const IconAvatar = () => (
   <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
@@ -25,6 +48,12 @@ const IconStar = ({ filled }) => (
 
 const IconClose = () => (
   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconCloseLarge = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
@@ -53,11 +82,43 @@ const IconPhone = () => (
   </svg>
 );
 
+const IconGallery = () => (
+  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+  </svg>
+);
+
+const IconChevronLeft = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
+const IconChevronRight = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+);
+
 function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings, isVisible, onRegisterGigWithPerson }) {
-  const [profile, setProfile] = useState(null);
-  const [stats, setStats] = useState({ gigs: 0, rating: 'New', gigsThisMonth: 0 });
-  const [loading, setLoading] = useState(true);
-  const [workPhotos, setWorkPhotos] = useState([]);
+  const targetId = userId;
+  const profileCacheKey = isOwn ? CACHE_KEY_OWN_PROFILE : CACHE_KEY_PROFILE_PREFIX + targetId;
+  const reviewsCacheKey = CACHE_KEY_REVIEWS_PREFIX + (targetId || 'own');
+  const gigHistoryCacheKey = CACHE_KEY_GIG_HISTORY_PREFIX + (targetId || 'own');
+
+  const cachedProfile = getCached(profileCacheKey);
+
+  const [profile, setProfile] = useState(cachedProfile || null);
+  const [stats, setStats] = useState(cachedProfile ? {
+    gigs: cachedProfile.gig_count || 0,
+    rating: cachedProfile.review_count > 0 ? (cachedProfile.rating / cachedProfile.review_count).toFixed(1) : 'New',
+    gigsThisMonth: 0,
+  } : { gigs: 0, rating: 'New', gigsThisMonth: 0 });
+  const [loading, setLoading] = useState(!cachedProfile);
+  const [workPhotos, setWorkPhotos] = useState(() => {
+    const photos = cachedProfile?.work_photos || [];
+    return [...photos].reverse();
+  });
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showFullNumber, setShowFullNumber] = useState(false);
   const [isSticky, setIsSticky] = useState(false);
@@ -65,40 +126,41 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   const [showReviews, setShowReviews] = useState(false);
   const [showGigHistory, setShowGigHistory] = useState(false);
   const [showRecentChats, setShowRecentChats] = useState(false);
-  const [reviews, setReviews] = useState([]);
-  const [gigHistory, setGigHistory] = useState([]);
+  const [reviews, setReviews] = useState(() => getCached(reviewsCacheKey) || []);
+  const [gigHistory, setGigHistory] = useState(() => getCached(gigHistoryCacheKey + '_provider') || []);
   const [gigHistoryTab, setGigHistoryTab] = useState('provider');
   const [recentChats, setRecentChats] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [loadingGigHistory, setLoadingGigHistory] = useState(false);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   const fileInputRef = useRef(null);
   const nameRef = useRef(null);
   const scrollRef = useRef(null);
   const isMounted = useRef(true);
+  const initialFetchDone = useRef(!!cachedProfile);
 
   useEffect(() => {
     isMounted.current = true;
-    loadProfile();
-    return () => { isMounted.current = false; };
-  }, [userId]);
-
-  useEffect(() => {
-    if (isVisible && !loading) {
+    if (isVisible) {
       loadProfile();
+    } else {
+      initialFetchDone.current = false;
     }
-  }, [isVisible]);
+    return () => { isMounted.current = false; };
+  }, [targetId, isVisible]);
 
   const loadProfile = async () => {
     try {
-      const targetId = userId || (await supabase.auth.getUser()).data.user?.id;
-      if (!targetId || !isMounted.current) return;
+      const id = targetId || (await supabase.auth.getUser()).data.user?.id;
+      if (!id || !isMounted.current) return;
 
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', targetId)
+        .eq('id', id)
         .single();
 
       if (isMounted.current && profileData) {
@@ -106,13 +168,13 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
           ...profileData,
           show_phone: profileData.show_phone !== false,
         });
-        setWorkPhotos(profileData.work_photos || []);
+        setWorkPhotos([...(profileData.work_photos || [])].reverse());
 
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { count: monthCount } = await supabase
           .from('gigs')
           .select('*', { count: 'exact', head: true })
-          .eq('provider_id', targetId)
+          .eq('provider_id', id)
           .eq('status', 'completed')
           .gte('completed_at', thirtyDaysAgo);
 
@@ -124,8 +186,12 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
           gigsThisMonth: monthCount || 0,
         });
 
-        const { data: activeData } = await supabase.rpc('is_user_active', { p_user_id: targetId });
+        const { data: activeData } = await supabase.rpc('is_user_active', { p_user_id: id });
         if (isMounted.current) setIsActive(activeData || false);
+
+        const currentCacheKey = isOwn ? CACHE_KEY_OWN_PROFILE : CACHE_KEY_PROFILE_PREFIX + id;
+        setCached(currentCacheKey, profileData);
+        initialFetchDone.current = true;
       }
     } catch (err) {
       console.error('Profile load error:', err);
@@ -135,12 +201,18 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   };
 
   const loadReviews = async () => {
-    const targetId = userId || profile?.id;
-    if (!targetId) return;
+    const id = targetId || profile?.id;
+    if (!id) return;
+    const key = CACHE_KEY_REVIEWS_PREFIX + id;
+    const cached = getCached(key);
+    if (cached) setReviews(cached);
     setLoadingReviews(true);
     try {
-      const data = await getUserReviews(targetId);
-      if (isMounted.current) setReviews(data);
+      const data = await getUserReviews(id);
+      if (isMounted.current) {
+        setReviews(data);
+        setCached(key, data);
+      }
     } catch (err) {
       console.error('Load reviews error:', err);
     } finally {
@@ -149,12 +221,18 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   };
 
   const loadGigHistory = async (role) => {
-    const targetId = userId || profile?.id;
-    if (!targetId) return;
+    const id = targetId || profile?.id;
+    if (!id) return;
+    const key = CACHE_KEY_GIG_HISTORY_PREFIX + id + '_' + role;
+    const cached = getCached(key);
+    if (cached) setGigHistory(cached);
     setLoadingGigHistory(true);
     try {
-      const data = await getGigHistory(targetId, role);
-      if (isMounted.current) setGigHistory(data);
+      const data = await getGigHistory(id, role);
+      if (isMounted.current) {
+        setGigHistory(data);
+        setCached(key, data);
+      }
     } catch (err) {
       console.error('Load gig history error:', err);
     } finally {
@@ -163,11 +241,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   };
 
   const loadRecentChatsList = async () => {
-    const targetId = userId || profile?.id;
-    if (!targetId) return;
+    const id = targetId || profile?.id;
+    if (!id) return;
     setLoadingRecentChats(true);
     try {
-      const data = await getRecentChats(targetId);
+      const data = await getRecentChats(id);
       if (isMounted.current) setRecentChats(data);
     } catch (err) {
       console.error('Load recent chats error:', err);
@@ -205,65 +283,89 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     }
   }, []);
 
-  const handleAddPhoto = () => {
-    if (workPhotos.length >= 15) {
-      alert('You have reached the maximum of 15 photos. Delete some to add more.');
-      return;
-    }
+  const handleAddPhotos = () => {
     fileInputRef.current?.click();
   };
 
   const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    if (workPhotos.length >= 15) {
+    const remaining = 15 - workPhotos.length;
+    if (remaining <= 0) {
       alert('Maximum 15 photos allowed. Delete some first.');
       return;
     }
 
+    const filesToUpload = files.slice(0, remaining);
     setUploadingPhoto(true);
 
-    try {
-      const authRes = await fetch(IMAGEKIT_AUTH_URL);
-      const auth = await authRes.json();
+    for (const file of filesToUpload) {
+      if (!isMounted.current) break;
+      try {
+        const authRes = await fetch(IMAGEKIT_AUTH_URL);
+        const auth = await authRes.json();
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', 'work-photo.jpg');
-      formData.append('folder', '/work-photos');
-      formData.append('useUniqueFileName', 'true');
-      formData.append('publicKey', imagekitPublicKey);
-      formData.append('token', auth.token);
-      formData.append('signature', auth.signature);
-      formData.append('expire', auth.expire);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('fileName', 'work-photo.jpg');
+        formData.append('folder', '/work-photos');
+        formData.append('useUniqueFileName', 'true');
+        formData.append('publicKey', imagekitPublicKey);
+        formData.append('token', auth.token);
+        formData.append('signature', auth.signature);
+        formData.append('expire', auth.expire);
 
-      const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+          method: 'POST',
+          body: formData,
+        });
 
-      const result = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
+        const result = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
 
-      const newPhotos = [...workPhotos, result.url];
-      setWorkPhotos(newPhotos);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('profiles').update({ work_photos: newPhotos }).eq('id', user.id);
-    } catch (err) {
-      console.error('Photo upload failed:', err);
-    } finally {
-      setUploadingPhoto(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+        setWorkPhotos(prev => {
+          const updated = [result.url, ...prev];
+          const { data: { user } } = supabase.auth.getUser().then(({ data }) => {
+            if (data?.user) {
+              supabase.from('profiles').update({ work_photos: [...updated].reverse() }).eq('id', data.user.id);
+              setCached(CACHE_KEY_OWN_PROFILE, { ...profile, work_photos: [...updated].reverse() });
+            }
+          });
+          return updated;
+        });
+      } catch (err) {
+        console.error('Photo upload failed:', err);
+      }
     }
+
+    if (isMounted.current) setUploadingPhoto(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDeletePhoto = async (index) => {
     const newPhotos = workPhotos.filter((_, i) => i !== index);
     setWorkPhotos(newPhotos);
+    const reversed = [...newPhotos].reverse();
     const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('profiles').update({ work_photos: newPhotos }).eq('id', user.id);
+    if (user) {
+      await supabase.from('profiles').update({ work_photos: reversed }).eq('id', user.id);
+      setCached(CACHE_KEY_OWN_PROFILE, { ...profile, work_photos: reversed });
+    }
+  };
+
+  const openGallery = (index) => {
+    setGalleryIndex(index);
+    setGalleryOpen(true);
+  };
+
+  const navigateGallery = (direction) => {
+    setGalleryIndex(prev => {
+      const next = prev + direction;
+      if (next < 0) return workPhotos.length - 1;
+      if (next >= workPhotos.length) return 0;
+      return next;
+    });
   };
 
   const formatServices = (services) => {
@@ -329,7 +431,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       <div className="profile-top">
         <div className="profile-avatar">
           {profile.profile_pic_url ? (
-            <img src={profile.profile_pic_url} alt={profile.full_name} />
+            <img src={getPhotoUrl(profile.profile_pic_url, 'thumb')} alt={profile.full_name} />
           ) : (
             <div className="profile-avatar-placeholder"><IconAvatar /></div>
           )}
@@ -401,31 +503,169 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         )}
       </div>
 
-      <div className="profile-photo-grid">
-        {workPhotos.map((photo, index) => (
-          <div key={index} className="photo-grid-item">
-            <img src={photo} alt="" />
-            {isOwn && (
-              <button className="photo-delete-btn" onClick={() => handleDeletePhoto(index)}>
-                <IconClose />
-              </button>
-            )}
-          </div>
-        ))}
-        {isOwn && workPhotos.length < 15 && (
-          <button className="photo-grid-item photo-add-btn" onClick={handleAddPhoto}>
-            {uploadingPhoto ? <div className="skeleton" style={{ width: '100%', height: '100%' }} /> : <span>+</span>}
+      {isOwn && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 8px' }}>
+          <button
+            onClick={handleAddPhotos}
+            disabled={uploadingPhoto}
+            className="chip"
+            style={{ fontSize: '13px', gap: '4px' }}
+          >
+            {uploadingPhoto ? 'Uploading...' : 'Add Photos +'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {isOwn && workPhotos.length === 0 && (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 24px',
+          color: 'var(--color-text-secondary)',
+          textAlign: 'center',
+          gap: '12px',
+        }}>
+          <IconGallery />
+          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+            Showcase your work
+          </p>
+          <p style={{ fontSize: '13px', lineHeight: 1.5, margin: 0, maxWidth: 280 }}>
+            Add photos of your best work to attract more clients. Tap 'Add Photos +' above to get started.
+          </p>
+        </div>
+      )}
+
+      {workPhotos.length > 0 && (
+        <div className="profile-photo-grid">
+          {workPhotos.map((photo, index) => (
+            <div key={index} className="photo-grid-item" onClick={() => openGallery(index)}>
+              <img src={getPhotoUrl(photo, 'thumb')} alt="" loading="lazy" />
+              {isOwn && (
+                <button
+                  className="photo-delete-btn"
+                  onClick={(e) => { e.stopPropagation(); handleDeletePhoto(index); }}
+                >
+                  <IconClose />
+                </button>
+              )}
+            </div>
+          ))}
+          {isOwn && workPhotos.length < 15 && (
+            <button className="photo-grid-item photo-add-btn" onClick={handleAddPhotos}>
+              <span>+</span>
+            </button>
+          )}
+        </div>
+      )}
 
       <input
         type="file"
         accept="image/*"
+        multiple
         ref={fileInputRef}
         onChange={handlePhotoUpload}
         style={{ display: 'none' }}
       />
+
+      {galleryOpen && (
+        <div
+          className="fullscreen-overlay"
+          style={{
+            background: 'rgba(0,0,0,0.92)',
+            padding: '40px 16px',
+            alignItems: 'center',
+          }}
+          onClick={() => setGalleryOpen(false)}
+        >
+          <button
+            className="fullscreen-close"
+            onClick={() => setGalleryOpen(false)}
+            style={{ position: 'absolute', top: 'max(16px, var(--safe-top))', right: 'max(16px, var(--safe-right))', zIndex: 2 }}
+          >
+            <IconCloseLarge />
+          </button>
+
+          {workPhotos.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); navigateGallery(-1); }}
+                style={{
+                  position: 'absolute',
+                  left: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  zIndex: 2,
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                }}
+              >
+                <IconChevronLeft />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); navigateGallery(1); }}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  zIndex: 2,
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                }}
+              >
+                <IconChevronRight />
+              </button>
+            </>
+          )}
+
+          <img
+            src={getPhotoUrl(workPhotos[galleryIndex], 'gallery')}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '80vh',
+              objectFit: 'contain',
+              borderRadius: '14px',
+            }}
+          />
+
+          {workPhotos.length > 1 && (
+            <div style={{
+              position: 'absolute',
+              bottom: 'max(60px, var(--safe-bottom))',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              color: '#FFFFFF',
+              fontSize: '13px',
+              fontWeight: 500,
+              background: 'rgba(255,255,255,0.15)',
+              padding: '4px 12px',
+              borderRadius: '12px',
+            }}>
+              {galleryIndex + 1} / {workPhotos.length}
+            </div>
+          )}
+        </div>
+      )}
 
       {showReviews && (
         <div className="sheet-overlay" onClick={() => setShowReviews(false)}>
@@ -443,7 +683,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                     <div className="review-header">
                       <div className="review-avatar">
                         {review.reviewer_pic ? (
-                          <img src={review.reviewer_pic} alt="" />
+                          <img src={getPhotoUrl(review.reviewer_pic, 'thumb')} alt="" />
                         ) : (
                           <IconAvatar />
                         )}
@@ -545,7 +785,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                   >
                     <div className="chat-list-avatar">
                       {chat.other_user_pic ? (
-                        <img src={chat.other_user_pic} alt="" />
+                        <img src={getPhotoUrl(chat.other_user_pic, 'thumb')} alt="" />
                       ) : (
                         <div className="chat-list-avatar-placeholder"><IconAvatar /></div>
                       )}
