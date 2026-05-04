@@ -276,6 +276,7 @@ function App() {
       </div>
       <div style={{ display: activeTab === 'search' && !hasDeepScreen ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <SearchScreen
+          visible={activeTab === 'search' && !hasDeepScreen}
           onStartChat={(user) => navigateTo('chat', { userId: user.id, userName: user.full_name })}
           onViewProfile={(user) => navigateTo('profile', { userId: user.id })}
         />
