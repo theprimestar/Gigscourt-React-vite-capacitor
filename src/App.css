@@ -12,8 +12,8 @@
   justify-content: space-around;
   align-items: center;
   background: var(--color-bg);
-  padding: var(--space-sm) var(--space-md);
-  padding-bottom: calc(var(--space-sm) + var(--safe-bottom));
+  padding: 1px var(--space-md);
+  padding-bottom: calc(1px + var(--safe-bottom));
   transition: transform var(--duration-slow) var(--ease-out);
 }
 
