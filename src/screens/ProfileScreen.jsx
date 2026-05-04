@@ -312,6 +312,13 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         <span style={{ width: 40 }} />
       </div>
 
+      {!isOwn && !isSticky && (
+        <div className="profile-settings-row">
+          <button onClick={onBack} className="profile-back-btn"><IconBack /></button>
+          <span />
+        </div>
+      )}
+
       {isOwn && !isSticky && (
         <div className="profile-settings-row">
           <span />
