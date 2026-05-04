@@ -12,8 +12,8 @@
   justify-content: space-around;
   align-items: center;
   background: var(--color-bg);
-  padding: 1px var(--space-md);
-  padding-bottom: calc(1px + var(--safe-bottom));
+  padding: 2px var(--space-md);
+  padding-bottom: calc(2px + var(--safe-bottom));
   transition: transform var(--duration-slow) var(--ease-out);
 }
 
@@ -28,10 +28,10 @@
   justify-content: center;
   gap: 4px;
   width: 48px;
-  height: 48px;
   color: var(--color-text-primary);
   transition: color var(--duration-fast) var(--ease-out);
   position: relative;
+  padding: 0;
 }
 
 .nav-btn::after {
