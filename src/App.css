@@ -1,76 +1,199 @@
 /* =============================================
-   App — Bottom Navigation
+   Bottom Navigation — 2026 Conventions
    ============================================= */
 
+/* ----- Container ----- */
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 200;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+
+  /* Pill shape */
+  width: calc(100% - var(--space-xl) * 2);
+  max-width: 448px;
+  height: 64px;
+  padding: 0 var(--space-xs);
+  margin-bottom: calc(var(--space-md) + var(--safe-bottom));
+
   display: flex;
-  justify-content: space-around;
   align-items: center;
-  background: var(--color-bg);
-  height: calc(32px + var(--safe-bottom));
-  padding: 0 var(--space-md);
-  transition: transform var(--duration-slow) var(--ease-out);
+  justify-content: space-around;
+
+  /* Glass surface */
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+
+  /* Spring transition for show/hide */
+  transition: transform var(--duration-slow) var(--ease-spring),
+              opacity var(--duration-normal) var(--ease-out);
+  transform-origin: bottom center;
+}
+
+/* ----- Visibility States ----- */
+.bottom-nav.visible {
+  transform: translateX(-50%) translateY(0) scale(1);
+  opacity: 1;
 }
 
 .bottom-nav.hidden {
-  transform: translateY(100%);
+  transform: translateX(-50%) translateY(20px) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
 }
 
+/* ----- Nav Button ----- */
 .nav-btn {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 32px;
-  color: var(--color-text-primary);
-  transition: color var(--duration-fast) var(--ease-out);
-  position: relative;
+  gap: 2px;
+
+  /* Minimum touch target: 48×48px */
+  min-width: 48px;
+  min-height: 48px;
+  padding: var(--space-xs) var(--space-sm);
+
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
 }
 
+.nav-btn:active {
+  transform: scale(0.92);
+}
+
+/* ----- Active State ----- */
 .nav-btn.active {
   color: var(--color-accent);
 }
 
-.nav-btn::after {
+/* Active indicator pill */
+.nav-btn.active::after {
   content: '';
   position: absolute;
   bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
   width: 20px;
-  height: 2px;
-  border-radius: 1px;
-  background: transparent;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.nav-btn.active::after {
+  height: 3px;
   background: var(--color-accent);
+  border-radius: var(--radius-full);
 }
 
+/* Active icon gets filled */
+.nav-btn.active svg {
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
+}
+
+/* ----- SVG Icons ----- */
+.nav-btn svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  transition: fill var(--duration-fast) var(--ease-out),
+              stroke var(--duration-fast) var(--ease-out);
+}
+
+/* ----- Label (optional, none currently — kept for future) ----- */
+.nav-label {
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* ----- Badge ----- */
 .nav-icon-wrapper {
   position: relative;
   display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-badge {
   position: absolute;
-  top: -4px;
-  right: -8px;
+  top: -6px;
+  right: -10px;
+
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
   background: var(--color-destructive);
   color: #FFFFFF;
   font-size: 11px;
   font-weight: var(--weight-bold);
+  line-height: 1;
+  letter-spacing: 0;
+
   border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border: 2px solid var(--color-surface);
+
+  /* Pop-in animation */
+  animation: badgePop var(--duration-normal) var(--ease-spring);
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* ----- Dark Mode Adjustments ----- */
+@media (prefers-color-scheme: dark) {
+  .bottom-nav {
+    /* Subtle glow instead of harsh border */
+    box-shadow: 0 0 0 1px var(--color-border),
+                0 4px 24px rgba(59, 95, 227, 0.15);
+  }
+
+  .nav-badge {
+    border-color: var(--color-surface);
+  }
+}
+
+/* ----- Desktop/Tablet: Hide bottom nav, show elsewhere ----- */
+@media (min-width: 769px) {
+  .bottom-nav {
+    display: none;
+  }
+
+  /* Add bottom padding to main content so nothing gets hidden
+     behind the bottom nav (which doesn't exist on desktop) */
+  .scroll-screen {
+    padding-bottom: 0;
+  }
+}
+
+/* ----- Content Padding: prevent last items from hiding ----- */
+.scroll-screen {
+  padding-bottom: calc(64px + var(--safe-bottom) + var(--space-3xl));
+}
+
+/* ----- 5-tab layout (admin visible) ----- */
+.bottom-nav:has(.nav-btn:nth-child(5)) {
+  padding: 0 var(--space-xs);
+}
+
+.bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn {
+  min-width: 40px;
+  padding: var(--space-xs) 2px;
+}
+
+.bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn svg {
+  width: 22px;
+  height: 22px;
 }
