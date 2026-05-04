@@ -3,6 +3,37 @@ import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
 import { getUserReviews, getRecentChats, getGigHistory } from '../gigSystem';
+import '../Profile.css';
+
+const IconAvatar = () => (
+  <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+  </svg>
+);
+
+const IconMapPin = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+  </svg>
+);
+
+const IconStar = ({ filled }) => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+  </svg>
+);
+
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconSettings = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+  </svg>
+);
 
 function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings, isVisible, onRegisterGigWithPerson }) {
   const [profile, setProfile] = useState(null);
@@ -53,7 +84,6 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         .single();
 
       if (isMounted.current && profileData) {
-        // Normalize show_phone: null/undefined defaults to true (visible)
         setProfile({
           ...profileData,
           show_phone: profileData.show_phone !== false,
@@ -233,7 +263,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     return (
       <div className="profile-screen">
         <div className="profile-loading">
-          <div className="spinner"></div>
+          <div className="skeleton skeleton-avatar" />
+          <div className="skeleton-stats">
+            <div className="skeleton skeleton-stat" />
+            <div className="skeleton skeleton-stat" />
+          </div>
         </div>
       </div>
     );
@@ -242,7 +276,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   if (!profile) {
     return (
       <div className="profile-screen">
-        <p>Profile not found</p>
+        <p style={{ textAlign: 'center', marginTop: 60, color: 'var(--color-text-secondary)' }}>Profile not found</p>
       </div>
     );
   }
@@ -251,11 +285,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     <div className="profile-screen" ref={scrollRef} onScroll={handleScroll}>
       <div className={`profile-sticky-header ${isSticky ? 'visible' : ''}`}>
         <button onClick={onBack || (() => {})} className="profile-back-btn">
-          {onBack ? '←' : '⚙️'}
+          <IconBack />
         </button>
         <span className="profile-sticky-name">
           {profile.full_name}
-          {isActive && <span className="active-dot" style={{ display: 'inline-block', width: 8, height: 8, background: '#34c759', borderRadius: '50%', marginLeft: 6 }}></span>}
+          {isActive && <span className="active-dot-inline" />}
         </span>
         <span style={{ width: 40 }} />
       </div>
@@ -263,7 +297,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       {isOwn && !isSticky && (
         <div className="profile-settings-row">
           <span />
-          <button className="profile-settings-btn" onClick={onOpenSettings}>⚙️</button>
+          <button className="profile-settings-btn" onClick={onOpenSettings}><IconSettings /></button>
         </div>
       )}
 
@@ -272,7 +306,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
           {profile.profile_pic_url ? (
             <img src={profile.profile_pic_url} alt={profile.full_name} />
           ) : (
-            <div className="profile-avatar-placeholder">👤</div>
+            <div className="profile-avatar-placeholder"><IconAvatar /></div>
           )}
         </div>
 
@@ -291,7 +325,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       <div className="profile-name-section" ref={nameRef}>
         <h2 className="profile-name">
           {profile.full_name}
-          {isActive && <span className="active-dot-inline" style={{ display: 'inline-block', width: 8, height: 8, background: '#34c759', borderRadius: '50%', marginLeft: 6, verticalAlign: 'middle' }}></span>}
+          {isActive && <span className="active-dot-inline" />}
         </h2>
       </div>
 
@@ -300,7 +334,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       <p className="profile-gigs-month">{stats.gigsThisMonth} gigs this month</p>
 
       {profile.workspace_address && (
-        <p className="profile-address">📍 {profile.workspace_address}</p>
+        <p className="profile-address"><IconMapPin /> {profile.workspace_address}</p>
       )}
 
       {profile.services && profile.services.length > 0 && (
@@ -320,7 +354,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         ) : (
           <>
             <button className="profile-action-btn primary" onClick={() => onStartChat && onStartChat(profile)}>
-              💬 Message
+              <IconMessage /> Message
             </button>
             <button
               className="profile-action-btn secondary"
@@ -332,7 +366,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                 setShowFullNumber(!showFullNumber);
               }}
             >
-              📞 {showFullNumber && profile.phone 
+              <IconPhone /> {showFullNumber && profile.phone 
                 ? profile.phone 
                 : profile.show_phone === false 
                   ? 'Phone hidden' 
@@ -348,14 +382,14 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
             <img src={photo} alt="" />
             {isOwn && (
               <button className="photo-delete-btn" onClick={() => handleDeletePhoto(index)}>
-                ✕
+                <IconClose />
               </button>
             )}
           </div>
         ))}
         {isOwn && workPhotos.length < 15 && (
           <button className="photo-grid-item photo-add-btn" onClick={handleAddPhoto}>
-            {uploadingPhoto ? <div className="spinner"></div> : <span>+</span>}
+            {uploadingPhoto ? <div className="skeleton" style={{ width: '100%', height: '100%' }} /> : <span>+</span>}
           </button>
         )}
       </div>
@@ -369,15 +403,15 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       />
 
       {showReviews && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowReviews(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle"></div>
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setShowReviews(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <h2>Reviews</h2>
               {loadingReviews ? (
-                <div className="spinner"></div>
+                <div className="skeleton" style={{ width: '100%', height: 40, marginTop: 12 }} />
               ) : reviews.length === 0 ? (
-                <p style={{ color: '#8e8e93', marginTop: 12 }}>No reviews yet</p>
+                <p style={{ color: 'var(--color-text-secondary)', marginTop: 12 }}>No reviews yet</p>
               ) : (
                 reviews.map(review => (
                   <div key={review.id} className="review-item">
@@ -386,12 +420,14 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                         {review.reviewer_pic ? (
                           <img src={review.reviewer_pic} alt="" />
                         ) : (
-                          <span>👤</span>
+                          <IconAvatar />
                         )}
                       </div>
                       <span className="review-name">{review.reviewer_name}</span>
                       <span className="review-stars">
-                        {'⭐'.repeat(review.rating)}
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <IconStar key={i} filled={i < review.rating} />
+                        ))}
                       </span>
                     </div>
                     {review.review_text ? (
@@ -407,10 +443,10 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       )}
 
       {showGigHistory && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowGigHistory(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle"></div>
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setShowGigHistory(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <h2>Gig History</h2>
               <div className="gig-history-tabs">
                 <button 
@@ -427,9 +463,9 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                 </button>
               </div>
               {loadingGigHistory ? (
-                <div className="spinner"></div>
+                <div className="skeleton" style={{ width: '100%', height: 40, marginTop: 12 }} />
               ) : gigHistory.length === 0 ? (
-                <p style={{ color: '#8e8e93', marginTop: 12 }}>No gigs found</p>
+                <p style={{ color: 'var(--color-text-secondary)', marginTop: 12 }}>No gigs found</p>
               ) : (
                 gigHistory.map(gig => (
                   <div key={gig.id} className="gig-history-item">
@@ -441,7 +477,9 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                     </div>
                     {gig.rating && (
                       <span className="gig-history-rating">
-                        {'⭐'.repeat(gig.rating)}
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <IconStar key={i} filled={i < gig.rating} />
+                        ))}
                       </span>
                     )}
                     <span className="gig-history-date">
@@ -456,18 +494,18 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       )}
 
       {showRecentChats && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowRecentChats(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle"></div>
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setShowRecentChats(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <h2>Register a Gig</h2>
-              <p style={{ color: '#8e8e93', fontSize: 13, marginBottom: 12 }}>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 12 }}>
                 Select someone you've chatted with in the last 14 days
               </p>
               {loadingRecentChats ? (
-                <div className="spinner"></div>
+                <div className="skeleton" style={{ width: '100%', height: 40, marginTop: 12 }} />
               ) : recentChats.length === 0 ? (
-                <p style={{ color: '#8e8e93', marginTop: 12 }}>No recent chats</p>
+                <p style={{ color: 'var(--color-text-secondary)', marginTop: 12 }}>No recent chats</p>
               ) : (
                 recentChats.map(chat => (
                   <div 
@@ -484,7 +522,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                       {chat.other_user_pic ? (
                         <img src={chat.other_user_pic} alt="" />
                       ) : (
-                        <div className="chat-list-avatar-placeholder">👤</div>
+                        <div className="chat-list-avatar-placeholder"><IconAvatar /></div>
                       )}
                     </div>
                     <div className="chat-list-info">
