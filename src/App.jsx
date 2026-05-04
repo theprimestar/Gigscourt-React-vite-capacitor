@@ -60,7 +60,6 @@ function App() {
   const [navVisible, setNavVisible] = useState(true);
   const splashTimerRef = useRef(null);
   const screenRef = useRef(screen);
-  const lastScrollY = useRef(0);
   screenRef.current = screen;
 
   useEffect(() => {
@@ -71,26 +70,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== 'home' && activeTab !== 'search') {
-      setNavVisible(true);
-      return;
-    }
-
-    const scrollContainer = document.querySelector('.scroll-screen');
-    if (!scrollContainer) return;
-
-    const handleScroll = () => {
-      const currentY = scrollContainer.scrollTop;
-      if (currentY > lastScrollY.current && currentY > 80) {
-        setNavVisible(false);
-      } else if (currentY < lastScrollY.current) {
-        setNavVisible(true);
-      }
-      lastScrollY.current = currentY;
-    };
-
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    setNavVisible(true);
   }, [activeTab]);
 
   const initApp = async () => {
