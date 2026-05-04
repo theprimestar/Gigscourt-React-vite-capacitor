@@ -29,6 +29,23 @@
   }
 }
 
+/* Extend background behind safe area */
+.bottom-nav::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: var(--safe-bottom);
+  background: var(--color-surface);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bottom-nav::after {
+    background: #000000;
+  }
+}
+
 /* ----- Nav Button ----- */
 .nav-btn {
   position: relative;
@@ -105,7 +122,6 @@
   border: 2px solid var(--color-surface);
 }
 
-/* Badge border matches black in dark mode */
 @media (prefers-color-scheme: dark) {
   .nav-badge {
     border-color: #000000;
@@ -162,7 +178,7 @@
 
 /* ----- Content bottom padding ----- */
 .scroll-screen {
-  padding-bottom: calc(40px + var(--space-sm));
+  padding-bottom: calc(40px + var(--safe-bottom) + var(--space-sm));
 }
 
 /* ----- Desktop: hide ----- */
