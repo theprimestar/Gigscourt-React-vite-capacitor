@@ -1,21 +1,19 @@
 /* =============================================
-   Bottom Navigation — 2026 Conventions
+   Bottom Navigation — Mobile-First, All Phones
    ============================================= */
 
 /* ----- Container ----- */
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: var(--space-lg);
+  right: var(--space-lg);
   z-index: 900;
 
-  /* Pill shape */
-  width: calc(100% - var(--space-xl) * 2);
-  max-width: 448px;
+  /* Pill shape — fluid width, no hard max */
+  width: auto;
   height: 64px;
   padding: 0 var(--space-xs);
-  margin-bottom: calc(var(--space-md) + var(--safe-bottom));
 
   display: flex;
   align-items: center;
@@ -27,20 +25,23 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 
-  /* Spring transition for show/hide */
+  /* Center the pill when it doesn't span full width */
+  margin: 0 auto;
+  margin-bottom: calc(var(--space-md) + var(--safe-bottom));
+
+  /* Spring transition */
   transition: transform var(--duration-slow) var(--ease-spring),
               opacity var(--duration-normal) var(--ease-out);
-  transform-origin: bottom center;
 }
 
 /* ----- Visibility States ----- */
 .bottom-nav.visible {
-  transform: translateX(-50%) translateY(0) scale(1);
+  transform: translateY(0) scale(1);
   opacity: 1;
 }
 
 .bottom-nav.hidden {
-  transform: translateX(-50%) translateY(20px) scale(0.95);
+  transform: translateY(24px) scale(0.92);
   opacity: 0;
   pointer-events: none;
 }
@@ -58,16 +59,18 @@
   min-width: 48px;
   min-height: 48px;
   padding: var(--space-xs) var(--space-sm);
+  flex: 1;
 
   color: var(--color-text-tertiary);
   border-radius: var(--radius-md);
   transition: color var(--duration-fast) var(--ease-out),
               transform var(--duration-fast) var(--ease-out);
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 
 .nav-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.9);
 }
 
 /* ----- Active State ----- */
@@ -79,16 +82,17 @@
 .nav-btn.active::after {
   content: '';
   position: absolute;
-  bottom: 2px;
+  bottom: 3px;
   left: 50%;
   transform: translateX(-50%);
   width: 20px;
   height: 3px;
   background: var(--color-accent);
   border-radius: var(--radius-full);
+  transition: width var(--duration-fast) var(--ease-out);
 }
 
-/* Active icon gets filled */
+/* Active icon — fill the interior */
 .nav-btn.active svg {
   fill: var(--color-accent);
   stroke: var(--color-accent);
@@ -101,14 +105,6 @@
   flex-shrink: 0;
   transition: fill var(--duration-fast) var(--ease-out),
               stroke var(--duration-fast) var(--ease-out);
-}
-
-/* ----- Label (optional, none currently — kept for future) ----- */
-.nav-label {
-  font-size: 10px;
-  font-weight: var(--weight-medium);
-  line-height: 1;
-  letter-spacing: 0.02em;
 }
 
 /* ----- Badge ----- */
@@ -142,58 +138,94 @@
   border-radius: var(--radius-full);
   border: 2px solid var(--color-surface);
 
-  /* Pop-in animation */
   animation: badgePop var(--duration-normal) var(--ease-spring);
 }
 
 @keyframes badgePop {
   0% { transform: scale(0); }
-  60% { transform: scale(1.2); }
+  60% { transform: scale(1.25); }
   100% { transform: scale(1); }
 }
 
-/* ----- Dark Mode Adjustments ----- */
-@media (prefers-color-scheme: dark) {
-  .bottom-nav {
-    /* Subtle glow instead of harsh border */
-    box-shadow: 0 0 0 1px var(--color-border),
-                0 4px 24px rgba(59, 95, 227, 0.15);
-  }
-
-  .nav-badge {
-    border-color: var(--color-surface);
-  }
-}
-
-/* ----- Desktop/Tablet: Hide bottom nav, show elsewhere ----- */
-@media (min-width: 769px) {
-  .bottom-nav {
-    display: none;
-  }
-
-  /* Add bottom padding to main content so nothing gets hidden
-     behind the bottom nav (which doesn't exist on desktop) */
-  .scroll-screen {
-    padding-bottom: 0;
-  }
-}
-
-/* ----- Content Padding: prevent last items from hiding ----- */
-.scroll-screen {
-  padding-bottom: calc(64px + var(--safe-bottom) + var(--space-3xl));
-}
-
-/* ----- 5-tab layout (admin visible) ----- */
-.bottom-nav:has(.nav-btn:nth-child(5)) {
-  padding: 0 var(--space-xs);
-}
-
+/* ----- 5-tab Layout (admin visible) ----- */
 .bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn {
-  min-width: 40px;
+  min-width: 42px;
   padding: var(--space-xs) 2px;
 }
 
 .bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn svg {
   width: 22px;
   height: 22px;
+}
+
+/* ----- Landscape: compact bar ----- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .bottom-nav {
+    height: 48px;
+    padding: 0 var(--space-sm);
+    border-radius: var(--radius-lg);
+    margin-bottom: calc(var(--space-sm) + var(--safe-bottom));
+  }
+
+  .nav-btn {
+    min-height: 40px;
+    gap: 0;
+  }
+
+  .nav-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .nav-btn.active::after {
+    bottom: 2px;
+    width: 16px;
+    height: 2px;
+  }
+}
+
+/* ----- Very small screens (iPhone SE, older Androids) ----- */
+@media (max-width: 374px) {
+  .bottom-nav {
+    left: var(--space-md);
+    right: var(--space-md);
+    height: 56px;
+  }
+
+  .nav-btn {
+    min-width: 44px;
+  }
+
+  .nav-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+/* ----- Content bottom padding so nothing hides behind nav ----- */
+.scroll-screen {
+  padding-bottom: calc(64px + var(--safe-bottom) + var(--space-3xl));
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .scroll-screen {
+    padding-bottom: calc(48px + var(--safe-bottom) + var(--space-lg));
+  }
+}
+
+@media (max-width: 374px) {
+  .scroll-screen {
+    padding-bottom: calc(56px + var(--safe-bottom) + var(--space-xl));
+  }
+}
+
+/* ----- Desktop: hide (you'd use sidebar/top nav here) ----- */
+@media (min-width: 769px) {
+  .bottom-nav {
+    display: none;
+  }
+
+  .scroll-screen {
+    padding-bottom: 0;
+  }
 }
