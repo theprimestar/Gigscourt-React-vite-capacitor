@@ -5,6 +5,7 @@ import { IMAGEKIT_AUTH_URL } from '../lib/config';
 import L from 'leaflet';
 import 'leaflet-rotate';
 import '../Profile.css';
+import '../Onboarding.css';
 
 const IconBack = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
