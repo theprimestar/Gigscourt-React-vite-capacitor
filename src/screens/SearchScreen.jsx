@@ -5,6 +5,17 @@ import L from 'leaflet';
 import 'leaflet-rotate';
 import '../Search.css';
 
+const CACHE_KEY_SEARCH = 'gigscourt_search_results';
+const CACHE_KEY_SEARCH_TERM = 'gigscourt_search_term';
+const CACHE_KEY_SEARCH_RADIUS = 'gigscourt_search_radius';
+
+function getCached(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function setCached(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
 const POPULAR_SERVICES = [
   'barbing', 'tailoring', 'makeup', 'hairdressing',
   'electrical', 'plumbing', 'auto-mechanic', 'photography'
@@ -59,17 +70,21 @@ const IconStar = () => (
 );
 
 function SearchScreen({ onStartChat, onViewProfile }) {
+  const cachedResults = getCached(CACHE_KEY_SEARCH);
+  const cachedTerm = getCached(CACHE_KEY_SEARCH_TERM);
+  const cachedRadius = getCached(CACHE_KEY_SEARCH_RADIUS);
+
   const [view, setView] = useState('map');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [radius, setRadius] = useState(1000);
-  const [providers, setProviders] = useState([]);
+  const [searchTerm, setSearchTerm] = useState(cachedTerm || '');
+  const [radius, setRadius] = useState(cachedRadius || 1000);
+  const [providers, setProviders] = useState(cachedResults || []);
   const [loading, setLoading] = useState(false);
   const [viewerLat, setViewerLat] = useState(null);
   const [viewerLng, setViewerLng] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeService, setActiveService] = useState(null);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [activeService, setActiveService] = useState(cachedTerm || null);
+  const [hasSearched, setHasSearched] = useState(!!cachedResults);
   const [services, setServices] = useState([]);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showChipsSlider, setShowChipsSlider] = useState(true);
@@ -81,6 +96,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
   const listScrollRef = useRef(null);
   const prevScrollY = useRef(0);
   const resizeObserverRef = useRef(null);
+  const initialFetchDone = useRef(!!cachedResults);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -189,6 +205,8 @@ function SearchScreen({ onStartChat, onViewProfile }) {
     setActiveService(trimmed);
     setHasSearched(true);
     setShowSuggestions(false);
+    setCached(CACHE_KEY_SEARCH_TERM, trimmed);
+    setCached(CACHE_KEY_SEARCH_RADIUS, radius);
 
     const { data } = await supabase.rpc('search_providers', {
       viewer_lat: viewerLat, viewer_lng: viewerLng, service_slug: trimmed,
@@ -197,7 +215,9 @@ function SearchScreen({ onStartChat, onViewProfile }) {
 
     const enriched = await enrichCards(data || []);
     setProviders(enriched);
+    setCached(CACHE_KEY_SEARCH, enriched);
     setLoading(false);
+    initialFetchDone.current = true;
   }, [viewerLat, viewerLng, radius]);
 
   useEffect(() => {
@@ -306,6 +326,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
               onChange={e => {
                 const val = Number(e.target.value);
                 setRadius(val);
+                setCached(CACHE_KEY_SEARCH_RADIUS, val);
                 if (debounceRef.current) clearTimeout(debounceRef.current);
                 debounceRef.current = setTimeout(() => { if (activeService) handleSearch(activeService); }, 400);
               }}
