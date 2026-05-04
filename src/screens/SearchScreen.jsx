@@ -69,7 +69,7 @@ const IconStar = () => (
   </svg>
 );
 
-function SearchScreen({ onStartChat, onViewProfile }) {
+function SearchScreen({ onStartChat, onViewProfile, visible }) {
   const cachedResults = getCached(CACHE_KEY_SEARCH);
   const cachedTerm = getCached(CACHE_KEY_SEARCH_TERM);
   const cachedRadius = getCached(CACHE_KEY_SEARCH_RADIUS);
@@ -496,7 +496,7 @@ function SearchScreen({ onStartChat, onViewProfile }) {
         document.getElementById('portal-root')
       )}
 
-      {!hasSearched && !loading && view === 'map' && ReactDOM.createPortal(
+      {visible && !hasSearched && !loading && view === 'map' && ReactDOM.createPortal(
   <div className="map-empty-overlay">
     <div className="map-empty-card">
       <p className="map-empty-title">Find providers near you</p>
