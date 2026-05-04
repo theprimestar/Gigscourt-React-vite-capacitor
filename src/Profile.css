@@ -773,3 +773,7 @@
   font-weight: 700;
   color: var(--color-accent);
 }
+
+.profile-back-btn svg {
+  color: var(--color-accent);
+}
