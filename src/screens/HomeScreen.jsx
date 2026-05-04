@@ -4,6 +4,17 @@ import { supabase } from '../lib/supabase';
 import Logo from '../Logo';
 import '../Home.css';
 
+const CACHE_KEY_PROVIDERS = 'gigscourt_home_top_providers';
+const CACHE_KEY_CARDS = 'gigscourt_home_cards';
+const CACHE_KEY_LOCATION = 'gigscourt_home_location';
+
+function getCached(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function setCached(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
 const IconBell = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -35,15 +46,19 @@ const IconStar = () => (
 );
 
 function HomeScreen({ onStartChat, onViewProfile }) {
-  const [topProviders, setTopProviders] = useState([]);
-  const [cards, setCards] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedCards = getCached(CACHE_KEY_CARDS);
+  const cachedTopProviders = getCached(CACHE_KEY_PROVIDERS);
+  const cachedLocation = getCached(CACHE_KEY_LOCATION);
+
+  const [topProviders, setTopProviders] = useState(cachedTopProviders || []);
+  const [cards, setCards] = useState(cachedCards || []);
+  const [loading, setLoading] = useState(!cachedCards);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [hasMoreTop, setHasMoreTop] = useState(true);
   const [loadingMoreTop, setLoadingMoreTop] = useState(false);
-  const [viewerLat, setViewerLat] = useState(null);
-  const [viewerLng, setViewerLng] = useState(null);
+  const [viewerLat, setViewerLat] = useState(cachedLocation?.lat || null);
+  const [viewerLng, setViewerLng] = useState(cachedLocation?.lng || null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -53,12 +68,13 @@ function HomeScreen({ onStartChat, onViewProfile }) {
   const gridObserverRef = useRef(null);
   const discoverObserverRef = useRef(null);
   const watchIdRef = useRef(null);
-  const lastFetchRef = useRef({ lat: null, lng: null });
+  const lastFetchRef = useRef(cachedLocation || { lat: null, lng: null });
   const isMounted = useRef(true);
   const scrollContainerRef = useRef(null);
   const discoverScrollRef = useRef(null);
-  const firstLoad = useRef(true);
+  const firstLoad = useRef(!cachedCards);
   const isLocationChange = useRef(false);
+  const initialFetchDone = useRef(!!cachedCards);
 
   useEffect(() => {
     isMounted.current = true;
@@ -72,9 +88,12 @@ function HomeScreen({ onStartChat, onViewProfile }) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (!isMounted.current) return;
-        setViewerLat(pos.coords.latitude);
-        setViewerLng(pos.coords.longitude);
-        lastFetchRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
+        setViewerLat(newLat);
+        setViewerLng(newLng);
+        lastFetchRef.current = { lat: newLat, lng: newLng };
+        setCached(CACHE_KEY_LOCATION, { lat: newLat, lng: newLng });
       },
       () => {
         if (isMounted.current) {
@@ -102,6 +121,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
             setViewerLat(newLat);
             setViewerLng(newLng);
             lastFetchRef.current = { lat: newLat, lng: newLng };
+            setCached(CACHE_KEY_LOCATION, { lat: newLat, lng: newLng });
           }
         }
       },
@@ -117,8 +137,10 @@ function HomeScreen({ onStartChat, onViewProfile }) {
 
   useEffect(() => {
     if (viewerLat === null || viewerLng === null) return;
+    if (initialFetchDone.current && !isLocationChange.current) return;
     fetchTopProviders();
     fetchProfiles();
+    initialFetchDone.current = true;
   }, [viewerLat, viewerLng]);
 
   const enrichCards = async (profiles) => {
@@ -165,6 +187,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       if (isMounted.current && data) {
         const enriched = await enrichCards(data);
         setTopProviders(enriched);
+        setCached(CACHE_KEY_PROVIDERS, enriched);
         if (data.length > 0) {
           const last = data[data.length - 1];
           topCursorRef.current = { distance: last.distance_meters, id: last.id };
@@ -186,7 +209,11 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       });
       if (isMounted.current && data) {
         const enriched = await enrichCards(data);
-        setTopProviders(prev => [...prev, ...enriched]);
+        setTopProviders(prev => {
+          const updated = [...prev, ...enriched];
+          setCached(CACHE_KEY_PROVIDERS, updated);
+          return updated;
+        });
         if (data.length > 0) {
           const last = data[data.length - 1];
           topCursorRef.current = { distance: last.distance_meters, id: last.id };
@@ -207,6 +234,7 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       if (isMounted.current) {
         const enriched = await enrichCards(data || []);
         setCards(enriched);
+        setCached(CACHE_KEY_CARDS, enriched);
         if (data && data.length > 0) {
           const last = data[data.length - 1];
           cursorRef.current = { distance: last.distance_meters, id: last.id };
@@ -234,7 +262,11 @@ function HomeScreen({ onStartChat, onViewProfile }) {
       });
       if (isMounted.current) {
         const enriched = await enrichCards(data || []);
-        setCards(prev => [...prev, ...enriched]);
+        setCards(prev => {
+          const updated = [...prev, ...enriched];
+          setCached(CACHE_KEY_CARDS, updated);
+          return updated;
+        });
         if (data && data.length > 0) {
           const last = data[data.length - 1];
           cursorRef.current = { distance: last.distance_meters, id: last.id };
