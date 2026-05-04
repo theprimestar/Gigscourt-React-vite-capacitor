@@ -1,47 +1,38 @@
 /* =============================================
-   Bottom Navigation — Mobile-First, All Phones
+   Bottom Navigation — Grounded, Minimal
    ============================================= */
 
 /* ----- Container ----- */
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: var(--space-lg);
-  right: var(--space-lg);
+  left: 0;
+  right: 0;
   z-index: 900;
 
-  /* Pill shape — fluid width, no hard max */
-  width: auto;
-  height: 64px;
-  padding: 0 var(--space-xs);
+  height: calc(50px + var(--safe-bottom));
+  padding: 0 var(--space-lg) var(--safe-bottom);
 
   display: flex;
   align-items: center;
   justify-content: space-around;
 
-  /* Glass surface */
+  /* Solid surface — no float, no gap */
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  border-top: 0.5px solid var(--color-border);
 
-  /* Center the pill when it doesn't span full width */
-  margin: 0 auto;
-  margin-bottom: var(--safe-bottom);
-   
-  /* Spring transition */
-  transition: transform var(--duration-slow) var(--ease-spring),
-              opacity var(--duration-normal) var(--ease-out);
+  transition: background var(--duration-normal) var(--ease-out),
+              border-color var(--duration-normal) var(--ease-out);
 }
 
 /* ----- Visibility States ----- */
 .bottom-nav.visible {
-  transform: translateY(0) scale(1);
+  transform: translateY(0);
   opacity: 1;
 }
 
 .bottom-nav.hidden {
-  transform: translateY(24px) scale(0.92);
+  transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
 }
@@ -55,14 +46,12 @@
   justify-content: center;
   gap: 2px;
 
-  /* Minimum touch target: 48×48px */
   min-width: 48px;
   min-height: 48px;
-  padding: var(--space-xs) var(--space-sm);
   flex: 1;
 
   color: var(--color-text-tertiary);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   transition: color var(--duration-fast) var(--ease-out),
               transform var(--duration-fast) var(--ease-out);
   -webkit-tap-highlight-color: transparent;
@@ -78,21 +67,18 @@
   color: var(--color-accent);
 }
 
-/* Active indicator pill */
 .nav-btn.active::after {
   content: '';
   position: absolute;
-  bottom: 3px;
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
-  width: 20px;
-  height: 3px;
+  width: 4px;
+  height: 4px;
   background: var(--color-accent);
   border-radius: var(--radius-full);
-  transition: width var(--duration-fast) var(--ease-out);
 }
 
-/* Active icon — fill the interior */
 .nav-btn.active svg {
   fill: var(--color-accent);
   stroke: var(--color-accent);
@@ -105,6 +91,7 @@
   flex-shrink: 0;
   transition: fill var(--duration-fast) var(--ease-out),
               stroke var(--duration-fast) var(--ease-out);
+  margin-top: -2px;
 }
 
 /* ----- Badge ----- */
@@ -148,11 +135,6 @@
 }
 
 /* ----- 5-tab Layout (admin visible) ----- */
-.bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn {
-  min-width: 42px;
-  padding: var(--space-xs) 2px;
-}
-
 .bottom-nav:has(.nav-btn:nth-child(5)) .nav-btn svg {
   width: 22px;
   height: 22px;
@@ -161,15 +143,12 @@
 /* ----- Landscape: compact bar ----- */
 @media (max-height: 500px) and (orientation: landscape) {
   .bottom-nav {
-    height: 48px;
-    padding: 0 var(--space-sm);
-    border-radius: var(--radius-lg);
-    margin-bottom: calc(var(--space-sm) + var(--safe-bottom));
+    height: calc(42px + var(--safe-bottom));
+    padding: 0 var(--space-lg) var(--safe-bottom);
   }
 
   .nav-btn {
-    min-height: 40px;
-    gap: 0;
+    min-height: 36px;
   }
 
   .nav-btn svg {
@@ -178,48 +157,49 @@
   }
 
   .nav-btn.active::after {
-    bottom: 2px;
-    width: 16px;
-    height: 2px;
+    bottom: 4px;
+    width: 3px;
+    height: 3px;
   }
 }
 
 /* ----- Very small screens (iPhone SE, older Androids) ----- */
 @media (max-width: 374px) {
   .bottom-nav {
-    left: var(--space-md);
-    right: var(--space-md);
-    height: 56px;
-  }
-
-  .nav-btn {
-    min-width: 44px;
+    height: calc(46px + var(--safe-bottom));
+    padding: 0 var(--space-md) var(--safe-bottom);
   }
 
   .nav-btn svg {
     width: 22px;
     height: 22px;
   }
+
+  .nav-btn.active::after {
+    bottom: 4px;
+    width: 3px;
+    height: 3px;
+  }
 }
 
 /* ----- Content bottom padding so nothing hides behind nav ----- */
 .scroll-screen {
-  padding-bottom: calc(64px + var(--safe-bottom) + var(--space-md));
+  padding-bottom: calc(50px + var(--safe-bottom) + var(--space-md));
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
   .scroll-screen {
-    padding-bottom: calc(48px + var(--safe-bottom) + var(--space-sm));
+    padding-bottom: calc(42px + var(--safe-bottom) + var(--space-sm));
   }
 }
 
 @media (max-width: 374px) {
   .scroll-screen {
-    padding-bottom: calc(56px + var(--safe-bottom) + var(--space-sm));
+    padding-bottom: calc(46px + var(--safe-bottom) + var(--space-sm));
   }
 }
 
-/* ----- Desktop: hide (you'd use sidebar/top nav here) ----- */
+/* ----- Desktop: hide ----- */
 @media (min-width: 769px) {
   .bottom-nav {
     display: none;
