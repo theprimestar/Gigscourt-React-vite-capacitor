@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCredits } from '../gigSystem';
+import '../Profile.css';
+
+const IconBack = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
 
 const CREDIT_PACKAGES = [
   { credits: 3, amount: 150000, label: '3 Credits', price: '₦1,500' },
@@ -95,7 +102,6 @@ function SettingsScreen({ onBack, onLogout }) {
           credits: pkg.credits,
         },
         onSuccess: () => {
-          // Reload credits after successful payment
           setTimeout(async () => {
             const balance = await getCredits(data.user.id);
             setCredits(balance);
@@ -130,13 +136,12 @@ function SettingsScreen({ onBack, onLogout }) {
   return (
     <div className="settings-screen">
       <div className="settings-header">
-        <button onClick={onBack} className="settings-back">←</button>
+        <button onClick={onBack} className="settings-back"><IconBack /></button>
         <h2>Settings</h2>
         <span style={{ width: 50 }} />
       </div>
 
       <div className="settings-body">
-        {/* Privacy */}
         <div className="settings-section">
           <h3 className="settings-section-title">Privacy</h3>
           <div className="settings-item">
@@ -153,7 +158,6 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* Notifications */}
         <div className="settings-section">
           <h3 className="settings-section-title">Notifications</h3>
           <div className="settings-item">
@@ -182,10 +186,9 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* Credits */}
         <div className="settings-section">
           <h3 className="settings-section-title">Credits</h3>
-          <div className="settings-item" onClick={() => setShowPackages(true)} style={{ cursor: 'pointer' }}>
+          <div className="settings-item settings-item-tappable" onClick={() => setShowPackages(true)}>
             <div className="settings-item-info">
               <span className="settings-item-label">My Credits</span>
               <span className="settings-item-sub">{credits} credits remaining</span>
@@ -194,16 +197,15 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* Support */}
         <div className="settings-section">
           <h3 className="settings-section-title">Support</h3>
-          <div className="settings-item" onClick={() => alert('Help & Support coming soon.')}>
+          <div className="settings-item settings-item-tappable" onClick={() => alert('Help & Support coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Help & Support</span>
             </div>
             <span className="settings-arrow">›</span>
           </div>
-          <div className="settings-item" onClick={() => alert('Report a Problem coming soon.')}>
+          <div className="settings-item settings-item-tappable" onClick={() => alert('Report a Problem coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Report a Problem</span>
             </div>
@@ -211,16 +213,15 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* Legal */}
         <div className="settings-section">
           <h3 className="settings-section-title">Legal</h3>
-          <div className="settings-item" onClick={() => alert('Terms of Service coming soon.')}>
+          <div className="settings-item settings-item-tappable" onClick={() => alert('Terms of Service coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Terms of Service</span>
             </div>
             <span className="settings-arrow">›</span>
           </div>
-          <div className="settings-item" onClick={() => alert('Privacy Policy coming soon.')}>
+          <div className="settings-item settings-item-tappable" onClick={() => alert('Privacy Policy coming soon.')}>
             <div className="settings-item-info">
               <span className="settings-item-label">Privacy Policy</span>
             </div>
@@ -228,7 +229,6 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* App Info */}
         <div className="settings-section">
           <h3 className="settings-section-title">About</h3>
           <div className="settings-item">
@@ -239,25 +239,22 @@ function SettingsScreen({ onBack, onLogout }) {
           </div>
         </div>
 
-        {/* Logout */}
         <button className="settings-logout-btn" onClick={onLogout}>
           Log Out
         </button>
 
-        {/* Delete Account */}
         <button className="settings-delete-btn" onClick={handleDeleteAccount}>
           Delete Account
         </button>
       </div>
 
-      {/* Credit Package Selection */}
       {showPackages && (
-        <div className="bottom-sheet-overlay" onClick={() => setShowPackages(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="bottom-sheet-handle"></div>
-            <div className="bottom-sheet-content">
+        <div className="sheet-overlay" onClick={() => setShowPackages(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
               <h2>Buy Credits</h2>
-              <p style={{ color: '#8e8e93', fontSize: 13, marginBottom: 16 }}>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 16 }}>
                 Credits are used to receive reviews and boost your reputation.
               </p>
               <div className="credit-packages">
@@ -274,7 +271,7 @@ function SettingsScreen({ onBack, onLogout }) {
                 ))}
               </div>
               {paying && (
-                <p style={{ textAlign: 'center', color: '#8e8e93', marginTop: 12 }}>
+                <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', marginTop: 12 }}>
                   Processing payment...
                 </p>
               )}
