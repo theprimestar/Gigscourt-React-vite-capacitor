@@ -4,17 +4,13 @@
 
 .home-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--color-bg);
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(64px + var(--space-sm));
-  /* Remove safe-bottom from padding — it's handled by bottom: 0 + the nav */
 }
 
 /* --- Header --- */
