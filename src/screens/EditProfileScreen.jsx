@@ -4,6 +4,25 @@ import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
 import L from 'leaflet';
 import 'leaflet-rotate';
+import '../Profile.css';
+
+const IconBack = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+);
+
+const IconAvatar = () => (
+  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/>
+  </svg>
+);
+
+const IconClose = () => (
+  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
 
 function EditProfileScreen({ onBack }) {
   const [fullName, setFullName] = useState('');
@@ -182,12 +201,6 @@ function EditProfileScreen({ onBack }) {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    // FIXED: Use update() instead of upsert() to prevent data loss
-    // update() only modifies the columns specified, leaving all other
-    // profile data intact (work_photos, onboarding_completed, gig_count,
-    // rating, review_count, show_phone, onesignal_player_id)
-    // The profile always exists at this point (user completed onboarding),
-    // so upsert is unnecessary and destructive
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -235,7 +248,7 @@ function EditProfileScreen({ onBack }) {
   return (
     <div className="edit-profile-screen">
       <div className="edit-profile-header">
-        <button onClick={onBack} className="edit-profile-back">←</button>
+        <button onClick={onBack} className="edit-profile-back"><IconBack /></button>
         <h2>Edit Profile</h2>
         <button onClick={handleSave} disabled={saving} className="edit-profile-save">
           {saving ? 'Saving...' : 'Save'}
@@ -248,13 +261,13 @@ function EditProfileScreen({ onBack }) {
           <div className="profile-pic-section">
             <div className="avatar-wrapper" onClick={handleAvatarClick}>
               <div className={`avatar-circle ${profilePic ? 'has-photo' : ''}`}>
-                {profilePic ? <img src={profilePic} alt="" /> : <span>👤</span>}
+                {profilePic ? <img src={profilePic} alt="" /> : <IconAvatar />}
               </div>
               {!uploading && (
                 <div className="avatar-overlay"><span>+</span></div>
               )}
               {uploading && (
-                <div className="avatar-uploading"><div className="spinner"></div></div>
+                <div className="avatar-uploading"><div className="avatar-spinner" /></div>
               )}
             </div>
             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
@@ -296,8 +309,8 @@ function EditProfileScreen({ onBack }) {
           {selectedServices.length > 0 && (
             <div className="selected-tags">
               {selectedServices.map((slug) => (
-                <span key={slug} className="tag" onClick={() => toggleService(slug)}>
-                  {slug.replace(/-/g, ' ')} ✕
+                <span key={slug} className="selected-tag" onClick={() => toggleService(slug)}>
+                  {slug.replace(/-/g, ' ')} <IconClose />
                 </span>
               ))}
             </div>
@@ -317,7 +330,7 @@ function EditProfileScreen({ onBack }) {
                   {groupedServices[category].map((s) => (
                     <button
                       key={s.id}
-                      className={`chip ${selectedServices.includes(s.slug) ? 'chip-selected' : ''}`}
+                      className={`chip ${selectedServices.includes(s.slug) ? 'active' : ''}`}
                       onClick={() => toggleService(s.slug)}
                     >
                       {s.name}
