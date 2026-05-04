@@ -13,7 +13,7 @@
   align-items: center;
   background: var(--color-bg);
   padding: 2px var(--space-md);
-  padding-bottom: calc(2px + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   transition: transform var(--duration-slow) var(--ease-out);
 }
 
@@ -32,12 +32,13 @@
   transition: color var(--duration-fast) var(--ease-out);
   position: relative;
   padding: 0;
+  padding-bottom: 4px;
 }
 
 .nav-btn::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: -2;
   width: 20px;
   height: 2px;
   border-radius: 1px;
