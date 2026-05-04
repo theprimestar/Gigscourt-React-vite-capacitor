@@ -29,14 +29,14 @@
   }
 }
 
-/* Extend background behind safe area */
+/* Extend background behind safe area with 3px overlap */
 .bottom-nav::after {
   content: '';
   position: absolute;
-  top: 100%;
+  top: calc(100% - 3px);
   left: 0;
   right: 0;
-  height: var(--safe-bottom);
+  height: calc(var(--safe-bottom) + 3px);
   background: var(--color-surface);
 }
 
@@ -156,7 +156,7 @@
   }
 
   .scroll-screen {
-    padding-bottom: calc(36px + var(--space-sm));
+    padding-bottom: calc(36px + var(--safe-bottom) + var(--space-sm));
   }
 }
 
@@ -172,7 +172,7 @@
   }
 
   .scroll-screen {
-    padding-bottom: calc(38px + var(--space-sm));
+    padding-bottom: calc(38px + var(--safe-bottom) + var(--space-sm));
   }
 }
 
