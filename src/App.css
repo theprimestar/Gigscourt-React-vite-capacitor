@@ -27,8 +27,8 @@
 
   /* Center the pill when it doesn't span full width */
   margin: 0 auto;
-  margin-bottom: calc(var(--space-sm) + var(--safe-bottom));
-
+  margin-bottom: var(--safe-bottom);
+   
   /* Spring transition */
   transition: transform var(--duration-slow) var(--ease-spring),
               opacity var(--duration-normal) var(--ease-out);
