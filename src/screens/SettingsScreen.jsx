@@ -4,6 +4,16 @@ import { supabase } from '../lib/supabase';
 import { getCredits, getPurchaseHistory } from '../gigSystem';
 import '../Profile.css';
 
+const CACHE_KEY_SETTINGS = 'gigscourt_settings';
+const CACHE_KEY_CREDITS = 'gigscourt_settings_credits';
+
+function getCached(key) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function setCached(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
 const CREDIT_PACKAGES = [
   { credits: 3, amount: 150000, label: '3 Credits', price: '₦1,500' },
   { credits: 5, amount: 225000, label: '5 Credits', price: '₦2,250' },
@@ -17,12 +27,15 @@ const IconBack = () => (
   </svg>
 );
 
-function SettingsScreen({ onBack, onLogout }) {
-  const [showPhone, setShowPhone] = useState(true);
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [credits, setCredits] = useState(0);
-  const [loading, setLoading] = useState(true);
+function SettingsScreen({ onBack, onLogout, isVisible }) {
+  const cachedSettings = getCached(CACHE_KEY_SETTINGS);
+  const cachedCredits = getCached(CACHE_KEY_CREDITS);
+
+  const [showPhone, setShowPhone] = useState(cachedSettings?.showPhone ?? true);
+  const [pushEnabled, setPushEnabled] = useState(cachedSettings?.pushEnabled ?? true);
+  const [emailEnabled, setEmailEnabled] = useState(cachedSettings?.emailEnabled ?? false);
+  const [credits, setCredits] = useState(cachedCredits ?? 0);
+  const [loading, setLoading] = useState(!cachedSettings);
   const [showPackages, setShowPackages] = useState(false);
   const [paying, setPaying] = useState(false);
   const [showCreditHistory, setShowCreditHistory] = useState(false);
@@ -38,10 +51,14 @@ function SettingsScreen({ onBack, onLogout }) {
   const [showTerms, setShowTerms] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (isVisible && !initialLoadDone.current) {
+      loadSettings();
+      initialLoadDone.current = true;
+    }
+  }, [isVisible]);
 
   const loadSettings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -57,11 +74,17 @@ function SettingsScreen({ onBack, onLogout }) {
       setShowPhone(data.show_phone !== false);
       setPushEnabled(data.push_enabled !== false);
       setEmailEnabled(data.email_enabled === true);
+      setCached(CACHE_KEY_SETTINGS, {
+        showPhone: data.show_phone !== false,
+        pushEnabled: data.push_enabled !== false,
+        emailEnabled: data.email_enabled === true,
+      });
     }
 
     try {
       const balance = await getCredits(user.id);
       setCredits(balance);
+      setCached(CACHE_KEY_CREDITS, balance);
     } catch (err) {
       console.error('Failed to load credits:', err);
     }
@@ -72,6 +95,7 @@ function SettingsScreen({ onBack, onLogout }) {
   const toggleShowPhone = async () => {
     const newValue = !showPhone;
     setShowPhone(newValue);
+    setCached(CACHE_KEY_SETTINGS, { showPhone: newValue, pushEnabled, emailEnabled });
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('profiles').update({
       show_phone: newValue,
@@ -82,6 +106,7 @@ function SettingsScreen({ onBack, onLogout }) {
   const togglePush = async () => {
     const newValue = !pushEnabled;
     setPushEnabled(newValue);
+    setCached(CACHE_KEY_SETTINGS, { showPhone, pushEnabled: newValue, emailEnabled });
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('profiles').update({
       push_enabled: newValue,
@@ -92,6 +117,7 @@ function SettingsScreen({ onBack, onLogout }) {
   const toggleEmail = async () => {
     const newValue = !emailEnabled;
     setEmailEnabled(newValue);
+    setCached(CACHE_KEY_SETTINGS, { showPhone, pushEnabled, emailEnabled: newValue });
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('profiles').update({
       email_enabled: newValue,
@@ -122,6 +148,7 @@ function SettingsScreen({ onBack, onLogout }) {
         setTimeout(async () => {
           const balance = await getCredits(user.id);
           setCredits(balance);
+          setCached(CACHE_KEY_CREDITS, balance);
         }, 2000);
         setPaying(false);
       },
