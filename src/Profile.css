@@ -122,7 +122,7 @@
   display: flex;
   align-items: center;
   padding: 0 16px 12px;
-  gap: 28px;
+  gap: 20px;
 }
 
 .profile-avatar {
@@ -157,13 +157,16 @@
 
 .profile-stats {
   display: flex;
-  gap: 28px;
+  gap: 18px;
+  flex: 1;
+  justify-content: space-around;
 }
 
 .profile-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 0;
 }
 
 .profile-stat-tappable {
