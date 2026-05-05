@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { getCredits, getPurchaseHistory } from '../gigSystem';
@@ -51,13 +51,9 @@ function SettingsScreen({ onBack, onLogout, isVisible }) {
   const [showTerms, setShowTerms] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const initialLoadDone = useRef(false);
 
   useEffect(() => {
-    if (isVisible && !initialLoadDone.current) {
-      loadSettings();
-      initialLoadDone.current = true;
-    }
+    if (isVisible) loadSettings();
   }, [isVisible]);
 
   const loadSettings = async () => {
