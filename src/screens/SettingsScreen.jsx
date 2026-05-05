@@ -525,6 +525,19 @@ function SettingsScreen({ onBack, onLogout, isVisible }) {
                       <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
                         {formatDate(ticket.created_at)}
                       </span>
+                      {ticket.status === 'resolved' && ticket.response_text && (
+                        <div style={{
+                          marginTop: 8, padding: '10px 14px', borderRadius: 10,
+                          background: 'rgba(52, 199, 89, 0.06)', borderLeft: '3px solid var(--color-success)'
+                        }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-success)', marginBottom: 3 }}>
+                            Response from GigsCourt:
+                          </p>
+                          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+                            {ticket.response_text}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
