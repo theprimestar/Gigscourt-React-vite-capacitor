@@ -213,8 +213,9 @@ function AdminScreen({ isVisible }) {
 
   // Issues
   const handleResolveIssue = async (id) => {
-    await supabase.from('reported_issues').update({ status: 'resolved' }).eq('id', id);
-    loadReportedIssues();
+    const { data, error } = await supabase.from('reported_issues').update({ status: 'resolved' }).eq('id', id).select();
+    console.log('Resolve result:', JSON.stringify(data), 'Error:', JSON.stringify(error));
+    if (!error) loadReportedIssues();
   };
 
   // Broadcast
