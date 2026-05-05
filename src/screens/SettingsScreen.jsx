@@ -228,7 +228,7 @@ function SettingsScreen({ onBack, onLogout, isVisible }) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase.from('profiles').update({
+      const { error } = await supabase.from('profiles').update({
         deleted_at: new Date().toISOString(),
         credits: 0,
         full_name: null,
@@ -246,8 +246,11 @@ function SettingsScreen({ onBack, onLogout, isVisible }) {
         gig_count: 0,
         updated_at: new Date().toISOString(),
       }).eq('id', user.id);
-      await supabase.auth.signOut();
-      onLogout();
+      console.log('Delete error:', JSON.stringify(error));
+      if (!error) {
+        await supabase.auth.signOut();
+        onLogout();
+      }
     } catch (err) {
       console.error('Delete account error:', err);
     } finally {
