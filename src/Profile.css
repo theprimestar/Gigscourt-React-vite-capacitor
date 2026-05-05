@@ -841,6 +841,16 @@
   color: var(--color-text-secondary);
 }
 
+/* --- Tappable Settings Row --- */
+
+.settings-item-tappable {
+  cursor: pointer;
+}
+
+.settings-item-tappable:active {
+  background: var(--color-bg);
+}
+
 /* --- Toggle Switch --- */
 
 .toggle-switch {
