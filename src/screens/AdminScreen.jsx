@@ -126,11 +126,12 @@ function AdminScreen({ isVisible }) {
   };
 
   const loadReportedIssues = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('reported_issues')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50);
+    console.log('Issues data:', data, 'Error:', error);
     if (isMounted.current && data) setReportedIssues(data);
   };
 
