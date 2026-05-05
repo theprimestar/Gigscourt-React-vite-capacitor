@@ -2,6 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import '../Admin.css';
 
+const PRESET_RESPONSES = [
+  { label: 'Payment Verified', text: 'We\'ve verified your payment and your credits have been updated. Please refresh the app. If the issue persists, share your payment reference.' },
+  { label: 'Account Fixed', text: 'We\'ve checked your account and everything looks good on our end. Please try again. If the issue persists, try reinstalling the app.' },
+  { label: 'Gig Resolved', text: 'We\'ve reviewed your gig details. The issue should be resolved now. Both parties must complete the gig before a review can be submitted.' },
+  { label: 'Chat Working', text: 'We\'ve checked the chat system and it\'s working properly. Please ensure your internet connection is stable. Try restarting the app.' },
+  { label: 'Search Tips', text: 'Search results depend on providers near your location. Try increasing the search radius or checking that location services are enabled.' },
+  { label: 'User Reviewed', text: 'Thank you for reporting this. We\'ve reviewed the account and taken appropriate action.' },
+  { label: 'Bug Noted', text: 'Thank you for reporting this. Our team is investigating and we\'ll release a fix soon.' },
+  { label: 'Noted', text: 'Thank you for reaching out. We\'ve noted your feedback.' },
+];
+
 function AdminScreen({ isVisible }) {
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -25,6 +36,8 @@ function AdminScreen({ isVisible }) {
   const [editName, setEditName] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
+  const [resolvingIssueId, setResolvingIssueId] = useState(null);
+  const [customResponse, setCustomResponse] = useState('');
   
   // User search
   const [userQuery, setUserQuery] = useState('');
@@ -213,7 +226,15 @@ function AdminScreen({ isVisible }) {
 
   // Issues
   const handleResolveIssue = async (id) => {
-    await supabase.rpc('resolve_reported_issue', { p_issue_id: id });
+    await supabase.rpc('resolve_reported_issue', { p_issue_id: id, p_response_text: customResponse.trim() || null });
+    setResolvingIssueId(null);
+    setCustomResponse('');
+    loadReportedIssues();
+  };
+
+  const handlePresetResolve = async (id, text) => {
+    await supabase.rpc('resolve_reported_issue', { p_issue_id: id, p_response_text: text });
+    setResolvingIssueId(null);
     loadReportedIssues();
   };
 
@@ -571,10 +592,67 @@ function AdminScreen({ isVisible }) {
                   {issue.description && <p className="issue-description">{issue.description}</p>}
                   <div className="issue-footer">
                     <span className="issue-date">{new Date(issue.created_at).toLocaleDateString()}</span>
-                    {issue.status === 'pending' && (
-                      <button onClick={() => handleResolveIssue(issue.id)} className="btn-approve">Resolve</button>
+                    {issue.status === 'pending' && resolvingIssueId !== issue.id && (
+                      <button onClick={() => setResolvingIssueId(issue.id)} className="btn-approve">Resolve</button>
                     )}
                   </div>
+                  
+                  {resolvingIssueId === issue.id && (
+                    <div style={{ marginTop: 12, padding: 12, background: 'var(--color-bg)', borderRadius: 10 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-primary)' }}>
+                        Quick Reply:
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                        {PRESET_RESPONSES.map((preset, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handlePresetResolve(issue.id, preset.text)}
+                            style={{
+                              padding: '6px 12px', borderRadius: 20, border: '1px solid var(--color-border)',
+                              background: 'var(--color-surface)', fontSize: 12, color: 'var(--color-text-primary)',
+                              cursor: 'pointer', whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={customResponse}
+                        onChange={e => setCustomResponse(e.target.value)}
+                        placeholder="Or type a custom response..."
+                        rows={2}
+                        style={{
+                          width: '100%', padding: '10px 12px', borderRadius: 10,
+                          border: '1px solid var(--color-border)', background: 'var(--color-surface)',
+                          fontSize: 13, color: 'var(--color-text-primary)', fontFamily: 'inherit',
+                          resize: 'none', marginBottom: 8
+                        }}
+                      />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => handleResolveIssue(issue.id)} className="btn-approve">
+                          {customResponse.trim() ? 'Reply & Resolve' : 'Resolve Without Reply'}
+                        </button>
+                        <button onClick={() => { setResolvingIssueId(null); setCustomResponse(''); }} className="btn-reject">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {issue.status === 'resolved' && issue.response_text && (
+                    <div style={{
+                      marginTop: 10, padding: '10px 14px', borderRadius: 10,
+                      background: 'rgba(52, 199, 89, 0.06)', borderLeft: '3px solid var(--color-success)'
+                    }}>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-success)', marginBottom: 4 }}>
+                        Response:
+                      </p>
+                      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+                        {issue.response_text}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
               {reportedIssues.length === 0 && <p className="empty-text">No reported issues</p>}
