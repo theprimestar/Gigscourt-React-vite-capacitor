@@ -10,6 +10,13 @@ const CACHE_KEY_PROFILE_PREFIX = 'gigscourt_profile_';
 const CACHE_KEY_REVIEWS_PREFIX = 'gigscourt_reviews_';
 const CACHE_KEY_GIG_HISTORY_PREFIX = 'gigscourt_gighistory_';
 
+const CREDIT_PACKAGES = [
+  { credits: 3, amount: 150000, label: '3 Credits', price: '₦1,500' },
+  { credits: 5, amount: 225000, label: '5 Credits', price: '₦2,250' },
+  { credits: 8, amount: 340000, label: '8 Credits', price: '₦3,400' },
+  { credits: 10, amount: 400000, label: '10 Credits', price: '₦4,000' },
+];
+
 function getCached(key) {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
@@ -37,8 +44,8 @@ const IconMapPin = () => (
   </svg>
 );
 
-const IconStar = ({ filled }) => (
-  <svg viewBox="0 0 24 24" width="12" height="12" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+const IconStar = ({ filled, width = 12, height = 12 }) => (
+  <svg viewBox="0 0 24 24" width={width} height={height} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
   </svg>
 );
@@ -55,9 +62,11 @@ const IconCloseLarge = () => (
   </svg>
 );
 
-const IconSettings = () => (
+const IconHamburger = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
   </svg>
 );
 
@@ -103,6 +112,22 @@ const IconTrash = () => (
   </svg>
 );
 
+const IconBriefcase = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+  </svg>
+);
+
+const IconCoin = () => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M14.5 9.5c0-1.5-1-2.5-2.5-2.5s-2.5 1-2.5 2.5 1 2.5 2.5 2.5 2.5 1 2.5 2.5-1 2.5-2.5 2.5-2.5-1-2.5-2.5"/>
+    <line x1="12" y1="6" x2="12" y2="4"/>
+    <line x1="12" y1="20" x2="12" y2="22"/>
+  </svg>
+);
+
 function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOpenSettings, isVisible, onRegisterGigWithPerson }) {
   const targetId = userId;
   const profileCacheKey = isOwn ? CACHE_KEY_OWN_PROFILE : CACHE_KEY_PROFILE_PREFIX + targetId;
@@ -118,6 +143,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     gigsThisMonth: 0,
   } : { gigs: 0, rating: 'New', gigsThisMonth: 0 });
   const [loading, setLoading] = useState(!cachedProfile);
+  const [credits, setCredits] = useState(0);
   const [workPhotos, setWorkPhotos] = useState(() => {
     const photos = cachedProfile?.work_photos || [];
     return [...photos].reverse();
@@ -129,6 +155,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   const [showReviews, setShowReviews] = useState(false);
   const [showGigHistory, setShowGigHistory] = useState(false);
   const [showRecentChats, setShowRecentChats] = useState(false);
+  const [showCreditPackages, setShowCreditPackages] = useState(false);
   const [reviews, setReviews] = useState(() => getCached(reviewsCacheKey) || []);
   const [gigHistory, setGigHistory] = useState(() => getCached(gigHistoryCacheKey + '_provider') || []);
   const [gigHistoryTab, setGigHistoryTab] = useState('provider');
@@ -138,6 +165,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
+  const [paying, setPaying] = useState(false);
 
   const fileInputRef = useRef(null);
   const nameRef = useRef(null);
@@ -149,11 +177,24 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     isMounted.current = true;
     if (isVisible) {
       loadProfile();
+      if (isOwn) loadCredits();
     } else {
       initialFetchDone.current = false;
     }
     return () => { isMounted.current = false; };
   }, [targetId, isVisible]);
+
+  const loadCredits = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !isMounted.current) return;
+      const { getCredits } = await import('../gigSystem');
+      const balance = await getCredits(user.id);
+      if (isMounted.current) setCredits(balance);
+    } catch (err) {
+      console.error('Failed to load credits:', err);
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -401,6 +442,39 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     });
   };
 
+  const handleBuyCredits = (pkg) => {
+    setShowCreditPackages(false);
+    setPaying(true);
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data?.user) return;
+
+      const handler = window.PaystackPop.setup({
+        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        email: data.user.email,
+        amount: pkg.amount,
+        ref: `gigs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        metadata: {
+          user_id: data.user.id,
+          credits: pkg.credits,
+        },
+        onSuccess: () => {
+          setTimeout(async () => {
+            const { getCredits } = await import('../gigSystem');
+            const balance = await getCredits(data.user.id);
+            if (isMounted.current) setCredits(balance);
+          }, 2000);
+          setPaying(false);
+        },
+        onClose: () => {
+          setPaying(false);
+        },
+      });
+
+      handler.openIframe();
+    });
+  };
+
   const formatServices = (services) => {
     if (!services || services.length === 0) return '';
     return services.map((s) => s.replace(/-/g, ' ')).join(', ');
@@ -457,7 +531,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       {isOwn && !isSticky && (
         <div className="profile-settings-row">
           <span />
-          <button className="profile-settings-btn" onClick={onOpenSettings}><IconSettings /></button>
+          <button className="profile-settings-btn" onClick={onOpenSettings}><IconHamburger /></button>
         </div>
       )}
 
@@ -473,12 +547,18 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         <div className="profile-stats">
           <div className="profile-stat profile-stat-tappable" onClick={handleOpenGigHistory}>
             <span className="stat-number">{stats.gigs}</span>
-            <span className="stat-label">Gigs</span>
+            <span className="stat-label"><IconBriefcase /> Gigs</span>
           </div>
           <div className="profile-stat profile-stat-tappable" onClick={handleOpenReviews}>
             <span className="stat-number">{stats.rating}</span>
-            <span className="stat-label">Rating</span>
+            <span className="stat-label"><IconStar width={14} height={14} /> Rating</span>
           </div>
+          {isOwn && (
+            <div className="profile-stat profile-stat-tappable" onClick={() => setShowCreditPackages(true)}>
+              <span className="stat-number">{credits}</span>
+              <span className="stat-label"><IconCoin /> Credits</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -769,6 +849,38 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreditPackages && (
+        <div className="sheet-overlay" onClick={() => setShowCreditPackages(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-body">
+              <h2>Buy Credits</h2>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 13, marginBottom: 16 }}>
+                Credits are used to receive reviews and boost your reputation.
+              </p>
+              <div className="credit-packages">
+                {CREDIT_PACKAGES.map((pkg) => (
+                  <button
+                    key={pkg.credits}
+                    className="credit-package-btn"
+                    onClick={() => handleBuyCredits(pkg)}
+                    disabled={paying}
+                  >
+                    <span className="package-label">{pkg.label}</span>
+                    <span className="package-price">{pkg.price}</span>
+                  </button>
+                ))}
+              </div>
+              {paying && (
+                <p style={{ textAlign: 'center', color: 'var(--color-text-secondary)', marginTop: 12 }}>
+                  Processing payment...
+                </p>
               )}
             </div>
           </div>
