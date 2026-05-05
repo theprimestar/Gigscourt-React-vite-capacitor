@@ -99,36 +99,38 @@ function SettingsScreen({ onBack, onLogout }) {
     }).eq('id', user.id);
   };
 
-  const handleBuyCredits = (pkg) => {
+  const handleBuyCredits = async (pkg) => {
     setShowPackages(false);
     setPaying(true);
 
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data?.user) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setPaying(false);
+      return;
+    }
 
-      const handler = window.PaystackPop.setup({
-        key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-        email: data.user.email,
-        amount: pkg.amount,
-        ref: `gigs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          user_id: data.user.id,
-          credits: pkg.credits,
-        },
-        onSuccess: () => {
-          setTimeout(async () => {
-            const balance = await getCredits(data.user.id);
-            setCredits(balance);
-          }, 2000);
-          setPaying(false);
-        },
-        onClose: () => {
-          setPaying(false);
-        },
-      });
-
-      handler.openIframe();
+    const handler = window.PaystackPop.setup({
+      key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+      email: user.email,
+      amount: pkg.amount,
+      ref: `gigs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      metadata: {
+        user_id: user.id,
+        credits: pkg.credits,
+      },
+      onSuccess: () => {
+        setTimeout(async () => {
+          const balance = await getCredits(user.id);
+          setCredits(balance);
+        }, 2000);
+        setPaying(false);
+      },
+      onClose: () => {
+        setPaying(false);
+      },
     });
+
+    handler.openIframe();
   };
 
   const handleOpenCreditHistory = async () => {
