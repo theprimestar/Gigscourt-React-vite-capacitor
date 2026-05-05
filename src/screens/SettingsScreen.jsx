@@ -228,24 +228,7 @@ function SettingsScreen({ onBack, onLogout, isVisible }) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { error } = await supabase.from('profiles').update({
-        deleted_at: new Date().toISOString(),
-        credits: 0,
-        full_name: null,
-        bio: null,
-        phone: null,
-        profile_pic_url: null,
-        services: [],
-        work_photos: [],
-        workspace_lat: null,
-        workspace_lng: null,
-        workspace_address: null,
-        onboarding_completed: false,
-        rating: 0,
-        review_count: 0,
-        gig_count: 0,
-        updated_at: new Date().toISOString(),
-      }).eq('id', user.id);
+      const { error } = await supabase.rpc('soft_delete_user', { p_user_id: user.id });
       console.log('Delete error:', JSON.stringify(error));
       if (!error) {
         await supabase.auth.signOut();
