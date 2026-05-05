@@ -126,12 +126,14 @@ function AdminScreen({ isVisible }) {
   };
 
   const loadReportedIssues = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('Admin user ID:', user?.id);
     const { data, error } = await supabase
       .from('reported_issues')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50);
-    console.log('Issues data:', data, 'Error:', error);
+    console.log('Issues data:', JSON.stringify(data), 'Error:', JSON.stringify(error));
     if (isMounted.current && data) setReportedIssues(data);
   };
 
