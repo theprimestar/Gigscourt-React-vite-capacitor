@@ -954,3 +954,7 @@
 .photo-grid-item:nth-last-child(2):nth-child(3n+1),
 .photo-grid-item:last-child:nth-child(3n+1) { border-bottom-left-radius: 12px; }
 .photo-grid-item:last-child:nth-child(3n) { border-bottom-right-radius: 12px; }
+
+.profile-screen .sheet-overlay {
+  z-index: 1000;
+}
