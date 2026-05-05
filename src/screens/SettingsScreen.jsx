@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { getCredits, getPurchaseHistory } from '../gigSystem';
