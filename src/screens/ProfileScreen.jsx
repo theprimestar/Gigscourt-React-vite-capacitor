@@ -16,9 +16,6 @@ function getCached(key) {
 function setCached(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
-function clearCached(key) {
-  try { localStorage.removeItem(key); } catch {}
-}
 
 function getPhotoUrl(url, size) {
   if (!url) return '';
@@ -97,6 +94,12 @@ const IconChevronLeft = () => (
 const IconChevronRight = () => (
   <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6"/>
+  </svg>
+);
+
+const IconTrash = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
   </svg>
 );
 
@@ -324,14 +327,19 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         const result = await uploadRes.json();
         if (!uploadRes.ok) throw new Error(result.message || 'Upload failed');
 
+        const newUrl = result.url;
+        
         setWorkPhotos(prev => {
-          const updated = [result.url, ...prev];
-          const { data: { user } } = supabase.auth.getUser().then(({ data }) => {
+          const updated = [newUrl, ...prev];
+          const reversed = [...updated].reverse();
+          
+          supabase.auth.getUser().then(({ data }) => {
             if (data?.user) {
-              supabase.from('profiles').update({ work_photos: [...updated].reverse() }).eq('id', data.user.id);
-              setCached(CACHE_KEY_OWN_PROFILE, { ...profile, work_photos: [...updated].reverse() });
+              supabase.from('profiles').update({ work_photos: reversed }).eq('id', data.user.id);
+              setCached(CACHE_KEY_OWN_PROFILE, { ...profile, work_photos: reversed });
             }
           });
+          
           return updated;
         });
       } catch (err) {
@@ -343,9 +351,34 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleDeletePhoto = async (index) => {
+  const handleDeletePhoto = async () => {
+    if (!confirm('Delete this photo?')) return;
+
+    const newPhotos = workPhotos.filter((_, i) => i !== galleryIndex);
+    setWorkPhotos(newPhotos);
+
+    const reversed = [...newPhotos].reverse();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ work_photos: reversed }).eq('id', user.id);
+      setCached(CACHE_KEY_OWN_PROFILE, { ...profile, work_photos: reversed });
+    }
+
+    if (newPhotos.length === 0) {
+      setGalleryOpen(false);
+      setGalleryIndex(0);
+    } else if (galleryIndex >= newPhotos.length) {
+      setGalleryIndex(newPhotos.length - 1);
+    }
+  };
+
+  const handleGridDeletePhoto = async (e, index) => {
+    e.stopPropagation();
+    if (!confirm('Delete this photo?')) return;
+
     const newPhotos = workPhotos.filter((_, i) => i !== index);
     setWorkPhotos(newPhotos);
+
     const reversed = [...newPhotos].reverse();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -504,12 +537,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       </div>
 
       {isOwn && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 8px' }}>
+        <div className="add-photos-row">
           <button
             onClick={handleAddPhotos}
             disabled={uploadingPhoto}
-            className="chip"
-            style={{ fontSize: '13px', gap: '4px' }}
+            className="chip add-photos-chip"
           >
             {uploadingPhoto ? 'Uploading...' : 'Add Photos +'}
           </button>
@@ -517,21 +549,10 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       )}
 
       {isOwn && workPhotos.length === 0 && (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '40px 24px',
-          color: 'var(--color-text-secondary)',
-          textAlign: 'center',
-          gap: '12px',
-        }}>
+        <div className="photos-empty-state">
           <IconGallery />
-          <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
-            Showcase your work
-          </p>
-          <p style={{ fontSize: '13px', lineHeight: 1.5, margin: 0, maxWidth: 280 }}>
+          <p className="photos-empty-title">Showcase your work</p>
+          <p className="photos-empty-sub">
             Add photos of your best work to attract more clients. Tap 'Add Photos +' above to get started.
           </p>
         </div>
@@ -545,7 +566,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               {isOwn && (
                 <button
                   className="photo-delete-btn"
-                  onClick={(e) => { e.stopPropagation(); handleDeletePhoto(index); }}
+                  onClick={(e) => handleGridDeletePhoto(e, index)}
                 >
                   <IconClose />
                 </button>
@@ -570,66 +591,34 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
       />
 
       {galleryOpen && (
-        <div
-          className="fullscreen-overlay"
-          style={{
-            background: 'rgba(0,0,0,0.92)',
-            padding: '40px 16px',
-            alignItems: 'center',
-          }}
-          onClick={() => setGalleryOpen(false)}
-        >
+        <div className="gallery-overlay" onClick={() => setGalleryOpen(false)}>
           <button
-            className="fullscreen-close"
+            className="gallery-close-btn"
             onClick={() => setGalleryOpen(false)}
-            style={{ position: 'absolute', top: 'max(16px, var(--safe-top))', right: 'max(16px, var(--safe-right))', zIndex: 2 }}
           >
             <IconCloseLarge />
           </button>
 
+          {isOwn && (
+            <button
+              className="gallery-delete-btn"
+              onClick={handleDeletePhoto}
+            >
+              <IconTrash />
+            </button>
+          )}
+
           {workPhotos.length > 1 && (
             <>
               <button
+                className="gallery-nav-btn gallery-nav-left"
                 onClick={(e) => { e.stopPropagation(); navigateGallery(-1); }}
-                style={{
-                  position: 'absolute',
-                  left: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  zIndex: 2,
-                  background: 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#FFFFFF',
-                  cursor: 'pointer',
-                }}
               >
                 <IconChevronLeft />
               </button>
               <button
+                className="gallery-nav-btn gallery-nav-right"
                 onClick={(e) => { e.stopPropagation(); navigateGallery(1); }}
-                style={{
-                  position: 'absolute',
-                  right: '8px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  zIndex: 2,
-                  background: 'rgba(255,255,255,0.1)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#FFFFFF',
-                  cursor: 'pointer',
-                }}
               >
                 <IconChevronRight />
               </button>
@@ -639,28 +628,12 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
           <img
             src={getPhotoUrl(workPhotos[galleryIndex], 'gallery')}
             alt=""
+            className="gallery-image"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              maxWidth: '100%',
-              maxHeight: '80vh',
-              objectFit: 'contain',
-              borderRadius: '14px',
-            }}
           />
 
           {workPhotos.length > 1 && (
-            <div style={{
-              position: 'absolute',
-              bottom: 'max(60px, var(--safe-bottom))',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              color: '#FFFFFF',
-              fontSize: '13px',
-              fontWeight: 500,
-              background: 'rgba(255,255,255,0.15)',
-              padding: '4px 12px',
-              borderRadius: '12px',
-            }}>
+            <div className="gallery-counter">
               {galleryIndex + 1} / {workPhotos.length}
             </div>
           )}
