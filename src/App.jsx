@@ -328,6 +328,7 @@ function App() {
       </div>
       <div style={{ display: currentDeepScreen?.screen === 'settings' ? 'block' : 'none', position: 'fixed', inset: 0 }}>
         <SettingsScreen
+          isVisible={currentDeepScreen?.screen === 'settings'}
           onBack={goBack}
           onLogout={async () => {
             await supabase.auth.signOut();
