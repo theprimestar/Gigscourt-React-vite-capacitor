@@ -89,7 +89,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: calc(var(--safe-top) + 16px) 16px 8px;
+  padding: calc(var(--safe-top) + 24px) 16px 8px;
 }
 
 .profile-settings-row .profile-back-btn {
@@ -179,6 +179,9 @@
 .stat-label {
   font-size: 13px;
   color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 /* --- Name --- */
@@ -393,7 +396,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.95);
-  z-index: 100;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
