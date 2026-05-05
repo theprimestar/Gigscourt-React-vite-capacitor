@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { supabase } from '../lib/supabase';
 import { imagekitUrl, imagekitPublicKey } from '../lib/imagekit';
 import { IMAGEKIT_AUTH_URL } from '../lib/config';
@@ -670,7 +671,7 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
         style={{ display: 'none' }}
       />
 
-      {galleryOpen && (
+      {galleryOpen && ReactDOM.createPortal(
         <div className="gallery-overlay" onClick={() => setGalleryOpen(false)}>
           <button
             className="gallery-close-btn"
@@ -717,10 +718,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               {galleryIndex + 1} / {workPhotos.length}
             </div>
           )}
-        </div>
+        </div>,
+        document.getElementById('portal-root')
       )}
 
-      {showReviews && (
+      {showReviews && ReactDOM.createPortal(
         <div className="sheet-overlay" onClick={() => setShowReviews(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
@@ -757,10 +759,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('portal-root')
       )}
 
-      {showGigHistory && (
+      {showGigHistory && ReactDOM.createPortal(
         <div className="sheet-overlay" onClick={() => setShowGigHistory(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
@@ -808,10 +811,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('portal-root')
       )}
 
-      {showRecentChats && (
+      {showRecentChats && ReactDOM.createPortal(
         <div className="sheet-overlay" onClick={() => setShowRecentChats(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
@@ -852,10 +856,11 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('portal-root')
       )}
 
-      {showCreditPackages && (
+      {showCreditPackages && ReactDOM.createPortal(
         <div className="sheet-overlay" onClick={() => setShowCreditPackages(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
@@ -884,7 +889,8 @@ function ProfileScreen({ userId, isOwn, onBack, onStartChat, onEditProfile, onOp
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.getElementById('portal-root')
       )}
     </div>
   );
