@@ -1,64 +1,53 @@
-name: Build iOS (Unsigned IPA for ESign)
+name: Build Unsigned IPA
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
-  build-ios:
-    name: Build iOS IPA
-    runs-on: macos-26
+  build:
+    runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: subosito/flutter-action@v2
         with:
-          node-version: 22
+          flutter-version: '3.41.9'
+          channel: 'stable'
+          cache: true
 
       - name: Install dependencies
-        run: npm install
+        working-directory: app
+        run: flutter pub get
 
-      - name: Build web app
-        run: npm run build
-
-      - name: Sync Capacitor iOS
+      - name: Build unsigned iOS
+        working-directory: app
         run: |
-          npx cap add ios
-          npx cap sync ios
+          export CODE_SIGNING_ALLOWED=NO
+          export CODE_SIGNING_REQUIRED=NO
+          export CODE_SIGN_IDENTITY=""
+          export DEVELOPMENT_TEAM=""
+          flutter build ios --release --no-codesign
 
-      - name: Add iOS Permission Strings
+      - name: Create unsigned IPA
+        working-directory: app
         run: |
-          PLIST="ios/App/App/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'GigsCourt needs your location to show nearby service providers.'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'GigsCourt needs camera access for profile picture uploads.'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'GigsCourt needs photo library access for profile picture and work photo uploads.'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 'GigsCourt needs to save photos to your library.'" "$PLIST"
-
-      - name: Build unsigned IPA
-        run: |
-          cd ios/App
-          xcodebuild clean build \
-            -workspace App.xcworkspace \
-            -scheme App \
+          cd ios
+          xcodebuild clean archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
             -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath ./build \
-            CODE_SIGN_IDENTITY="" \
+            -archivePath ../build/ios/Runner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
-
-      - name: Create IPA
-        run: |
+            CODE_SIGN_IDENTITY=""
+          cd ..
           mkdir -p Payload
-          cp -r ios/App/build/Build/Products/Release-iphoneos/App.app Payload/
-          zip -r GigsCourt-iOS-Unsigned.ipa Payload/
-          mkdir -p output
-          mv GigsCourt-iOS-Unsigned.ipa output/
+          cp -r build/ios/Runner.xcarchive/Products/Applications/Runner.app Payload/
+          mkdir -p build/ios/ipa
+          zip -r build/ios/ipa/GigsCourt.ipa Payload/
+          rm -rf Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gigscourt-ios-unsigned
-          path: output/GigsCourt-iOS-Unsigned.ipa
-          retention-days: 30
+          name: gigscourt-unsigned.ipa
+          path: app/build/ios/ipa/GigsCourt.ipa
